@@ -1420,8 +1420,14 @@ uniforms.uBustHalf.value = BUST_HEIGHT / 2;
    be looking at — so on the Index he stands back and lifts, and only his crown clears the cards. */
 const INDEX_SCALE = 0.40;
 const INDEX_LIFT = 0.5;
-// Local only until the figure is signed off: on any other host the spine holds the centre.
-const USE_MASCOT = ['localhost', '127.0.0.1'].includes(location.hostname);
+/* The mascot now ships everywhere. To hold him back on a host (e.g. while a new figure is being
+   signed off) set MASCOT_EVERYWHERE to false: he then only appears on localhost. Either way,
+   ?mascot=0 / ?mascot=1 on the URL forces it off or on, for reviewing both versions. */
+const MASCOT_EVERYWHERE = true;
+const mascotParam = new URLSearchParams(location.search).get('mascot');
+const USE_MASCOT = mascotParam !== null
+  ? mascotParam !== '0'
+  : MASCOT_EVERYWHERE || ['localhost', '127.0.0.1'].includes(location.hostname);
 let mascotAttr = null;
 let mascotNeutralAttr = null;
 let mascotFlexAttr = null;

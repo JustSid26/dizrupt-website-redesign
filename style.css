@@ -534,10 +534,14 @@ body.intro-projects #index.open {
 .index-label.is-front strong, .index-label.is-hover strong { color: var(--fg); }
 .index-hint {
   position: absolute; left: 50%; bottom: var(--gutter); translate: -50% 0; white-space: nowrap;
+  max-width: calc(100vw - 2 * var(--gutter, 20px)); text-align: center;
   font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);
   /* leaves to the left with the spiral it belongs to */
   transform: translate3d(calc(var(--handoff, 0) * -26vw), 0, 0);
   opacity: calc(1 - var(--handoff, 0) * 2.5);
+}
+@media (max-width: 720px) {
+  .index-hint { white-space: normal; width: max-content; line-height: 1.6; }
 }
 
 /* ---------- Cursor ---------- */
@@ -676,6 +680,16 @@ body.intro-projects #index.open {
 }
 @media (prefers-reduced-motion: reduce) {
   .stat { transition: opacity 0.4s linear; transform: none; }
+}
+@media (max-width: 600px) {
+  /* Phones: two narrow columns can't hold "CLI · 25+" at the desktop size, so the gap between
+     them and the type both come down enough that every value stays on screen. */
+  .intro-stats {
+    width: calc(100vw - 2 * var(--gutter, 20px));
+    column-gap: 26vw;
+  }
+  .stat-n { font-size: clamp(16px, 4.6vw, 22px); }
+  .stat-l { font-size: 10px; margin-top: 8px; }
 }
 
 /* ---------- Intro: the profile ----------
