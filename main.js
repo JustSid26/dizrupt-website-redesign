@@ -1821,26 +1821,11 @@ const centreColours = () => (mascotAttr ? MASCOT_COLORS : SPINE_COLORS);
 const SPINE_A = new THREE.Color(SPINE_COLORS[0]);
 const SPINE_B = new THREE.Color(SPINE_COLORS[1]);
 const WHITE = new THREE.Color('#ffffff');
+const CONTACT_A = new THREE.Color(MASCOT_COLORS[0]);
+const CONTACT_B = new THREE.Color(MASCOT_COLORS[1]);
+const CONTACT_SHIFT = 2.15; // how far left he stands on the contact page (desktop)
+const CONTACT_YAW = 0.42;   // and turned a little towards the copy on his right
 
-/* The white screen the particles gather into: a jittered grid filling the view at z = 0. A plain
-   random scatter clumps and leaves thin patches, and thin patches read as grey. It is built well
-   past the edges of the frame so it still covers when the camera pushes in or the window changes
-   shape, and carries a little depth so the field doesn't look like a decal. */
-const curtainAttr = (() => {
-  const arr = new Float32Array(COUNT * 3);
-  const height = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAMERA_Z * 1.5;
-  const width = height * Math.max(camera.aspect, 1.2);
-  const cols = Math.ceil(Math.sqrt(COUNT * (width / height)));
-  const rows = Math.ceil(COUNT / cols);
-  for (let i = 0; i < COUNT; i++) {
-    const x = i % cols;
-    const y = (i / cols) | 0;
-    arr[i * 3] = ((x + Math.random()) / cols - 0.5) * width;
-    arr[i * 3 + 1] = ((y + Math.random()) / rows - 0.5) * height;
-    arr[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
-  }
-  return new THREE.BufferAttribute(arr, 3);
-})();
 const root = document.documentElement;
 let exitAcc = 0;
 
@@ -1914,6 +1899,12 @@ function prepareContactCounterflow() {
 }
 prepareContactCounterflow();
 
+// The studio's local time on the contact page.
+const mumbaiTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
+const tickMumbai = () => { const el = document.getElementById('mumbai-time'); if (el) el.textContent = mumbaiTime.format(new Date()); };
+tickMumbai();
+setInterval(tickMumbai, 15000);
+
 // The first movement off the spiral sets the morph up; from there the scroll scrubs uProgress
 // itself, so the wordmark forms and unforms under your fingers instead of playing on a timer.
 function beginHandoff() {
@@ -1922,7 +1913,8 @@ function beginHandoff() {
   // the spine has been turning for many revolutions; aim at the nearest whole turn so the screen
   // it becomes ends up square to the camera rather than a plane seen at an angle
   handoff.turn = Math.round(index.angle() / (Math.PI * 2)) * Math.PI * 2;
-  morphTo(curtainAttr); // the particles become the white screen
+  // The particles gather back into him — he sees you out — or, without the mascot, the wordmark.
+  morphTo(mascotNeutralAttr || shapeAttrs[0]);
   state.tweening = false; // ...at the pace of the scroll, not the clock
 }
 
@@ -1943,13 +1935,13 @@ function applyHandoff(p) {
   /* The scatter is a hump, not a ramp: out to nothing in the middle of the move, back together by
      the end. That is the whole trick — the shape has to be lost before the screen can form, or it
      reads as the spine flattening rather than the particles becoming the page. */
-  handoff.disperse = Math.sin(Math.PI * clamp01(p / 0.85)) * 3.6;
-  // and they fatten as they gather, so the field closes up into white instead of staying specks
-  handoff.size = smooth(clamp01((p - 0.3) / 0.45));
+  handoff.disperse = Math.sin(Math.PI * clamp01(p / 0.85)) * 2.2;
+  handoff.size = 0; // he re-forms as points, the way he first appeared, not as a solid surface
 
-  const white = smooth(clamp01(p / 0.5));
-  state.colorA.copy(SPINE_A).lerp(WHITE, white);
-  state.colorB.copy(SPINE_B).lerp(WHITE, white);
+  // the spine's bone and cord drain into his violet as he forms
+  const toMascot = smooth(clamp01(p / 0.7));
+  state.colorA.copy(SPINE_A).lerp(CONTACT_A, toMascot);
+  state.colorB.copy(SPINE_B).lerp(CONTACT_B, toMascot);
 
   root.style.setProperty('--handoff', p.toFixed(4));
   // the page itself comes up under the last of the gathering, and the type only once it is whole
@@ -3217,8 +3209,12 @@ function tick() {
     const e = handoff.p * handoff.p * (3 - 2 * handoff.p);
     const spiral = index.angle();
     // no sway at the end of it: the screen is a flat plane, and any tilt shows it edge-on
-    points.rotation.y = spiral + (handoff.turn - spiral) * e;
-    points.position.y = mascotAttr ? 0 : (((index.lift() % SPINE_GAP) + SPINE_GAP) % SPINE_GAP) * (1 - e);
+    points.rotation.y = spiral + (handoff.turn + CONTACT_YAW * (isMobile ? 0 : 1) - spiral) * e;
+    const restY = mascotAttr ? INDEX_LIFT : (((index.lift() % SPINE_GAP) + SPINE_GAP) % SPINE_GAP);
+    // desktop: he stands at the left, framed like the landing; phones: small, above the copy
+    const contactY = mascotAttr ? (isMobile ? 1.35 : BUST_DROP) : (isMobile ? 1.6 : 0);
+    points.position.y = restY + (contactY - restY) * e;
+    points.position.x = (isMobile ? 0 : -CONTACT_SHIFT) * e;
   } else if (inIndex) {
     // The spine turns and climbs in lockstep with the spiral. The spiral's angle keeps counting
     // up past a full turn, so it must be followed exactly: easing towards it the "short way round"
@@ -3248,7 +3244,10 @@ function tick() {
   }
   // the intro drives his scale itself; everywhere else he is at rest, and small behind the spiral
   if (!intro.active) {
-    const rest = inIndex && mascotAttr ? INDEX_SCALE : 1;
+    const contactScale = isMobile ? 0.5 : 0.92;
+    const rest = inIndex && mascotAttr ? INDEX_SCALE
+      : handoff.p > 0 ? INDEX_SCALE + (contactScale - INDEX_SCALE) * handoff.p
+      : 1;
     points.scale.setScalar(damp(points.scale.x, rest * (1 - caseIn * 0.22), 4, dt));
   }
   const upright = inIndex || intro.active || handoff.p > 0; // the screen must not lean with the pointer

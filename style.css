@@ -173,51 +173,63 @@ body.panel-open #work { opacity: 0; pointer-events: none; }
 .back:hover { background: var(--fg); color: var(--bg); }
 
 /* ---------- Contact ---------- */
-/* Contact is the one white page on the site: white ground, black type, nothing else. The particles
-   still drive the page handoff; once the white surface is nearly whole, Counterflow assembles the
-   headline and the supporting copy follows it. */
+/* Contact: the mascot re-forms on the left and the page is a dark pane on the right. The particles
+   drive the hand-over; once he is whole, Counterflow assembles the headline and the rest follows. */
 #contact {
   position: fixed; inset: 0; z-index: 7; pointer-events: none;
   display: flex; align-items: center; padding: 0 var(--gutter);
-  background: #fff; color: #0b0b0e;
+  color: var(--fg);
+  background: linear-gradient(90deg, transparent 0%, transparent 38%, rgba(5, 5, 7, 0.72) 60%, rgba(5, 5, 7, 0.9) 100%);
   opacity: 0; visibility: hidden; overflow: hidden;
 }
 #contact.handing, #contact.open { visibility: visible; opacity: var(--contact-in, 0); }
 #contact.open { pointer-events: auto; }
-.contact-inner { position: relative; z-index: 1; width: 100%; max-width: 1280px; margin: 0 auto; }
-/* The type waits for the white particle surface to be nearly whole. Counterflow is thresholded in
-   main.js rather than scrubbed, so its easing remains coherent even on a slow trackpad gesture. */
-.contact-inner > * {
-  opacity: 0;
-  transform: translateY(18px);
-}
+.contact-inner { position: relative; z-index: 1; width: min(640px, 100%); margin: 0 0 0 auto; }
+.contact-inner > * { opacity: 0; transform: translateY(18px); }
 #contact.contact-text-in .contact-heading {
   opacity: 1; transform: none;
   animation: contact-counter-track 1.45s var(--ease) 0.04s both;
 }
 #contact.contact-text-in .eyebrow { animation: contact-detail-in 0.8s var(--ease-out) 0.12s both; }
-#contact.contact-text-in .big-link { animation: contact-detail-in 0.9s var(--ease-out) 0.82s both; }
-#contact.contact-text-in .contact-meta { animation: contact-detail-in 0.85s var(--ease-out) 0.94s both; }
-#contact.contact-text-in .socials { animation: contact-detail-in 0.8s var(--ease-out) 1.02s both; }
+#contact.contact-text-in .contact-lead { animation: contact-detail-in 0.9s var(--ease-out) 0.7s both; }
+#contact.contact-text-in .contact-cta { animation: contact-detail-in 0.9s var(--ease-out) 0.82s both; }
+#contact.contact-text-in .contact-grid { animation: contact-detail-in 0.85s var(--ease-out) 0.94s both; }
 #contact.contact-text-in .back { animation: contact-detail-in 0.8s var(--ease-out) 1.08s both; }
-#contact .big-link { border-bottom-color: rgba(11, 11, 14, 0.25); }
-#contact .big-link:hover { border-bottom-color: #0b0b0e; }
-#contact .eyebrow, #contact .contact-meta { color: rgba(11, 11, 14, 0.55); }
-#contact .contact-meta a:hover { color: #0b0b0e; }
-.socials { display: flex; gap: 10px; margin-top: 34px; }
-.socials a {
-  display: grid; place-items: center; width: 44px; height: 44px;
-  border: 1px solid rgba(11, 11, 14, 0.18); border-radius: 50%;
-  transition: background 0.35s var(--ease), border-color 0.35s var(--ease), color 0.35s var(--ease);
+#contact .eyebrow { color: var(--dim); }
+.hud-no { font-family: var(--mono); color: var(--violet-soft); margin-right: 0.8em; }
+.contact-lead { margin-top: 26px; max-width: 38ch; font-size: clamp(16px, 1.3vw, 19px); line-height: 1.55; color: rgba(242, 240, 235, 0.72); }
+.contact-cta {
+  display: inline-flex; align-items: center; gap: 16px; margin-top: 34px;
+  padding: 18px 28px; border-radius: 999px;
+  background: linear-gradient(100deg, #6f4dff, var(--violet));
+  font-family: var(--display); font-weight: 600; font-stretch: 85%;
+  font-size: clamp(18px, 1.5vw, 22px); letter-spacing: 0.01em;
+  box-shadow: 0 0 0 0 rgba(163, 16, 231, 0.5);
+  transition: box-shadow 0.5s var(--ease-out), transform 0.5s var(--ease-out);
 }
-.socials svg { width: 19px; height: 19px; fill: currentColor; }
-.socials a:hover { background: #0b0b0e; border-color: #0b0b0e; color: #fff; }
-#contact .back { border-color: rgba(11, 11, 14, 0.2); }
-#contact .back:hover { background: #0b0b0e; color: #fff; }
+.contact-cta i { font-style: normal; transition: transform 0.5s var(--ease-out); }
+.contact-cta:hover { box-shadow: 0 0 44px 6px rgba(163, 16, 231, 0.45); transform: translateY(-2px); }
+.contact-cta:hover i { transform: translateX(6px); }
+.contact-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px;
+  margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line);
+}
+.contact-grid dt { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+.contact-grid dd { font-size: 15px; line-height: 1.4; }
+.u-link { background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat; transition: background-size 0.5s var(--ease-out); }
+.u-link:hover { background-size: 100% 1px; }
+#contact .back { margin-top: 44px; }
+@media (max-width: 900px) {
+  #contact { align-items: flex-end; padding-bottom: calc(var(--gutter) * 1.5);
+    background: linear-gradient(180deg, transparent 0%, transparent 30%, rgba(5, 5, 7, 0.85) 52%, rgba(5, 5, 7, 0.95) 100%); }
+  .contact-inner { width: 100%; }
+  .contact-grid { grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 32px; }
+  .contact-lead { display: none; }
+}
 /* "Have a" sits back in a normal weight so PROJECT? carries the line */
 .contact-heading {
-  font-family: var(--sans); font-weight: 400;
-  font-size: clamp(44px, 7vw, 104px); line-height: 1.02; letter-spacing: -0.025em;
+  font-family: var(--display); font-weight: 500; font-stretch: 82%;
+  font-size: clamp(48px, 7vw, 112px); line-height: 0.95; letter-spacing: -0.03em;
   perspective: 900px; transform-origin: left center;
 }
 .contact-heading em { font-style: normal; font-weight: 700; text-transform: uppercase; }
