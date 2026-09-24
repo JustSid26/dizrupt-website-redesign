@@ -6,6 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createIndex, SPINE_GAP } from './spiral.js';
 import { createAtmosphere } from './atmosphere.js';
 import { createStatic } from './static.js';
+import { createWindowField } from './window.js';
 import { openProject, closeProject, onFlight, projectWhite, onNext, showNext, onGlitch } from './project.js';
 
 /* =========================================================
@@ -1191,6 +1192,17 @@ const index = createIndex({
     presentTimer = setTimeout(() => openCaseStudy(p, hit), PRESENT_MS);
   },
 });
+
+/* The front card is built out of the mascot's own particles, and rebuilt out of the last card's as
+   the spiral turns (window.js). While his particles are out there being a window he is not drawn. */
+const windowField = createWindowField({ scene, count: COUNT, cardScale: index.cardScale });
+let mascotVisible = 1; // written by the window field each frame
+let fieldOpacity = 0;
+const mascotSource = {
+  shape: () => geometry.attributes.aTarget.array,
+  matrix: () => points.matrixWorld,
+  showing: () => !!mascotAttr && uniforms.uOpacity.value > 0.3 && uniforms.uAurora.value > 0.3,
+};
 
 /* Going back, the card leans out of the middle of the screen and into its place on the spiral
    while the page is still shrinking onto it, rather than waiting for it to land and then snapping.
@@ -2576,6 +2588,7 @@ function startIntro() {
   state.tweening = false;
   uniforms.uDisperse.value = 0;
   uniforms.uOpacity.value = 0;
+  fieldOpacity = 0;
   uniforms.uBodyReveal.value = 1;
   uniforms.uEyeReveal.value = 1;
   uniforms.uBeamOn.value = 0;
@@ -2686,6 +2699,7 @@ function handOver() {
     uniforms.uBeam.value = 2.0;   // above his crown: nothing lit yet
     uniforms.uBeamOn.value = 1;
     uniforms.uOpacity.value = 0;
+    fieldOpacity = 0;
     state.tweening = false;
     state.colorA.set(MASCOT_COLORS[0]);
     state.colorB.set(MASCOT_COLORS[1]);
@@ -3084,9 +3098,10 @@ function tick() {
   const mascotField = intro.active && intro.handover && intro.mascotSequence
     && now - intro.sweepStarted >= 560; // the eyes come up as the last of the word goes
   // Behind a case study the client's model stays lit (dimmer on phones, where it sits under the copy).
-  const fieldOpacity = intro.active && !intro.revealIndex && !mascotField ? 0 : 1 - projectWhite() * (isMobile ? 0.7 : 0.1);
+  const fieldTarget = intro.active && !intro.revealIndex && !mascotField ? 0 : 1 - projectWhite() * (isMobile ? 0.7 : 0.1);
   const opacitySettle = projectWhite() > 0.001 ? 9 : 4;
-  uniforms.uOpacity.value = damp(uniforms.uOpacity.value, fieldOpacity, opacitySettle, dt);
+  fieldOpacity = damp(fieldOpacity, fieldTarget, opacitySettle, dt);
+  uniforms.uOpacity.value = fieldOpacity * mascotVisible;
   /* The bloom is eased back while the curtain is the only thing in frame: it is already a broad
      soft light of its own, and a post-process pass over it on a black screen only fogs it. */
   const kindling = intro.active && intro.mascotSequence
@@ -3283,6 +3298,18 @@ function tick() {
   atmosphere.setDrift(drift);
   uniforms.uCoil.value = damp(uniforms.uCoil.value, intro.coil, 1.5, dt);
   atmosphere.update(clock.elapsedTime);
+
+  // the window field: which card is being made, or back into him
+  group.updateMatrixWorld(true);
+  const wantCard = inIndex && handoff.p <= 0 && !menuOpen() && !state.menuPreview
+    && index.presented() < 0.01 && (!intro.active || intro.revealIndex);
+  const mascotUp = !!mascotAttr && (intro.active || handoff.p > 0 || inContact);
+  const want = wantCard ? { kind: 'card', n: index.front() }
+    : mascotUp && windowField.target() ? { kind: 'mascot' } : null;
+  windowField.go(want, { index, field: mascotSource });
+  mascotVisible = windowField.update(dt, clock.elapsedTime, {
+    index, field: mascotSource, camera, height: innerHeight * pixelRatio,
+  });
   composer.render();
   requestAnimationFrame(tick);
 }
@@ -3323,7 +3350,7 @@ function menuGo(where) {
   }
 }
 
-window.site = { revealStats, statFault, uniforms, state, introStatic, centrepiece, triggerGlitch, wordAttr, spineAttr, bloom, goTo, openPanel, index, scene, points, camera, intro, handoff, setHandoff, startIntro, introReady, streamAway, handOver, endIntro, enterContact, leaveContact, previewShape, endPreview, menuGo };
+window.site = { windowField, revealStats, statFault, uniforms, state, introStatic, centrepiece, triggerGlitch, wordAttr, spineAttr, bloom, goTo, openPanel, index, scene, points, camera, intro, handoff, setHandoff, startIntro, introReady, streamAway, handOver, endIntro, enterContact, leaveContact, previewShape, endPreview, menuGo };
 
 /* ---------- Loading ---------- */
 (function load() {

@@ -15,9 +15,9 @@ export const CARD_LIGHT = 0.32; // how bright a card may show its banner, held u
 export const SPINE_GAP = 0.62; // vertebra spacing; the spine scrolls in step with the cards but repeats on its own period
 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
-const CARD_W = 1.3; // card size in card units (scaled up per device below)
-const CARD_H = 0.86;
-const CORNER = 0.07; // corner radius
+export const CARD_W = 1.3; // card size in card units (scaled up per device below)
+export const CARD_H = 0.86;
+export const CORNER = 0.07; // corner radius
 const FRONT_TILT = { x: -0.07, y: 0.12, z: 0.035 }; // the focused card leans back slightly, like a card held up to you
 
 const STIFFNESS = 1.6; // a slightly longer, calmer glide between focused projects
@@ -359,6 +359,7 @@ export function createIndex({ projects, scene, camera, isMobile, onSelect }) {
   let exitTarget = 0;
   let slide = 0;      // world units the whole spiral is carried to the left, handing over to contact
   let openedAt = -Infinity;
+  let veilOf = () => 0; // how much of a card's own panel is hidden under the window field
   let wasOpen = false;
 
   const items = projects.map((p, n) => {
@@ -574,7 +575,7 @@ export function createIndex({ projects, scene, camera, isMobile, onSelect }) {
       fu.uHover.value = damp(fu.uHover.value, item.hover ? 1 : 0, 6, dt);
       // assemble from scattered particles when the Index opens, nearest cards first
       fu.uReveal.value = open ? Math.min(1, Math.max(0, (time - openedAt - Math.abs(rel) * 0.12) / 1.4)) : damp(fu.uReveal.value, 0, 3, dt);
-      item.panelMaterial.uniforms.uOpacity.value = fu.uOpacity.value * Math.min(1, fu.uReveal.value * 1.5) * (solidBacking ? 1 : 0.93);
+      item.panelMaterial.uniforms.uOpacity.value = fu.uOpacity.value * Math.min(1, fu.uReveal.value * 1.5) * (solidBacking ? 1 : 0.93) * (1 - veilOf(n));
       /* The banner is held well below full brightness, and further back still when the card is not
          the one you are looking at. The scene's bloom starts at a luminance of 0.15, so a banner on
          a white ground — and several of them are — would otherwise blow out into a lamp and take
@@ -671,6 +672,11 @@ export function createIndex({ projects, scene, camera, isMobile, onSelect }) {
   return {
     update,
     step,
+    // the window field (window.js) rebuilds the front card from particles
+    front: () => THREE.MathUtils.clamp(Math.round(snapTo ?? scroll), 0, last),
+    card: (n) => ({ matrix: items[n].card.matrixWorld, panelUniforms: items[n].panelMaterial.uniforms }),
+    veil: (fn) => { veilOf = fn; },
+    cardScale: CARD_SCALE,
     setBranches: (on) => { branchesOn = on; },
     setSolidBacking: (on) => { solidBacking = on; },
     focus: (n) => { snapTo = n; },
