@@ -16,7 +16,7 @@ import { CARD_W, CARD_H, CORNER } from './spiral.js';
    frozen (wherever it was when a flight was cut short).
    ========================================================= */
 const CARD = 0, MASCOT = 1, FROZEN = 2;
-const FLIGHT = 3.0;  // seconds for a whole flight
+const FLIGHT = 3.6;  // seconds for a whole flight
 const STAGGER = 0.7; // how much of it is the stagger: the card unzips edge first and pours across
 const SETTLE = 0.45;  // how long the crisp banner takes to come up under a finished card
 
@@ -55,21 +55,23 @@ void main() {
   vec3 run = uToC - uFromC;
   vec3 dir = length(run) > 0.001 ? normalize(run) : vec3(1.0, 0.0, 0.0);
   float lead = clamp(dot(A - uFromC, dir) / uHalf, -1.0, 1.0);
-  float st = (0.5 - 0.5 * lead) * 0.75 + aR.x * 0.25;
+  float st = (0.5 - 0.5 * lead) * 0.92 + aR.x * 0.08;
   float t = clamp((uP - st * ${STAGGER.toFixed(2)}) / ${(1 - STAGGER).toFixed(2)}, 0.0, 1.0);
   float e = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
   float arc = sin(e * 3.14159265);
   vec3 C = (A + B) * 0.5 + vec3(0.0, 0.5, 1.2) + (aR.yzw - 0.5) * uSpread;
   float ie = 1.0 - e;
   vec3 p = ie * ie * A + 2.0 * ie * e * C + e * e * B;
-  // a slow ripple travels down the stream
-  p.y += sin(e * 9.0 + uTime * 2.5 + aR.x * 6.2832) * 0.08 * arc;
+  // the ribbon carries a wave: crests roll along it from the old card to the new
+  float wave = sin(e * 3.14159265 * 3.0 - uTime * 3.2 + aCell.y * 1.5);
+  p.y += wave * 0.32 * arc;
+  p.z += cos(e * 3.14159265 * 3.0 - uTime * 3.2) * 0.18 * arc;
 
   vec4 mv = viewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float card = mix(uFromKind < 0.5 ? 1.0 : 0.0, uToKind < 0.5 ? 1.0 : 0.0, e);
   float size = mix(uMascotSize * (0.5 + aR.y), uPitch * uProj * 1.0, card);
-  gl_PointSize = size * (1.0 + arc * 0.8) / -mv.z;
+  gl_PointSize = size * (1.0 + arc * 0.5) / -mv.z;
   vCell = aCell;
   vCard = card;
   vArc = arc;
@@ -113,9 +115,9 @@ void main() {
   // in flight they are light: violet through the brand's cyan, rippling across the card
   float ray = 0.5 + 0.5 * sin(vCell.x * 9.0 + vCell.y * 4.0 + vR.z * 6.0);
   vec3 aurora = mix(vec3(0.55, 0.2, 1.0), vec3(0.2, 0.85, 1.0), ray);
-  col = mix(col, aurora * 0.75, vArc * 0.8);
+  col = mix(col, aurora * 0.75, vArc * 0.35);
   // on the mascot they pile deep and add, so each one is held right down
-  float alpha = mix(0.07, 1.0, vCard) * (1.0 - vArc * 0.6);
+  float alpha = mix(0.07, 1.0, vCard) * (1.0 - vArc * 0.3);
   gl_FragColor = vec4(col, a * alpha * uAlpha);
 }`;
 
@@ -203,7 +205,7 @@ export function createWindowField({ scene, count, cardScale }) {
       anchorAt(i, u.uFromKind.value, u.uFromMat.value, a);
       anchorAt(i, u.uToKind.value, u.uToMat.value, b);
       const lead = Math.min(1, Math.max(-1, ctl.copy(a).sub(fc).dot(dir) / u.uHalf.value));
-      const st = (0.5 - 0.5 * lead) * 0.75 + rand[r] * 0.25;
+      const st = (0.5 - 0.5 * lead) * 0.92 + rand[r] * 0.08;
       const t = Math.min(Math.max((P - st * STAGGER) / (1 - STAGGER), 0), 1);
       const e = t * t * t * (t * (t * 6 - 15) + 10);
       const arc = Math.sin(e * Math.PI), ie = 1 - e, sp = u.uSpread.value;
@@ -215,7 +217,8 @@ export function createWindowField({ scene, count, cardScale }) {
         const ak = a.getComponent(k), bk = b.getComponent(k), ck = ctl.getComponent(k);
         next[i * 3 + k] = ie * ie * ak + 2 * ie * e * ck + e * e * bk;
       }
-      next[i * 3 + 1] += Math.sin(e * 9 + t0 * 2.5 + rand[r] * 6.2832) * 0.08 * arc;
+      next[i * 3 + 1] += Math.sin(e * Math.PI * 3 - t0 * 3.2 + cell[i * 2 + 1] * 1.5) * 0.32 * arc;
+      next[i * 3 + 2] += Math.cos(e * Math.PI * 3 - t0 * 3.2) * 0.18 * arc;
     }
     // what is left of the flight is measured from where the cloud stands now
     u.uFromC.value.lerpVectors(fc, tc, P);
@@ -307,7 +310,7 @@ export function createWindowField({ scene, count, cardScale }) {
     if (u.uFromKind.value !== FROZEN) u.uFromC.value.setFromMatrixPosition(u.uFromMat.value);
     if (state.to) u.uToC.value.setFromMatrixPosition(u.uToMat.value);
     // a ribbon between two cards; a looser cloud when he is one end of it
-    u.uSpread.value = u.uFromKind.value === MASCOT || u.uToKind.value === MASCOT ? 1.6 : 0.5;
+    u.uSpread.value = u.uFromKind.value === MASCOT || u.uToKind.value === MASCOT ? 1.2 : 0.1;
 
     const done = u.uP.value >= 1;
     const onCard = state.to?.kind === 'card';
