@@ -16,8 +16,8 @@ import { CARD_W, CARD_H, CORNER } from './spiral.js';
    frozen (wherever it was when a flight was cut short).
    ========================================================= */
 const CARD = 0, MASCOT = 1, FROZEN = 2;
-const FLIGHT = 2.6;  // seconds for a whole flight
-const STAGGER = 0.55; // how much of it is the stagger across the card
+const FLIGHT = 3.0;  // seconds for a whole flight
+const STAGGER = 0.7; // how much of it is the stagger: the card unzips edge first and pours across
 const SETTLE = 0.45;  // how long the crisp banner takes to come up under a finished card
 
 const vertexShader = /* glsl */ `
@@ -28,6 +28,9 @@ uniform mat4 uFromMat, uToMat;
 uniform float uPitch;      // world size of one pixel of the card
 uniform float uProj;       // pixels per world unit at distance 1
 uniform float uMascotSize;
+uniform vec3 uFromC, uToC; // the middle of each end, so the stream knows which way it runs
+uniform float uHalf;       // half a card's width, in the world
+uniform float uSpread;     // how thick the stream is: a ribbon between cards, a cloud off the mascot
 attribute vec2 aCell;      // this particle's pixel, 0..1 across the card
 attribute vec4 aR;
 attribute vec3 aMascot;
@@ -44,15 +47,23 @@ vec3 anchor(float kind, mat4 m) {
 }
 
 void main() {
-  // Keep in sync with position() in window.js, which replays this on the CPU.
-  float st = aR.x * 0.6 + aCell.x * 0.4;
+  // Keep in sync with freeze() in window.js, which replays this on the CPU.
+  /* A flow, not a burst. The side of the old card nearest the new one lets go first and the rest
+     follows it off, so the card unzips; each particle rides an arch out towards you and over, and
+     the stream pours into the new card in the same order it left. */
+  vec3 A = anchor(uFromKind, uFromMat), B = anchor(uToKind, uToMat);
+  vec3 run = uToC - uFromC;
+  vec3 dir = length(run) > 0.001 ? normalize(run) : vec3(1.0, 0.0, 0.0);
+  float lead = clamp(dot(A - uFromC, dir) / uHalf, -1.0, 1.0);
+  float st = (0.5 - 0.5 * lead) * 0.75 + aR.x * 0.25;
   float t = clamp((uP - st * ${STAGGER.toFixed(2)}) / ${(1 - STAGGER).toFixed(2)}, 0.0, 1.0);
   float e = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
   float arc = sin(e * 3.14159265);
-  vec3 off = (aR.yzw - 0.5) * vec3(1.6, 1.1, 1.4);
-  off.y += sin(aCell.x * 6.2832 + uTime * 1.3 + aR.x * 2.0) * 0.45;
-  off.z += 0.9;
-  vec3 p = mix(anchor(uFromKind, uFromMat), anchor(uToKind, uToMat), e) + off * arc;
+  vec3 C = (A + B) * 0.5 + vec3(0.0, 0.5, 1.2) + (aR.yzw - 0.5) * uSpread;
+  float ie = 1.0 - e;
+  vec3 p = ie * ie * A + 2.0 * ie * e * C + e * e * B;
+  // a slow ripple travels down the stream
+  p.y += sin(e * 9.0 + uTime * 2.5 + aR.x * 6.2832) * 0.08 * arc;
 
   vec4 mv = viewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
@@ -145,6 +156,10 @@ export function createWindowField({ scene, count, cardScale }) {
     uPitch: { value: (CARD_W * cardScale) / cols },
     uProj: { value: 1 },
     uMascotSize: { value: 6 },
+    uFromC: { value: new THREE.Vector3() },
+    uToC: { value: new THREE.Vector3() },
+    uHalf: { value: (CARD_W * cardScale) / 2 },
+    uSpread: { value: 0.5 },
     uFromMap: { value: null },
     uToMap: { value: null },
     uFromWin: { value: new THREE.Vector4(1, 1, 0, 0) },
@@ -179,19 +194,31 @@ export function createWindowField({ scene, count, cardScale }) {
   function freeze() {
     const u = uniforms, P = u.uP.value, t0 = u.uTime.value;
     const next = new Float32Array(count * 3);
+    const fc = u.uFromC.value, tc = u.uToC.value;
+    const dir = tc.clone().sub(fc);
+    if (dir.length() > 0.001) dir.normalize(); else dir.set(1, 0, 0);
+    const ctl = new THREE.Vector3();
     for (let i = 0; i < count; i++) {
-      const cx = cell[i * 2], r = i * 4;
-      const st = rand[r] * 0.6 + cx * 0.4;
-      const t = Math.min(Math.max((P - st * STAGGER) / (1 - STAGGER), 0), 1);
-      const e = t * t * t * (t * (t * 6 - 15) + 10);
-      const arc = Math.sin(e * Math.PI);
+      const r = i * 4;
       anchorAt(i, u.uFromKind.value, u.uFromMat.value, a);
       anchorAt(i, u.uToKind.value, u.uToMat.value, b);
-      a.lerp(b, e);
-      next[i * 3] = a.x + (rand[r + 1] - 0.5) * 1.6 * arc;
-      next[i * 3 + 1] = a.y + ((rand[r + 2] - 0.5) * 1.1 + Math.sin(cx * 6.2832 + t0 * 1.3 + rand[r] * 2) * 0.45) * arc;
-      next[i * 3 + 2] = a.z + ((rand[r + 3] - 0.5) * 1.4 + 0.9) * arc;
+      const lead = Math.min(1, Math.max(-1, ctl.copy(a).sub(fc).dot(dir) / u.uHalf.value));
+      const st = (0.5 - 0.5 * lead) * 0.75 + rand[r] * 0.25;
+      const t = Math.min(Math.max((P - st * STAGGER) / (1 - STAGGER), 0), 1);
+      const e = t * t * t * (t * (t * 6 - 15) + 10);
+      const arc = Math.sin(e * Math.PI), ie = 1 - e, sp = u.uSpread.value;
+      ctl.copy(a).add(b).multiplyScalar(0.5);
+      ctl.x += (rand[r + 1] - 0.5) * sp;
+      ctl.y += 0.5 + (rand[r + 2] - 0.5) * sp;
+      ctl.z += 1.2 + (rand[r + 3] - 0.5) * sp;
+      for (let k = 0; k < 3; k++) {
+        const ak = a.getComponent(k), bk = b.getComponent(k), ck = ctl.getComponent(k);
+        next[i * 3 + k] = ie * ie * ak + 2 * ie * e * ck + e * e * bk;
+      }
+      next[i * 3 + 1] += Math.sin(e * 9 + t0 * 2.5 + rand[r] * 6.2832) * 0.08 * arc;
     }
+    // what is left of the flight is measured from where the cloud stands now
+    u.uFromC.value.lerpVectors(fc, tc, P);
     frozen.array.set(next);
     frozen.needsUpdate = true;
     // the colour it was showing goes with it: whichever end it was nearer
@@ -277,6 +304,10 @@ export function createWindowField({ scene, count, cardScale }) {
       setLook('to', c);
     } else if (state.to?.kind === 'mascot') u.uToMat.value.copy(field.matrix());
     if (u.uFromKind.value === CARD && fromCard.n >= 0) u.uFromMat.value.copy(index.card(fromCard.n).matrix);
+    if (u.uFromKind.value !== FROZEN) u.uFromC.value.setFromMatrixPosition(u.uFromMat.value);
+    if (state.to) u.uToC.value.setFromMatrixPosition(u.uToMat.value);
+    // a ribbon between two cards; a looser cloud when he is one end of it
+    u.uSpread.value = u.uFromKind.value === MASCOT || u.uToKind.value === MASCOT ? 1.6 : 0.5;
 
     const done = u.uP.value >= 1;
     const onCard = state.to?.kind === 'card';
