@@ -409,6 +409,49 @@ export function createIndex({ projects, scene, camera, isMobile, onSelect }) {
        texture is cropped to the middle of the picture rather than squeezed into the shape — which
        is where every one of these puts its logo. */
     const bannerUrl = bannerFor(p.title);
+    if (!bannerUrl) {
+      /* No banner yet: a typographic poster in the project's own colours, so the card never reads
+         as an empty frame. Swap in a real banner in banners.js and this is never drawn. */
+      const c = document.createElement('canvas');
+      c.width = 1287; c.height = 447; // the banner aspect, at half size
+      const ctx = c.getContext('2d');
+      const g = ctx.createLinearGradient(0, c.height, c.width, 0);
+      g.addColorStop(0, p.colors?.[0] ?? '#5b7cff');
+      g.addColorStop(1, p.colors?.[1] ?? '#d4b8ff');
+      ctx.fillStyle = '#07070b';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.globalAlpha = 1;
+      // scanlines, the site's signal texture
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      for (let y = 0; y < c.height; y += 4) ctx.fillRect(0, y, c.width, 1);
+      const draw = () => {
+        ctx.fillStyle = '#07070b';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // The card shows only the middle of the banner, so everything fits that visible width.
+        const visible = c.width * ((CARD_W / CARD_H) / BANNER_ASPECT) * 0.86;
+        const title = p.title.toUpperCase();
+        let size = 118;
+        ctx.font = `700 ${size}px "Bricolage Grotesque", "Inter Tight", sans-serif`;
+        const w = ctx.measureText(title).width;
+        if (w > visible) size = Math.floor(size * visible / w);
+        ctx.font = `700 ${size}px "Bricolage Grotesque", "Inter Tight", sans-serif`;
+        ctx.fillText(title, c.width / 2, c.height / 2 - 18);
+        ctx.font = '500 22px "JetBrains Mono", monospace';
+        ctx.fillText((p.client || '').toUpperCase(), c.width / 2, c.height / 2 + size * 0.5 + 24);
+        const texture = new THREE.CanvasTexture(c);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const cover = (CARD_W / CARD_H) / BANNER_ASPECT;
+        panelMaterial.uniforms.uMapScale.value.set(cover, 1);
+        panelMaterial.uniforms.uMapOffset.value.set((1 - cover) / 2, 0);
+        panelMaterial.uniforms.uMap.value = texture;
+        panelMaterial.uniforms.uHasMap.value = 1;
+      };
+      document.fonts.load('700 118px "Bricolage Grotesque"').finally(draw);
+    }
     if (bannerUrl) {
       new THREE.TextureLoader().load(bannerUrl, (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
