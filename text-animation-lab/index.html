@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dizrupt text animation lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    html,body{min-height:100%;height:auto;overflow:auto;background:#050507}.hub{min-height:100vh;padding:126px 38px 72px}.hub-head,.hub-grid,.hub-foot{width:min(1080px,100%);margin-inline:auto}.hub-head{margin-bottom:54px}.hub-kicker{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#83cfff}.hub h1{font-size:clamp(52px,8vw,112px);line-height:.88;letter-spacing:-.055em;font-weight:450;margin-top:18px}.hub-intro{max-width:610px;margin-top:26px;color:rgba(238,242,247,.52);font-size:14px;line-height:1.6}.hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.concept{position:relative;min-height:246px;padding:27px;border:1px solid rgba(218,231,255,.14);border-radius:24px;overflow:hidden;background:linear-gradient(145deg,rgba(17,22,30,.78),rgba(5,7,10,.88));display:flex;flex-direction:column;transition:transform .45s var(--ease),border-color .4s}.concept::after{content:"";position:absolute;inset:auto -12% -55% 30%;height:82%;background:radial-gradient(circle,rgba(77,163,217,.15),transparent 68%);transition:transform .6s var(--ease),opacity .4s}.concept:hover{transform:translateY(-5px);border-color:rgba(131,207,255,.38)}.concept:hover::after{transform:translate(-6%,-8%);opacity:1}.concept small{font-size:9px;letter-spacing:.15em;color:#83cfff}.concept i{position:absolute;right:25px;top:22px;font-style:normal;color:rgba(255,255,255,.45)}.concept strong{position:relative;z-index:1;margin-top:auto;font-size:clamp(27px,3vw,42px);font-weight:450;letter-spacing:-.03em}.concept p{position:relative;z-index:1;max-width:43ch;margin-top:9px;color:rgba(238,242,247,.48);font-size:12px;line-height:1.5}.concept:last-child{grid-column:1/-1}.hub-foot{margin-top:34px;color:rgba(238,242,247,.34);font-size:10px;letter-spacing:.06em;text-transform:uppercase}@media(max-width:720px){.hub{padding:96px 18px 46px}.hub-grid{grid-template-columns:1fr}.concept:last-child{grid-column:auto}.lab-nav{position:absolute}}
+  </style>
+</head>
+<body>
+  <div class="grain"></div>
+  <header class="lab-nav">
+    <a class="lab-brand" href="../index.html">DI<span>Z</span>RUPT</a>
+    <span class="lab-index">Text motion lab</span>
+  </header>
+  <main class="hub">
+    <header class="hub-head">
+      <p class="hub-kicker">Intro + contact studies</p>
+      <h1>Five text systems.</h1>
+      <p class="hub-intro">The same motion language is applied to both ends of the experience. Every study uses the real intro and contact copy, with the current site left untouched until you choose.</p>
+    </header>
+    <section class="hub-grid">
+      <a class="concept" href="01-mask.html"><small>01 / 05</small><i>↗</i><strong>Masked Lift</strong><p>Editorial vertical reveals with precise clipping and a calm, premium cadence.</p></a>
+      <a class="concept" href="02-focus.html"><small>02 / 05</small><i>↗</i><strong>Optical Focus</strong><p>Soft, defocused letterforms resolve into crisp type as if the camera finds focus.</p></a>
+      <a class="concept" href="03-axis.html"><small>03 / 05</small><i>↗</i><strong>Split Axis</strong><p>Two controlled directions assemble into one lockup, echoing the site's spatial depth.</p></a>
+      <a class="concept" href="04-scan.html"><small>04 / 05</small><i>↗</i><strong>Scan Resolve</strong><p>A restrained light scan develops the typography without becoming a glitch effect.</p></a>
+      <a class="concept" href="05-tracking.html"><small>05 / 05</small><i>↗</i><strong>Tracking Lock</strong><p>Wide cinematic spacing contracts into a confident final wordmark and contact statement.</p></a>
+    </section>
+    <p class="hub-foot">Open a study · click either stage or press R to replay</p>
+  </main>
+</body>
+</html>

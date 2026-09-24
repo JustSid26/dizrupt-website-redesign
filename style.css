@@ -1,0 +1,722 @@
+:root {
+  --bg: #050507;
+  --fg: #f2f0eb;
+  --dim: rgba(242, 240, 235, 0.5);
+  --line: rgba(242, 240, 235, 0.18);
+  --gutter: clamp(20px, 3vw, 40px);
+  --ease: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --sans: 'Inter Tight', system-ui, -apple-system, sans-serif; /* the whole site, headings included */
+  /* The one exception, and only for the count: a readout should look like something a machine
+     wrote. Taken from the system rather than loaded — every platform has a good one, and none of
+     them is worth a second font request for four lines of type. */
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, 'Roboto Mono', 'Courier New', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+ul { list-style: none; }
+
+@media (pointer: fine) {
+  body, button, a { cursor: none; }
+}
+
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* ---------- Atmosphere ---------- */
+.vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 4;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.75) 100%);
+}
+.grain {
+  position: fixed; inset: -50%; width: 200%; height: 200%;
+  pointer-events: none; z-index: 5; opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain 0.8s steps(5) infinite;
+}
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4%, 3%); }
+  40% { transform: translate(3%, -5%); }
+  60% { transform: translate(-2%, 4%); }
+  80% { transform: translate(5%, 2%); }
+}
+
+/* ---------- Nav ---------- */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--gutter);
+  font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  /* darkens as the white contact page comes up under it, or it would vanish into it */
+  color: color-mix(in srgb, var(--fg), #0b0b0e calc(max(var(--contact-in, 0), var(--project-in, 0)) * 100%));
+}
+.logo {
+  position: relative; display: block; width: 120px; height: 48px;
+  font-weight: 500; letter-spacing: 0.18em;
+}
+.logo-word {
+  position: absolute; left: 0; top: 50%; translate: 0 -50%; white-space: nowrap;
+  opacity: 1; transition: opacity 0.16s linear;
+}
+/* mirrored Z. The tracking is moved out to a margin first: left inside the span it would sit on
+   the wrong side of the flip and open a gap before the letter. */
+.logo .flip-z { display: inline-block; transform: scaleX(-1); letter-spacing: 0; margin-right: 0.18em; }
+
+/* Both the hand-off mark and the nav mark are made from the real DIZRUPT letters in Inter Tight.
+   The supplied registered logo is only the composition reference; no bitmap appears on the site. */
+.shuffle-mark {
+  --mark-size: 280px;
+  position: relative; display: block;
+  width: calc(var(--mark-size) * 0.62); height: var(--mark-size);
+  font-family: var(--sans); font-weight: 500; letter-spacing: -0.06em; line-height: 0.72;
+  color: currentColor;
+}
+.shuffle-slot {
+  position: absolute; left: calc(var(--x) * 1%); top: calc(var(--y) * 1%);
+  transform: translate(-50%, -50%); transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+.shuffle-glyph {
+  display: block; font-size: calc(var(--mark-size) * var(--fs));
+  font-style: normal;
+  transform: rotate(var(--r)); transform-origin: center;
+}
+.shuffle-glyph.is-z { color: #a310e7; transform: rotate(var(--r)) scaleX(-1); }
+.logo-mark {
+  --mark-size: 44px;
+  position: absolute; left: 0; top: 50%; translate: 0 -50%;
+  opacity: 0; pointer-events: none; transition: opacity 0.12s linear;
+}
+body.mark-locked .logo-word { opacity: 0; }
+body.mark-locked .logo-mark { opacity: 1; }
+
+.sound { display: flex; align-items: flex-end; gap: 2px; height: 14px; width: 22px; }
+.sound i { width: 2px; height: 3px; background: currentColor; transition: height 0.3s; }
+.sound.on i { animation: eq 0.9s ease-in-out infinite alternate; }
+.sound.on i:nth-child(2) { animation-delay: -0.3s; }
+.sound.on i:nth-child(3) { animation-delay: -0.6s; }
+.sound.on i:nth-child(4) { animation-delay: -0.15s; }
+@keyframes eq { from { height: 3px; } to { height: 14px; } }
+
+/* ---------- Work ---------- */
+#work { transition: opacity 0.8s var(--ease); }
+body.panel-open #work { opacity: 0; pointer-events: none; }
+.dim { color: var(--dim); }
+
+/* ---------- Panels ---------- */
+.panel {
+  position: fixed; inset: 0; z-index: 8;
+  display: flex; align-items: flex-start;
+  padding: 120px var(--gutter) 60px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(5, 5, 7, 0.6), rgba(5, 5, 7, 0.9));
+  -webkit-mask-image: linear-gradient(transparent 0, #000 110px);
+  mask-image: linear-gradient(transparent 0, #000 110px);
+  opacity: 0; visibility: hidden;
+  transition: opacity 0.8s var(--ease), visibility 0.8s;
+}
+.panel.open { opacity: 1; visibility: visible; }
+.panel-inner { margin-block: auto; width: 100%; max-width: 1280px; }
+.panel-inner > * { opacity: 0; transform: translateY(30px); transition: opacity 0.8s var(--ease), transform 1.2s var(--ease-out); }
+.panel.open .panel-inner > * { opacity: 1; transform: none; }
+.panel.open .panel-inner > *:nth-child(2) { transition-delay: 0.08s; }
+.panel.open .panel-inner > *:nth-child(3) { transition-delay: 0.16s; }
+.panel.open .panel-inner > *:nth-child(4) { transition-delay: 0.24s; }
+.panel.open .panel-inner > *:nth-child(5) { transition-delay: 0.32s; }
+
+.eyebrow { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 24px; }
+.panel-heading {
+  font-family: var(--sans); font-weight: 500;
+  font-size: clamp(40px, 6vw, 96px); line-height: 1.02; letter-spacing: -0.025em;
+  max-width: 18ch;
+}
+/* no italic in this family, so the emphasis is carried by weight instead */
+.panel-heading em { font-style: normal; font-weight: 300; }
+
+.lead { max-width: 62ch; margin-top: 32px; font-size: clamp(15px, 1.2vw, 18px); line-height: 1.65; color: var(--dim); }
+
+.case {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 48px;
+  margin-top: 56px; max-width: 1200px;
+}
+.case[hidden] { display: none; }
+.case-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 48px; }
+.case-actions .back { margin-top: 0; }
+.case-actions .back[hidden] { display: none; }
+.case h3 { font-size: 11px; font-weight: 400; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.case p { font-size: 15px; line-height: 1.75; }
+
+.back {
+  margin-top: 48px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 14px 22px; border: 1px solid var(--line); border-radius: 100px;
+  transition: background 0.4s, color 0.4s;
+}
+.back:hover { background: var(--fg); color: var(--bg); }
+
+/* ---------- Contact ---------- */
+/* Contact is the one white page on the site: white ground, black type, nothing else. The particles
+   still drive the page handoff; once the white surface is nearly whole, Counterflow assembles the
+   headline and the supporting copy follows it. */
+#contact {
+  position: fixed; inset: 0; z-index: 7; pointer-events: none;
+  display: flex; align-items: center; padding: 0 var(--gutter);
+  background: #fff; color: #0b0b0e;
+  opacity: 0; visibility: hidden; overflow: hidden;
+}
+#contact.handing, #contact.open { visibility: visible; opacity: var(--contact-in, 0); }
+#contact.open { pointer-events: auto; }
+.contact-inner { position: relative; z-index: 1; width: 100%; max-width: 1280px; margin: 0 auto; }
+/* The type waits for the white particle surface to be nearly whole. Counterflow is thresholded in
+   main.js rather than scrubbed, so its easing remains coherent even on a slow trackpad gesture. */
+.contact-inner > * {
+  opacity: 0;
+  transform: translateY(18px);
+}
+#contact.contact-text-in .contact-heading {
+  opacity: 1; transform: none;
+  animation: contact-counter-track 1.45s var(--ease) 0.04s both;
+}
+#contact.contact-text-in .eyebrow { animation: contact-detail-in 0.8s var(--ease-out) 0.12s both; }
+#contact.contact-text-in .big-link { animation: contact-detail-in 0.9s var(--ease-out) 0.82s both; }
+#contact.contact-text-in .contact-meta { animation: contact-detail-in 0.85s var(--ease-out) 0.94s both; }
+#contact.contact-text-in .socials { animation: contact-detail-in 0.8s var(--ease-out) 1.02s both; }
+#contact.contact-text-in .back { animation: contact-detail-in 0.8s var(--ease-out) 1.08s both; }
+#contact .big-link { border-bottom-color: rgba(11, 11, 14, 0.25); }
+#contact .big-link:hover { border-bottom-color: #0b0b0e; }
+#contact .eyebrow, #contact .contact-meta { color: rgba(11, 11, 14, 0.55); }
+#contact .contact-meta a:hover { color: #0b0b0e; }
+.socials { display: flex; gap: 10px; margin-top: 34px; }
+.socials a {
+  display: grid; place-items: center; width: 44px; height: 44px;
+  border: 1px solid rgba(11, 11, 14, 0.18); border-radius: 50%;
+  transition: background 0.35s var(--ease), border-color 0.35s var(--ease), color 0.35s var(--ease);
+}
+.socials svg { width: 19px; height: 19px; fill: currentColor; }
+.socials a:hover { background: #0b0b0e; border-color: #0b0b0e; color: #fff; }
+#contact .back { border-color: rgba(11, 11, 14, 0.2); }
+#contact .back:hover { background: #0b0b0e; color: #fff; }
+/* "Have a" sits back in a normal weight so PROJECT? carries the line */
+.contact-heading {
+  font-family: var(--sans); font-weight: 400;
+  font-size: clamp(44px, 7vw, 104px); line-height: 1.02; letter-spacing: -0.025em;
+  perspective: 900px; transform-origin: left center;
+}
+.contact-heading em { font-style: normal; font-weight: 700; text-transform: uppercase; }
+.contact-segment { display: inline-block; white-space: nowrap; }
+.contact-segment-gap { display: inline-block; width: 0.24em; }
+.contact-mask {
+  display: inline-block; overflow: hidden; padding-block: 0.1em; margin-block: -0.1em;
+  perspective: 850px; vertical-align: bottom;
+}
+.contact-space { display: inline-block; width: 0.24em; }
+.contact-char {
+  display: inline-block; opacity: 0; transform-origin: 50% 50%;
+  will-change: transform, opacity, filter;
+}
+.contact-mask.from-bottom .contact-char { transform: translateY(116%) rotateX(-68deg); }
+.contact-mask.from-top .contact-char { transform: translateY(-116%) rotateX(68deg); }
+.contact-mask.emphasis .contact-char { font-weight: 700; text-transform: uppercase; }
+#contact.contact-text-in .contact-char {
+  animation: contact-counter-glyph 1.08s var(--ease-out) calc(0.12s + var(--i) * 0.045s) both;
+}
+@keyframes contact-counter-track {
+  from { letter-spacing: 0.015em; transform: scaleX(0.95); }
+  to { letter-spacing: -0.025em; transform: none; }
+}
+@keyframes contact-counter-glyph {
+  0% { opacity: 0; filter: blur(1.25px); }
+  72% { opacity: 1; transform: translateY(calc((var(--i) - 7) * 0.18%)) rotateX(0); filter: blur(0); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+@keyframes contact-detail-in {
+  from { opacity: 0; transform: translateY(18px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.big-link {
+  display: inline-block; margin-top: 36px;
+  font-size: clamp(20px, 3vw, 40px); border-bottom: 1px solid var(--line);
+  transition: border-color 0.4s;
+}
+.big-link:hover { border-color: var(--fg); }
+.contact-meta {
+  display: flex; flex-wrap: wrap; gap: 28px; margin-top: 34px;
+  font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);
+}
+.contact-meta a { transition: color 0.3s; }
+.contact-meta a:hover { color: var(--fg); }
+#contact .back { margin-top: 48px; }
+
+/* ---------- Intro ---------- */
+#intro {
+  position: fixed; inset: 0; z-index: 100;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.6s linear, visibility 0.6s;
+}
+/* The flat black over the scene. main.js rewrites the mask every frame to punch a soft hole at
+   the cursor, so the particle field shows through wherever you look. The zero-radius default here
+   is solid black, which is what a touch screen and the first moments of the page get. */
+.intro-veil {
+  position: absolute; inset: 0; background: #000;
+  transition: opacity 1.5s var(--ease-out);
+  -webkit-mask-image: radial-gradient(circle 0px at 50% 50%, transparent 0%, rgba(0, 0, 0, 0.5) 42%, #000 76%);
+  mask-image: radial-gradient(circle 0px at 50% 50%, transparent 0%, rgba(0, 0, 0, 0.5) 42%, #000 76%);
+}
+/* The project scene is already live behind the intro. During the depth rack the black surface
+   dissolves slowly enough for the blurred destination to register before it resolves. */
+#intro.sweeping { pointer-events: none; }
+#intro.sweeping .intro-veil { opacity: 0; transition: opacity 2.15s var(--ease-out); }
+#intro.reveal .intro-veil { opacity: 0; transition: opacity 0.7s var(--ease-out); }
+
+/* The snow sits on the black and under the type, so DIZRUPT stays legible while the ground behind
+   it crawls. Scaled up from a small canvas with no smoothing, which is what gives it the coarse
+   analogue grain rather than the fine speckle of film. */
+.intro-static {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  image-rendering: pixelated;
+  opacity: 0.17;
+  mix-blend-mode: screen;
+}
+/* Scanlines cross everything a CRT shows, the lettering included. */
+.intro-scan {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: repeating-linear-gradient(to bottom,
+    rgba(0, 0, 0, 0.34) 0 1px, transparent 1px 3px);
+  opacity: 0.5;
+  animation: scan-drift 8s linear infinite;
+}
+@keyframes scan-drift {
+  from { background-position-y: 0; }
+  to { background-position-y: 48px; }
+}
+/* both go with the black when the picture finally resolves */
+#intro.sweeping .intro-static, #intro.sweeping .intro-scan,
+#intro.reveal .intro-static, #intro.reveal .intro-scan {
+  opacity: 0; transition: opacity 1.1s var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-scan { animation: none; }
+  .shuffle-slot, .intro-shuffle { animation: none !important; }
+}
+#intro.done { opacity: 0; visibility: hidden; pointer-events: none; }
+.intro-inner {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  gap: clamp(18px, 2.6vw, 34px);
+  transition: transform 1.35s var(--ease), opacity 0.9s linear, filter 0.9s linear;
+}
+.intro-shuffle {
+  --mark-size: clamp(190px, 28vw, 350px);
+  position: fixed; left: 50%; top: 50%; z-index: 2;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  will-change: left, top, transform, opacity;
+}
+#intro.shuffle-active .intro-shuffle { opacity: 1; visibility: visible; }
+#intro.shuffle-active #intro-word { opacity: 0; transition: opacity 0.08s linear; }
+#intro-word {
+  display: flex; font-family: var(--sans); font-weight: 500;
+  font-size: clamp(52px, 15vw, 230px); line-height: 1; letter-spacing: -0.02em;
+  transform-origin: center;
+}
+/* Counterflow: neighbouring glyphs enter from opposite sides of their own vertical masks. The
+   movement resolves onto one baseline, so the tension is in the arrival rather than the lockup. */
+.char-mask {
+  display: inline-block; overflow: hidden; padding: 0.11em 0; margin-block: -0.11em;
+  perspective: 850px;
+}
+/* the mirrored Z; its tracking moves to a margin so the flip stays centred on the letter */
+.char-mask.flip { transform: scaleX(-1); letter-spacing: 0; margin-right: -0.02em; }
+/* Every so often the Z loses hold of the signal: it tears, jumps a few pixels and drops part of
+   itself before settling. Driven from the mask, which only carries the flip, so the letter's own
+   entry animation is never interrupted — and every keyframe keeps the scaleX or it would unflip
+   mid-glitch. main.js fires it at irregular intervals; a metronome would read as decoration. */
+/* The Z loses its signal every so often: the picture tears and the three colour channels come
+   apart. Nothing here decides how far or for how long — main.js writes these values fresh on every
+   step of every glitch, so no two are alike. Keyframes would give the same seizure each time.
+
+   The mask normally clips its letter so the entry animation can ride up out of it; that clip would
+   shear the channels off the moment they step sideways, so it is lifted while glitching. */
+.char-mask.flip.glitch { overflow: visible; }
+.char-mask.flip .char { position: relative; }
+.char-mask.flip .char::before,
+.char-mask.flip .char::after,
+.char-mask.flip .z-ghost {
+  content: attr(data-char);
+  position: absolute; left: 0; top: 0;
+  pointer-events: none;
+  mix-blend-mode: screen; /* where all three still line up, the letter stays white */
+}
+.char-mask.flip .char::before {
+  color: #ff2d4f;
+  opacity: var(--r-o, 0);
+  transform: translate(var(--r-x, 0), var(--r-y, 0));
+  clip-path: var(--r-clip, none);
+}
+.char-mask.flip .char::after {
+  color: #2bff77;
+  opacity: var(--g-o, 0);
+  transform: translate(var(--g-x, 0), var(--g-y, 0));
+  clip-path: var(--g-clip, none);
+}
+.char-mask.flip .z-ghost {
+  color: #2f6bff;
+  opacity: var(--b-o, 0);
+  transform: translate(var(--b-x, 0), var(--b-y, 0));
+  clip-path: var(--b-clip, none);
+}
+@media (prefers-reduced-motion: reduce) {
+  .char-mask.flip .char::before,
+  .char-mask.flip .char::after,
+  .char-mask.flip .z-ghost { opacity: 0 !important; }
+}
+.char-mask .char {
+  display: inline-block; opacity: 0; transform-origin: 50% 50%;
+  will-change: transform, opacity, filter;
+}
+.char-mask:nth-child(odd) .char { transform: translateY(118%) rotateX(-70deg); }
+.char-mask:nth-child(even) .char { transform: translateY(-118%) rotateX(70deg); }
+#intro-word.in { animation: intro-counter-track 1.5s var(--ease) 0.06s both; }
+#intro-word.in .char {
+  animation: intro-counter-glyph 1.2s var(--ease-out) calc(0.1s + var(--i) * 0.065s) both;
+}
+/* The first Z signal break resolves that letter into Dizrupt's production brand purple.  There is
+   no colour tween here: the snap is the punctuation at the end of the glitch. */
+#intro-word.brand-purple .char-mask.flip .char { color: #a310e7; }
+@keyframes intro-counter-track {
+  from { transform: scaleX(0.94); }
+  to { transform: scaleX(1); }
+}
+@keyframes intro-counter-glyph {
+  0% { opacity: 0; filter: blur(1.5px); }
+  70% { opacity: 1; transform: translateY(calc((var(--i) - 3) * 0.3%)) rotateX(0); filter: blur(0); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+/* As the ribbon crosses the live letters they catch its light, but remain DOM type throughout. */
+#intro.wrapped #intro-word .char {
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.95), 0 0 56px rgba(170, 205, 255, 0.72);
+  transition: transform 1s var(--ease-out), opacity 0.5s linear, text-shadow 0.35s var(--ease-out);
+}
+/* the letters burn just before they go, so the hand-over to particles reads as heat, not a fade */
+#intro-word.burn .char {
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.9), 0 0 64px rgba(150, 180, 255, 0.55);
+  transition: text-shadow 0.5s var(--ease-out);
+}
+#intro-word.out .char-mask { overflow: visible; } /* or the blur is clipped at the mask edge */
+/* leaving, the letters don't move away: they blur and brighten out where they stand, so the
+   particles gathering into the same word take their place */
+#intro-word.out .char {
+  opacity: 0; transform: scale(0.995); filter: blur(5px);
+  transition: transform 0.9s var(--ease-out), opacity 0.72s linear, filter 0.72s linear;
+}
+/* Legacy exit state retained for devtools experiments; production entry uses the depth rack below. */
+#intro.exit { pointer-events: none; }
+#intro.exit .intro-inner {
+  transform: translate3d(-112vw, 0, 0) skewX(-3deg);
+  opacity: 0; filter: blur(7px);
+}
+/* Tagline and scroll cue arrive once the count reaches 100, and take the counter's place. */
+.intro-tag {
+  max-width: 34ch; text-align: center; text-wrap: balance;
+  font-size: clamp(13px, 1.1vw, 15px); line-height: 1.55; color: rgba(255, 255, 255, 0.55);
+  opacity: 0; transform: translateY(10px);
+  transition: opacity 0.9s var(--ease-out), transform 0.9s var(--ease-out);
+}
+#intro.ready .intro-tag { opacity: 1; transform: none; }
+#intro.reveal .intro-tag {
+  opacity: 0; transform: translateY(-8px); filter: blur(8px);
+  transition: opacity 0.7s linear, transform 0.9s var(--ease), filter 0.7s linear;
+}
+.intro-enter {
+  position: absolute; left: 50%; bottom: var(--gutter); translate: -50% 0;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  opacity: 0; transition: opacity 0.9s var(--ease-out) 0.15s, color 0.3s;
+}
+#intro.ready .intro-enter { opacity: 1; }
+#intro.reveal .intro-enter { opacity: 0; transition: opacity 0.4s linear; }
+#intro.sweeping .intro-enter { opacity: 0; transition: opacity 0.25s linear; }
+.intro-enter:hover { color: #fff; }
+.intro-enter i {
+  display: block; width: 1px; height: 32px; transform-origin: top;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff);
+  animation: cue 2s var(--ease) infinite;
+}
+@keyframes cue {
+  0% { transform: scaleY(0.15); opacity: 0.25; }
+  45% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0.15); opacity: 0.25; }
+}
+.intro-meter {
+  position: absolute; left: var(--gutter); bottom: var(--gutter);
+  font-size: 11px; letter-spacing: 0.18em; color: rgba(255, 255, 255, 0.4);
+  transition: opacity 0.6s linear;
+}
+#intro.ready .intro-meter { opacity: 0; }
+.intro-meter::after { content: '%'; }
+
+/* ---------- Intro → Index: Depth Rack ---------- */
+body.intro-depth #gl {
+  transform-origin: 50% 48%;
+  animation: intro-scene-focus 2.3s var(--ease) both;
+  will-change: transform, filter, opacity;
+}
+body.intro-depth #index {
+  animation: intro-index-focus 2.3s var(--ease) both;
+  will-change: transform, filter, opacity;
+}
+#intro.sweeping .intro-inner { animation: intro-copy-focus 1.72s var(--ease) 0.12s both; }
+#intro.sweeping .intro-tag { animation: intro-tag-focus 0.72s ease both; }
+@keyframes intro-copy-focus {
+  0%, 18% { transform: scale(1); opacity: 1; filter: blur(0); }
+  100% { transform: scale(.97); opacity: 0; filter: blur(13px); }
+}
+@keyframes intro-tag-focus {
+  to { transform: translateY(10px) scale(.98); opacity: 0; filter: blur(7px); }
+}
+@keyframes intro-scene-focus {
+  0% { transform: scale(1.07); opacity: .02; filter: blur(18px); }
+  28% { opacity: .16; }
+  100% { transform: scale(1); opacity: 1; filter: blur(0); }
+}
+@keyframes intro-index-focus {
+  0% { transform: scale(1.035); opacity: 0; filter: blur(12px); }
+  35% { opacity: .12; }
+  100% { transform: scale(1); opacity: 1; filter: blur(0); }
+}
+/* In the Claude sequence the project world waits until the flex reaches its peak. This later
+   animation overrides the early depth-rack timing and lets the cards grow out behind the pose. */
+body.intro-projects #index.open {
+  animation: mascot-projects-in 1.25s var(--ease-out) both;
+}
+@keyframes mascot-projects-in {
+  0% { transform: scale(1.028); opacity: 0; filter: blur(11px); }
+  30% { opacity: .18; }
+  100% { transform: scale(1); opacity: 1; filter: blur(0); }
+}
+
+/* ---------- Index (project spiral) ---------- */
+#index {
+  position: fixed; inset: 0; z-index: 7; pointer-events: none;
+  opacity: 0; visibility: hidden; transition: opacity 0.9s var(--ease), visibility 0.9s;
+}
+#index.open { opacity: 1; visibility: visible; }
+.index-hit {
+  position: absolute; top: 0; left: 0; width: 100px; height: 100px;
+  pointer-events: auto; transform-origin: 0 0; background: none; border: 0;
+}
+/* Cards are revealed shortly before the intro stream settles. Keep them visual-only during that
+   overlap so a project cannot replace the spine halfway through the handoff. */
+#intro:not(.done) ~ #index .index-hit { pointer-events: none !important; }
+.index-label {
+  position: absolute; top: 0; left: 0; width: 320px;
+  display: flex; flex-direction: column; gap: 4px;
+  pointer-events: none; transform-origin: 0 0; will-change: transform, opacity;
+}
+.index-label .index-meta { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+.index-label strong { font-family: var(--sans); font-weight: 500; font-size: 28px; line-height: 1.1; letter-spacing: -0.02em; color: var(--dim); transition: color 0.4s; }
+.index-label .index-cat { font-size: 12px; color: var(--dim); }
+.index-label.is-front strong, .index-label.is-hover strong { color: var(--fg); }
+.index-hint {
+  position: absolute; left: 50%; bottom: var(--gutter); translate: -50% 0; white-space: nowrap;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);
+  /* leaves to the left with the spiral it belongs to */
+  transform: translate3d(calc(var(--handoff, 0) * -26vw), 0, 0);
+  opacity: calc(1 - var(--handoff, 0) * 2.5);
+}
+
+/* ---------- Cursor ---------- */
+.cursor {
+  position: fixed; top: 0; left: 0; z-index: 200; pointer-events: none;
+  width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%;
+  background: var(--fg); mix-blend-mode: difference;
+  transition: width 0.4s var(--ease-out), height 0.4s var(--ease-out), margin 0.4s var(--ease-out);
+}
+.cursor.hover { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+@media (pointer: coarse) { .cursor { display: none; } }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 1000px) {
+  .case { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .case { grid-template-columns: 1fr; gap: 32px; }
+}
+
+/* ---------- Intro word: tearing out ----------
+   Scrolling away from the landing does not fold the word into the mark; the word loses the signal.
+   Two coloured copies sit exactly over the original and main.js tears all three into bands that
+   jump sideways independently, so the letters come apart into red and blue before they go. */
+.intro-word-shard {
+  position: absolute; left: 50%; top: 0;
+  display: flex; font-family: var(--sans); font-weight: 500;
+  font-size: clamp(52px, 15vw, 230px); line-height: 1; letter-spacing: -0.02em;
+  pointer-events: none;
+  transform: translate(-50%, 0) translateX(var(--slip, 0));
+  will-change: transform, opacity;
+}
+.intro-word-shard.r { color: #ff2d4f; mix-blend-mode: screen; }
+.intro-word-shard.b { color: #2f6bff; mix-blend-mode: screen; }
+/* the copies carry the whole word's markup, so the Z's own colour ghosts and the entry animation
+   have to keep out of the way — these are flat stamps of the word, nothing more */
+.intro-word-shard .char-mask.flip .char::before,
+.intro-word-shard .char-mask.flip .char::after,
+.intro-word-shard .z-ghost { display: none; }
+.intro-word-shard .char { transform: none !important; opacity: 1 !important; animation: none !important; }
+.intro-word-shard .char-mask { overflow: visible; }
+@media (prefers-reduced-motion: reduce) {
+  .intro-word-shard.r, .intro-word-shard.b { display: none; }
+}
+#intro.word-tearing .intro-inner { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+}
+
+/* ---------- Intro: the count around the portrait ----------
+   He holds the centre and the four numbers stand at his corners — founded in and solutions above
+   his shoulders, countries and clients below them. The columns are pushed apart by a gap wide
+   enough to clear his silhouette, so the grid frames him rather than sitting on him. The year's
+   last digit takes the same violet the Z resolves to, and the figures are tabular so nothing
+   jitters while they count up. */
+.intro-stats {
+  position: fixed; left: 50%; top: 50%; translate: -50% -50%;
+  z-index: 4; margin: 0;
+  width: min(1580px, 96vw);
+  display: grid; grid-template-columns: 1fr 1fr;
+  /* wide enough to clear his shoulders, which are about 42% of the frame across */
+  column-gap: clamp(230px, 49vw, 820px);
+  row-gap: clamp(120px, 26vh, 270px);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.9s var(--ease), visibility 0.9s;
+}
+#intro.stats-in .intro-stats { opacity: 1; visibility: visible; }
+.stat {
+  /* each pair reads inward, towards him */
+  opacity: 0; transform: translateY(18px);
+  transition: opacity 0.7s var(--ease-out), transform 0.95s var(--ease-out);
+}
+.stat:nth-child(odd) { text-align: right; }
+.stat:nth-child(even) { text-align: left; }
+/* Each one arrives when it is its turn, not on a stagger — main.js adds this as it reaches the
+   number, so that he can turn and look at it before the next one lands. */
+.stat.is-in { opacity: 1; transform: none; }
+.stat-n {
+  font-family: var(--mono); font-weight: 500;
+  font-size: clamp(24px, 3.2vw, 46px); line-height: 1; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums; /* so the width never shifts while the value is a cipher */
+  margin: 0;
+}
+/* the key: violet, and the one part of the line that never scrambles */
+.stat-key { font-style: normal; color: #a310e7; }
+.stat-l {
+  margin: 14px 0 0;
+  font-family: var(--mono);
+  font-size: 12px; letter-spacing: 0.01em; text-transform: none; color: var(--dim);
+}
+/* the comment marker, held well back — it is punctuation, not a word */
+.stat-mark { font-style: normal; color: rgba(242, 240, 235, 0.26); margin-right: 0.55em; }
+/* A label arrives in one of the languages of the countries the work is in and loses the signal
+   into English. Arabic, Devanagari, Thai and the CJK scripts either join up or are set solid, and
+   tracking pulls them apart — so the letter-spacing comes off for as long as the label is foreign,
+   and the uppercasing with it, since neither means anything in those scripts. */
+.stat-l.is-foreign { letter-spacing: 0; }
+
+/* The same fault the Z runs: the three colour channels come apart and a band drops out. main.js
+   writes every one of these values fresh on each step, so no two faults are alike. */
+.stat-n, .stat-l { position: relative; }
+.stat-n::before, .stat-n::after,
+.stat-l::before, .stat-l::after {
+  content: attr(data-text);
+  position: absolute; left: 0; top: 0; width: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen; /* where the channels still line up, the type stays as it was */
+  letter-spacing: inherit; text-transform: inherit; font-variant-numeric: inherit;
+  text-align: inherit;
+}
+.stat-n::before, .stat-l::before {
+  color: #ff2d4f;
+  opacity: var(--r-o, 0);
+  transform: translate(var(--r-x, 0), var(--r-y, 0));
+  clip-path: var(--r-clip, none);
+}
+.stat-n::after, .stat-l::after {
+  color: #2f6bff;
+  opacity: var(--b-o, 0);
+  transform: translate(var(--b-x, 0), var(--b-y, 0));
+  clip-path: var(--b-clip, none);
+}
+/* Written with the same weight as the arrival rule above it, or that rule's `transform: none`
+   wins on specificity and the cell never jumps. */
+#intro.stats-in .stat.is-in.faulting { transform: translate(var(--slip, 0), 0); }
+@media (prefers-reduced-motion: reduce) {
+  .stat-n::before, .stat-n::after, .stat-l::before, .stat-l::after { opacity: 0 !important; }
+}
+@media (max-width: 900px) {
+  /* he is nearly the width of the screen here, so the corners pull in tight against the edges */
+  .intro-stats {
+    width: 88vw;
+    column-gap: 46vw;
+    row-gap: clamp(150px, 34vh, 280px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat { transition: opacity 0.4s linear; transform: none; }
+}
+
+/* ---------- Intro: the profile ----------
+   The beat after the count. He turns side on and holds the left of the frame; this stands in the
+   space that leaves. Set against the right half rather than centred in it, so the line starts on
+   a column of its own and the gap between him and the type is the composition. */
+.intro-profile {
+  position: fixed; left: 56%; right: var(--gutter); top: 50%; translate: 0 -50%;
+  z-index: 4; max-width: 560px;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.9s var(--ease), visibility 0.9s;
+}
+#intro.profile-in .intro-profile { opacity: 1; visibility: visible; }
+.intro-profile > * {
+  opacity: 0; transform: translateY(16px);
+  transition: opacity 0.8s var(--ease-out), transform 1s var(--ease-out);
+}
+#intro.profile-in .intro-profile > * { opacity: 1; transform: none; }
+#intro.profile-in .profile-line { transition-delay: 0.12s; }
+#intro.profile-in .profile-body { transition-delay: 0.24s; }
+.profile-mark {
+  margin: 0 0 22px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.01em;
+  color: #a310e7;
+}
+.profile-line {
+  margin: 0;
+  font-family: var(--sans); font-weight: 500;
+  font-size: clamp(26px, 3.2vw, 50px); line-height: 1.06; letter-spacing: -0.03em;
+  max-width: 14ch;
+}
+.profile-body {
+  margin: 26px 0 0; max-width: 42ch;
+  font-family: var(--mono);
+  font-size: 12px; line-height: 1.8; color: var(--dim);
+}
+@media (max-width: 900px) {
+  /* no room beside him at this width: the type takes the lower third and he stands behind it */
+  .intro-profile {
+    left: var(--gutter); right: var(--gutter); top: auto; bottom: clamp(60px, 10vh, 110px);
+    translate: 0 0; max-width: none;
+  }
+  .profile-line { max-width: none; }
+}

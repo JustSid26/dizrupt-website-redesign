@@ -1,0 +1,187 @@
+/* ---------- Project page ----------
+   The case study: white ground, black type, the client's banner running the full width of the
+   screen and the work set out under it in three numbered chapters. `--project-in` is the white
+   rising under the growing frame and `--project-text` the copy arriving once it has landed; both
+   are driven from project.js frame by frame, so nothing here has a clock of its own. */
+#project {
+  position: fixed; inset: 0; z-index: 8;
+  --ink: #0b0b0e;
+  --ink-dim: rgba(11, 11, 14, 0.52);
+  --rule: rgba(11, 11, 14, 0.14);
+  color: var(--ink);
+  background: rgba(255, 255, 255, var(--project-in, 0));
+  visibility: hidden; pointer-events: none;
+}
+#project.open { visibility: visible; }
+#project.settled { pointer-events: auto; }
+
+.project-scroll {
+  position: absolute; inset: 0;
+  overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.project-scroll::-webkit-scrollbar { display: none; }
+#project.moving .project-scroll { overflow-y: hidden; }
+
+/* The banner runs edge to edge. The flying frame lands on this box exactly, and only then does this
+   one show — the two are never both visible, so the hand-over cannot be seen. */
+.project-hero {
+  position: relative; width: 100%; aspect-ratio: 2574 / 894;
+  margin: 0; overflow: hidden;
+  background: linear-gradient(120deg, var(--project-a, #5b7cff), var(--project-b, #d4b8ff));
+  opacity: 0;
+}
+#project.settled .project-hero { opacity: 1; }
+.project-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+#project.no-banner .project-hero img { display: none; }
+/* a project with no banner gets its name across its own two colours instead */
+.project-hero-word {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  font-size: clamp(36px, 6vw, 92px); font-weight: 500; letter-spacing: -0.03em; color: #fff;
+}
+#project.no-banner .project-hero-word { display: flex; }
+
+.project-inner {
+  width: 100%; max-width: 1240px; margin: 0 auto;
+  padding: clamp(56px, 8vw, 128px) var(--gutter) clamp(72px, 9vw, 150px);
+}
+
+/* Everything below the banner arrives on the same count as the page and leaves on it too. The
+   further down the page a block sits, the further it travels, so the eye is led rather than hit. */
+.project-reveal {
+  opacity: var(--project-text, 0);
+  transform: translateY(calc((1 - var(--project-text, 0)) * var(--rise, 22px)));
+}
+
+/* ---------- the head ---------- */
+.project-head { display: grid; gap: clamp(20px, 2.4vw, 34px); }
+.project-no {
+  font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim);
+  display: flex; align-items: center; gap: 14px;
+}
+.project-no::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+.project-title {
+  font-family: var(--sans); font-weight: 500;
+  font-size: clamp(46px, 9vw, 150px); line-height: 0.95; letter-spacing: -0.04em;
+  margin: 0;
+}
+.project-lead {
+  max-width: 34ch; margin-left: auto;
+  font-size: clamp(17px, 1.6vw, 24px); line-height: 1.45; letter-spacing: -0.01em;
+}
+
+/* ---------- who it was for ---------- */
+.project-meta {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(20px, 3vw, 48px);
+  margin: clamp(56px, 7vw, 110px) 0 0;
+  padding-top: 22px; border-top: 1px solid var(--rule);
+}
+.project-meta dt {
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim);
+  margin-bottom: 10px;
+}
+.project-meta dd { margin: 0; font-size: clamp(14px, 1.15vw, 17px); line-height: 1.45; }
+
+/* ---------- the chapters ---------- */
+.project-chapters { margin-top: clamp(64px, 9vw, 140px); }
+.project-chapters[hidden] { display: none; }
+.chapter {
+  display: grid; grid-template-columns: 90px minmax(0, 1fr);
+  gap: clamp(16px, 3vw, 56px);
+  padding: clamp(34px, 4.5vw, 64px) 0;
+  border-top: 1px solid var(--rule);
+}
+.chapter:last-child { border-bottom: 1px solid var(--rule); }
+.chapter-no {
+  font-size: 11px; letter-spacing: 0.16em; color: var(--ink-dim);
+  /* the number stays with you down a long chapter, the way a running head would */
+  position: sticky; top: 28px; align-self: start;
+}
+.chapter h3 {
+  font-family: var(--sans); font-weight: 500;
+  font-size: clamp(26px, 3.4vw, 52px); line-height: 1.05; letter-spacing: -0.03em;
+  margin: 0 0 clamp(16px, 1.8vw, 26px);
+}
+.chapter p { max-width: 62ch; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.7; color: rgba(11, 11, 14, 0.78); }
+
+/* ---------- the way out ---------- */
+.project-foot {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  margin-top: clamp(48px, 6vw, 96px);
+}
+#project .back { margin: 0; border-color: rgba(11, 11, 14, 0.2); color: var(--ink); }
+#project .back:hover { background: var(--ink); color: #fff; }
+.project-next {
+  display: grid; gap: 8px; text-align: right; margin-left: auto;
+  padding: 0; color: var(--ink);
+}
+.project-next-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
+.project-next strong {
+  font-family: var(--sans); font-weight: 500;
+  font-size: clamp(28px, 4.5vw, 64px); line-height: 1; letter-spacing: -0.03em;
+  /* the rule draws itself in from the side you are heading towards */
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat; background-position: 100% 100%; background-size: 0 1px;
+  transition: background-size 0.5s var(--ease-out);
+  padding-bottom: 6px;
+}
+.project-next:hover strong { background-size: 100% 1px; }
+
+/* turning to the next case: the page holds, its contents change under a short fade */
+#project.turning .project-inner, #project.turning .project-hero {
+  opacity: 0; transition: opacity 0.34s var(--ease);
+}
+#project .project-inner, #project .project-hero { transition: opacity 0.5s var(--ease); }
+
+/* ---------- the banner in flight ----------
+   A box moved and resized every frame from the card to the hero. It is positioned from its top-left
+   corner so the transform is a plain translate, and it clips its picture the way the hero does — so
+   the moment the two coincide, the swap cannot be seen. */
+.project-frame {
+  position: absolute; top: 0; left: 0; width: 100px; height: 100px;
+  overflow: hidden; border-radius: 18px;
+  background: linear-gradient(120deg, var(--project-a, #5b7cff), var(--project-b, #d4b8ff));
+  will-change: transform, width, height;
+  pointer-events: none;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, calc(0.35 * (1 - var(--project-in, 0))));
+}
+#project.settled .project-frame { display: none; }
+.project-frame-img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+  transform-origin: center; will-change: filter;
+}
+#project.no-banner .project-frame-img { display: none; }
+
+@media (max-width: 900px) {
+  .project-lead { max-width: none; margin-left: 0; }
+  .project-meta { grid-template-columns: 1fr; gap: 22px; }
+  .chapter { grid-template-columns: 1fr; gap: 10px; }
+  .chapter-no { position: static; }
+  .project-hero { aspect-ratio: 16 / 11; }
+  .project-next { text-align: left; margin-left: 0; }
+}
+
+/* ---------- the fault on the way in and out ----------
+   Opening a project tears the banner as it comes off the card; leaving one tears the page as it
+   goes. Both are the same burst: a jump sideways, a band lost across the middle and the red and
+   blue pulled apart, driven from project.js so no two are alike. */
+.project-frame.glitching, .project-scroll.glitching {
+  transform-origin: center;
+  will-change: transform, clip-path, filter;
+}
+.project-frame.glitching {
+  filter: drop-shadow(var(--rgb, 0) 0 rgba(255, 45, 79, 0.85))
+          drop-shadow(calc(var(--rgb, 0) * -1) 0 rgba(47, 107, 255, 0.85));
+}
+.project-frame.glitching .project-frame-img { transform: translateX(var(--slip, 0)); }
+.project-scroll.glitching {
+  filter: drop-shadow(var(--rgb, 0) 0 rgba(255, 45, 79, 0.5))
+          drop-shadow(calc(var(--rgb, 0) * -1) 0 rgba(47, 107, 255, 0.5));
+}
+.project-scroll.glitching .project-inner, .project-scroll.glitching .project-hero {
+  transform: translateX(var(--slip, 0));
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-frame.glitching, .project-scroll.glitching { filter: none; clip-path: none !important; }
+}

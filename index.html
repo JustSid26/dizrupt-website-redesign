@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dizrupt — Index</title>
+  <meta name="description" content="Dizrupt is a solutions-led full stack digital marketing agency headquartered in Mumbai.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="project.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div class="vignette"></div>
+  <div class="grain"></div>
+
+  <header class="nav">
+    <span class="logo" aria-label="Dizrupt">
+      <span class="logo-word" aria-hidden="true">DI<span class="flip-z">Z</span>RUPT</span>
+      <span class="shuffle-mark logo-mark" id="logo-mark" aria-hidden="true"></span>
+    </span>
+    <button class="sound" id="sound" aria-label="Toggle sound"><i></i><i></i><i></i><i></i></button>
+  </header>
+
+  <!-- Intro: the landing screen. It holds until you scroll. The veil is the flat black over the
+       scene; the cursor punches a hole in it, so the particle field shows through where you look. -->
+  <section id="intro">
+    <div class="intro-veil"></div>
+    <!-- analogue snow over the black, and the scanlines that cross everything including the type -->
+    <canvas class="intro-static" id="intro-static" aria-hidden="true"></canvas>
+    <div class="intro-inner">
+      <h1 id="intro-word" aria-label="Dizrupt"></h1>
+      <p class="intro-tag">A solutions-led full stack digital marketing agency, headquartered in Mumbai.</p>
+    </div>
+    <!-- The count, beside the portrait. It arrives once he has built, and holds there until you
+         scroll again. -->
+    <!-- data-key is the stable part: it never scrambles, so what decodes is only ever the value.
+         The label's own text is the plain English phrase, which is what the language table is keyed
+         on; the // is added when it is drawn. -->
+    <dl class="intro-stats" id="intro-stats">
+      <div class="stat">
+        <dt class="stat-n" data-key="EST" data-to="2023">2023</dt>
+        <dd class="stat-l">founded in</dd>
+      </div>
+      <div class="stat">
+        <dt class="stat-n" data-key="SOL" data-to="06">06</dt>
+        <dd class="stat-l">solutions</dd>
+      </div>
+      <div class="stat">
+        <dt class="stat-n" data-key="GEO" data-to="08" data-suffix="+">08+</dt>
+        <dd class="stat-l">countries</dd>
+      </div>
+      <div class="stat">
+        <dt class="stat-n" data-key="CLI" data-to="25" data-suffix="+">25+</dt>
+        <dd class="stat-l">clients</dd>
+      </div>
+    </dl>
+    <!-- The scene after the count: he turns side on and holds the left of the frame, and this
+         stands in the space he leaves. Copy is the site's own, not written for here. -->
+    <div class="intro-profile" id="intro-profile">
+      <p class="profile-mark">// who</p>
+      <h2 class="profile-line">Solutions designed for what’s next.</h2>
+      <p class="profile-body">A solutions-led full stack digital marketing agency, headquartered in Mumbai.</p>
+    </div>
+    <div class="shuffle-mark intro-shuffle" id="intro-shuffle" aria-hidden="true"></div>
+    <p class="intro-meter"><span id="intro-count">0</span></p>
+    <button class="intro-enter" id="intro-enter">Scroll to enter<i></i></button>
+    <div class="intro-scan" aria-hidden="true"></div>
+  </section>
+
+  <!-- Index: projects spiralling around the spine (built by spiral.js) -->
+  <section id="index" aria-label="All projects">
+    <div class="index-cards"></div>
+    <p class="index-hint">Scroll to turn the spiral · Click a project for its overview</p>
+  </section>
+
+  <!-- Contact: scrolling past the last project hands over to this -->
+  <section id="contact" aria-label="Contact">
+    <div class="contact-inner">
+      <p class="eyebrow">Contact</p>
+      <h2 class="contact-heading">Have a <em>project?</em></h2>
+      <a class="big-link" href="mailto:shamit.g@dizrupt.in">shamit.g@dizrupt.in</a>
+      <div class="contact-meta">
+        <a href="tel:+919920939203">+91 99209 39203</a>
+        <span>Mumbai, India</span>
+      </div>
+      <ul class="socials">
+        <li><a href="mailto:shamit.g@dizrupt.in" aria-label="Email Dizrupt">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm1.6 2L12 12.3 19.4 7H4.6ZM20 8.5l-7.42 5.3a1 1 0 0 1-1.16 0L4 8.5V17h16V8.5Z"/></svg>
+        </a></li>
+        <li><a href="https://www.linkedin.com/in/shamit-gandhi-8b727a194/" target="_blank" rel="noopener noreferrer" aria-label="Shamit Gandhi on LinkedIn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8.25H3.25V21H6.5V8.25ZM6.71 4.3A1.86 1.86 0 1 0 3 4.3a1.86 1.86 0 0 0 3.71 0ZM21 13.69c0-3.84-2.05-5.63-4.79-5.63-2.21 0-3.2 1.22-3.75 2.07V8.25H9.21V21h3.25v-6.31c0-1.66.31-3.27 2.37-3.27 2.03 0 2.05 1.9 2.05 3.38V21H21v-7.31Z"/></svg>
+        </a></li>
+      </ul>
+      <button class="back" id="contact-back">← Back to work</button>
+    </div>
+  </section>
+
+  <!-- Project page (filled from PROJECTS by project.js): the case study proper — full-bleed banner,
+       the ask, the solution and what came of it. The .project-frame is the banner in flight,
+       growing out of the card you clicked into the hero. -->
+  <section id="project" aria-label="Project">
+    <div class="project-scroll">
+      <figure class="project-hero"><img alt=""><figcaption class="project-hero-word"></figcaption></figure>
+
+      <div class="project-inner">
+        <header class="project-head">
+          <p class="project-no" id="project-no"></p>
+          <h2 class="project-title" id="project-title"></h2>
+          <p class="project-lead" id="project-summary"></p>
+        </header>
+
+        <dl class="project-meta">
+          <div><dt>Client</dt><dd id="project-client"></dd></div>
+          <div><dt>Services</dt><dd id="project-services"></dd></div>
+          <div><dt>Sector</dt><dd id="project-sector"></dd></div>
+        </dl>
+
+        <div class="project-chapters" id="project-chapters">
+          <section class="chapter"><p class="chapter-no">01</p><div><h3>The Ask</h3><p id="project-ask"></p></div></section>
+          <section class="chapter"><p class="chapter-no">02</p><div><h3>The Solution</h3><p id="project-solution"></p></div></section>
+          <section class="chapter"><p class="chapter-no">03</p><div><h3>The Dizruption</h3><p id="project-dizruption"></p></div></section>
+        </div>
+
+        <nav class="project-foot">
+          <button class="back" id="project-back">← Back to index</button>
+          <button class="project-next" id="project-next">
+            <span class="project-next-label">Next project</span>
+            <strong id="project-next-name"></strong>
+          </button>
+        </nav>
+      </div>
+    </div>
+    <div class="project-frame" aria-hidden="true"><img class="project-frame-img" alt=""></div>
+  </section>
+
+  <div class="cursor" id="cursor"></div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

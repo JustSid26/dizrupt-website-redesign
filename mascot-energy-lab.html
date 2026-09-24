@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dizrupt — Lantern Particle Hero Study</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #020307; color: #fff; }
+    body { font-family: "Inter Tight", sans-serif; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .wash {
+      position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(circle at 66% 20%, rgba(236,255,164,.10), transparent 18%),
+        radial-gradient(circle at 36% 45%, rgba(0,255,133,.12), transparent 34%),
+        radial-gradient(circle at 67% 58%, rgba(29,144,86,.10), transparent 31%),
+        linear-gradient(115deg, #010403 0%, #04120d 48%, #020706 100%);
+    }
+    .grain {
+      position: fixed; inset: -30%; pointer-events: none; opacity: .11; mix-blend-mode: screen;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      animation: grain .24s steps(2) infinite;
+    }
+    @keyframes grain {
+      0% { transform: translate(-2%, -1%); }
+      25% { transform: translate(2%, 1%); }
+      50% { transform: translate(-1%, 2%); }
+      75% { transform: translate(1%, -2%); }
+      100% { transform: translate(0, 1%); }
+    }
+    .brand { position: fixed; left: 28px; top: 24px; z-index: 3; font-size: 12px; letter-spacing: .18em; }
+    .brand .z { display: inline-block; color: #a310e7; transform: scaleX(-1); }
+    .caption {
+      position: fixed; left: 28px; bottom: 24px; z-index: 3;
+      font-size: 10px; line-height: 1.6; letter-spacing: .14em; text-transform: uppercase;
+      color: rgba(255,255,255,.42);
+    }
+    .caption strong { display: block; color: rgba(255,255,255,.82); font-weight: 500; }
+    .actions { position: fixed; right: 24px; bottom: 24px; z-index: 3; display: flex; gap: 8px; }
+    button {
+      border: 1px solid rgba(255,255,255,.18); border-radius: 999px; background: rgba(0,0,0,.18);
+      color: rgba(255,255,255,.68); padding: 10px 14px; font: 500 10px/1 "Inter Tight", sans-serif;
+      letter-spacing: .13em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(8px);
+      transition: color .25s, border-color .25s, background .25s;
+    }
+    button:hover { color: #fff; border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.07); }
+    .loading {
+      position: fixed; left: 50%; top: 50%; z-index: 4; translate: -50% -50%;
+      font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.5);
+      transition: opacity .4s;
+    }
+    .loading.done { opacity: 0; pointer-events: none; }
+    @media (max-width: 650px) {
+      .caption { left: 18px; bottom: 18px; }
+      .brand { left: 18px; top: 18px; }
+      .actions { right: 18px; bottom: 18px; }
+      .actions button:first-child { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .grain { animation: none; } }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="wash"></div>
+  <canvas id="energy"></canvas>
+  <div class="grain"></div>
+  <p class="brand">DI<span class="z">Z</span>RUPT</p>
+  <p class="caption"><strong>Lantern particle hero · Claude handoff</strong>Move the pointer · Click to overload</p>
+  <div class="actions">
+    <button id="overload">Overload energy</button>
+    <button id="replay">Replay build</button>
+  </div>
+  <p class="loading" id="loading">Loading Claude particles</p>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+    const canvas = document.querySelector('#energy');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setClearColor(0x000000, 0);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(43, innerWidth / innerHeight, .1, 40);
+    camera.position.set(0, 0, 7);
+
+    const world = new THREE.Group();
+    scene.add(world);
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .72, .42, .30);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+
+    const BODY_HEIGHT = innerWidth < 650 ? 4.3 : 4.72;
+    const mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 768;
+    const bodyUniforms = {
+      uTime: { value: 0 }, uReveal: { value: 0 }, uBoost: { value: 0 },
+      uPixelRatio: { value: Math.min(devicePixelRatio, 2) }, uSize: { value: mobile ? 10 : 9 },
+    };
+    const bodyVertex = `
+      uniform float uTime, uReveal, uBoost, uPixelRatio, uSize;
+      attribute float aSeed, aZone, aFront;
+      varying float vSeed, vEnergy, vZone, vFront;
+      void main() {
+        float gate = smoothstep(aSeed * .72, aSeed * .72 + .28, uReveal);
+        vec3 p = position;
+        float charge = sin(p.y * 5.4 - uTime * 4.2 + aSeed * 18.0) * .5 + .5;
+        p += normalize(p + vec3(.001)) * charge * (.012 + uBoost * .022);
+        p.x += sin(uTime * .7 + p.y * 2.1 + aSeed * 7.0) * .008;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = uSize * uPixelRatio * (.36 + aSeed * .72 + uBoost * .08) / -mv.z;
+        vSeed = aSeed;
+        vEnergy = charge * gate;
+        vZone = aZone;
+        vFront = aFront;
+        if (gate < .01) gl_Position.w = 0.0;
+      }
+    `;
+    const bodyFragment = `
+      varying float vSeed, vEnergy, vZone, vFront;
+      uniform float uBoost;
+      void main() {
+        float d = length(gl_PointCoord - .5);
+        if (d > .5) discard;
+        float core = smoothstep(.5, .02, d);
+        vec3 blackSuit = vec3(.008, .035, .027);
+        vec3 emerald = vec3(.0, .74, .30);
+        vec3 brightGreen = vec3(.08, 1.0, .47);
+        vec3 skin = vec3(.82, .45, .30);
+        vec3 gauntlet = vec3(.74, .93, .82);
+        vec3 color = mix(blackSuit, vec3(.012, .16, .075), smoothstep(.12, .9, vSeed));
+        if (vZone > .5 && vZone < 1.5) color = mix(emerald, brightGreen, vSeed);
+        if (vZone > 1.5 && vZone < 2.5) color = mix(gauntlet, vec3(1.0), vSeed * .56);
+        if (vZone > 2.5 && vZone < 3.5) color = mix(skin, vec3(1.0, .72, .56), vSeed * .38);
+        if (vZone > 3.5) color = mix(vec3(.0, .16, .08), emerald, vSeed * .52);
+        color = mix(color, vec3(.88, 1.0, .91), vEnergy * (.08 + uBoost * .14) * vFront);
+        float alpha = core * (.16 + vSeed * .24 + vEnergy * .15 + vFront * .05);
+        gl_FragColor = vec4(color, alpha);
+      }
+    `;
+
+    function seeded(index, salt = 0) {
+      const x = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    async function loadClaude() {
+      const [buffer, meta] = await Promise.all([
+        fetch('mascot-flex-claude.bin').then(r => {
+          if (!r.ok) throw new Error(`Claude asset ${r.status}`);
+          return r.arrayBuffer();
+        }),
+        fetch('mascot-transition-claude.json').then(r => r.json()),
+      ]);
+      const raw = new Int16Array(buffer);
+      const available = raw.length / 4;
+      const count = mobile ? 30000 : available;
+      const positions = new Float32Array(count * 3);
+      const seeds = new Float32Array(count);
+      const zones = new Float32Array(count);
+      const fronts = new Float32Array(count);
+      const scale = .75 / 32767 * BODY_HEIGHT;
+      for (let i = 0; i < count; i++) {
+        const source = Math.min(available - 1, Math.floor(i * available / count));
+        const j = source * 4;
+        const x = raw[j] * scale;
+        const y = raw[j + 2] * scale;
+        const z = -raw[j + 1] * scale;
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
+        seeds[i] = seeded(i, 2);
+        const isHead = y > 1.73 && x < .08;
+        const isRaisedGauntlet = x > .64 && y > 1.62;
+        const isLowGlove = x < -.72 && y > -.06 && y < .72;
+        const isTorso = y > .34 && y < 1.67 && x > -.74 && x < .18;
+        const isMaskBand = isHead && y > 2.02 && y < 2.22 && z > .04;
+        zones[i] = isMaskBand ? 4 : isHead ? 3 : (isRaisedGauntlet || isLowGlove) ? 2 : isTorso ? 1 : 0;
+        fronts[i] = THREE.MathUtils.clamp((z + .38) / .76, 0, 1);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+      geometry.setAttribute('aZone', new THREE.BufferAttribute(zones, 1));
+      geometry.setAttribute('aFront', new THREE.BufferAttribute(fronts, 1));
+      const material = new THREE.ShaderMaterial({
+        uniforms: bodyUniforms, vertexShader: bodyVertex, fragmentShader: bodyFragment,
+        transparent: true, depthWrite: false, blending: THREE.NormalBlending,
+      });
+      const body = new THREE.Points(geometry, material);
+      body.frustumCulled = false;
+      body.renderOrder = 2;
+      world.add(body);
+      const [ox, oy, oz] = meta.orb;
+      return { body, orb: new THREE.Vector3(ox * BODY_HEIGHT, oz * BODY_HEIGHT, -oy * BODY_HEIGHT) };
+    }
+
+    function makePointLayer(points, { color, size, opacity = 1, additive = true }) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+      const material = new THREE.PointsMaterial({
+        color, size, transparent: true, opacity: 0, depthWrite: false,
+        blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+        sizeAttenuation: true,
+      });
+      const cloud = new THREE.Points(geometry, material);
+      cloud.userData.targetOpacity = opacity;
+      cloud.frustumCulled = false;
+      cloud.renderOrder = 4;
+      world.add(cloud);
+      return cloud;
+    }
+
+    function scatterEllipse(count, cx, cy, rx, ry, z, salt) {
+      const points = [];
+      for (let i = 0; i < count; i++) {
+        const angle = seeded(i, salt) * Math.PI * 2;
+        const radius = Math.sqrt(seeded(i, salt + 1));
+        const rough = 1 + (seeded(i, salt + 2) - .5) * .11;
+        points.push(
+          cx + Math.cos(angle) * rx * radius * rough,
+          cy + Math.sin(angle) * ry * radius * rough,
+          z + (seeded(i, salt + 3) - .5) * .018,
+        );
+      }
+      return points;
+    }
+
+    function stroke(points, path, count, z, salt, width = .008) {
+      const lengths = [];
+      let total = 0;
+      for (let i = 1; i < path.length; i++) {
+        total += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+        lengths.push(total);
+      }
+      for (let i = 0; i < count; i++) {
+        const distance = seeded(i, salt) * total;
+        let segment = lengths.findIndex(length => distance <= length);
+        if (segment < 0) segment = lengths.length - 1;
+        const previous = segment === 0 ? 0 : lengths[segment - 1];
+        const amount = (distance - previous) / Math.max(.0001, lengths[segment] - previous);
+        const a = path[segment];
+        const b = path[segment + 1];
+        const jitterX = (seeded(i, salt + 3) - .5) * width;
+        const jitterY = (seeded(i, salt + 5) - .5) * width;
+        points.push(
+          THREE.MathUtils.lerp(a[0], b[0], amount) + jitterX,
+          THREE.MathUtils.lerp(a[1], b[1], amount) + jitterY,
+          z + (seeded(i, salt + 7) - .5) * .012,
+        );
+      }
+    }
+
+    function makeHeroDetails() {
+      const details = [];
+      const faceX = -.315;
+      const faceZ = .325;
+
+      // Dense angular domino mask: two swept wings connected over the nose.
+      const mask = [];
+      for (let i = 0; i < (mobile ? 1200 : 2900); i++) {
+        const side = i % 2 ? 1 : -1;
+        const u = seeded(i, 101);
+        const v = seeded(i, 103) * 2 - 1;
+        const wing = .075 + u * .155;
+        const taper = 1 - Math.pow(Math.abs(v), 1.7) * .68;
+        mask.push(
+          faceX + side * wing * taper,
+          2.115 + v * (.074 + u * .044) - u * .012,
+          faceZ + (seeded(i, 107) - .5) * .014,
+        );
+      }
+      details.push(makePointLayer(mask, { color: 0x00783d, size: .0085, opacity: .82, additive: false }));
+
+      // Dark sockets cut through the particle mask; pale slits sit inside without glowing.
+      const sockets = [
+        ...scatterEllipse(mobile ? 150 : 360, faceX - .105, 2.11, .082, .025, faceZ + .019, 108),
+        ...scatterEllipse(mobile ? 150 : 360, faceX + .105, 2.11, .082, .025, faceZ + .019, 110),
+      ];
+      details.push(makePointLayer(sockets, { color: 0x000704, size: .0055, opacity: .96, additive: false }));
+
+      const eyes = [];
+      const eyeCount = mobile ? 260 : 620;
+      for (let i = 0; i < eyeCount; i++) {
+        const side = i % 2 ? 1 : -1;
+        const t = seeded(i, 109) * 2 - 1;
+        const y = 2.112 + (.018 * (1 - t * t)) - Math.abs(t) * .008;
+        eyes.push(faceX + side * (.068 + Math.abs(t) * .074), y, faceZ + .018);
+      }
+      details.push(makePointLayer(eyes, { color: 0xa7bbae, size: .0028, opacity: .60, additive: false }));
+
+      // Hair cap plus a readable square jaw, nose and mouth.
+      const hairSource = scatterEllipse(mobile ? 1100 : 2700, faceX - .008, 2.31, .235, .135, faceZ - .012, 113);
+      const hair = [];
+      for (let i = 0; i < hairSource.length; i += 3) {
+        if (hairSource[i + 1] > 2.255) hair.push(hairSource[i], hairSource[i + 1], hairSource[i + 2]);
+      }
+      details.push(makePointLayer(hair, { color: 0x021b10, size: .012, opacity: .94, additive: false }));
+
+      const faceLines = [];
+      stroke(faceLines, [[-.53, 2.04], [-.50, 1.88], [-.40, 1.76], [-.31, 1.73], [-.21, 1.76], [-.11, 1.88], [-.09, 2.04]], mobile ? 420 : 1000, faceZ + .008, 127, .012);
+      stroke(faceLines, [[-.315, 2.08], [-.335, 1.99], [-.302, 1.96]], mobile ? 110 : 250, faceZ + .013, 131, .007);
+      stroke(faceLines, [[-.405, 1.90], [-.315, 1.88], [-.225, 1.90]], mobile ? 120 : 310, faceZ + .014, 137, .006);
+      stroke(faceLines, [[-.49, 2.26], [-.39, 2.35], [-.25, 2.37], [-.11, 2.28]], mobile ? 210 : 520, faceZ + .002, 139, .011);
+      details.push(makePointLayer(faceLines, { color: 0x07331e, size: .009, opacity: .82, additive: false }));
+
+      // Lantern-style chest badge: ring and horizontal energy rails, all particles.
+      const badge = [];
+      const badgeCount = mobile ? 620 : 1600;
+      for (let i = 0; i < badgeCount; i++) {
+        const a = seeded(i, 149) * Math.PI * 2;
+        const radius = .145 + (seeded(i, 151) - .5) * .025;
+        badge.push(faceX + Math.cos(a) * radius, 1.13 + Math.sin(a) * radius, .398 + (seeded(i, 153) - .5) * .014);
+      }
+      stroke(badge, [[-.49, 1.31], [-.14, 1.31]], mobile ? 170 : 420, .402, 157, .015);
+      stroke(badge, [[-.49, .95], [-.14, .95]], mobile ? 170 : 420, .402, 163, .015);
+      details.push(makePointLayer(badge, { color: 0xa4f3b9, size: .0055, opacity: .72, additive: false }));
+
+      // Comic suit construction lines keep the anatomy readable through the point cloud.
+      const seams = [];
+      stroke(seams, [[-.31, 1.50], [-.48, 1.40], [-.63, 1.28]], mobile ? 150 : 390, .385, 167, .009);
+      stroke(seams, [[-.31, 1.50], [-.14, 1.40], [.02, 1.28]], mobile ? 150 : 390, .385, 173, .009);
+      stroke(seams, [[-.62, 1.02], [-.48, .78], [-.31, .67], [-.14, .78], [.02, 1.02]], mobile ? 260 : 650, .387, 179, .008);
+      stroke(seams, [[-.51, .52], [-.31, .44], [-.12, .52]], mobile ? 150 : 360, .378, 181, .008);
+      details.push(makePointLayer(seams, { color: 0x18ff78, size: .008, opacity: .60 }));
+
+      return details;
+    }
+
+    function radialTexture() {
+      const surface = document.createElement('canvas');
+      surface.width = surface.height = 256;
+      const ctx = surface.getContext('2d');
+      const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      gradient.addColorStop(0, 'rgba(255,255,255,1)');
+      gradient.addColorStop(.08, 'rgba(225,255,190,.95)');
+      gradient.addColorStop(.22, 'rgba(35,255,194,.55)');
+      gradient.addColorStop(.52, 'rgba(134,54,255,.17)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 256, 256);
+      return new THREE.CanvasTexture(surface);
+    }
+
+    function makeOrb(anchor) {
+      const group = new THREE.Group();
+      group.position.copy(anchor);
+      group.renderOrder = 5;
+      const core = new THREE.Mesh(
+        new THREE.SphereGeometry(.095, 20, 14),
+        new THREE.MeshBasicMaterial({ color: 0xf7ffe7, transparent: true, opacity: .98 }),
+      );
+      group.add(core);
+      const texture = radialTexture();
+      [[.70, .34], [1.02, .13], [1.42, .045]].forEach(([size, opacity]) => {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: texture, color: 0xc5ffe8, transparent: true, opacity,
+          depthWrite: false, blending: THREE.AdditiveBlending,
+        }));
+        sprite.scale.setScalar(size);
+        group.add(sprite);
+      });
+
+      const count = mobile ? 1300 : 2600;
+      const positions = new Float32Array(count * 3);
+      const seeds = new Float32Array(count);
+      for (let i = 0; i < count; i++) {
+        const a = seeded(i, 7) * Math.PI * 2;
+        const z = seeded(i, 11) * 2 - 1;
+        const radius = .11 + seeded(i, 17) ** 2 * .42;
+        const ring = Math.sqrt(1 - z * z);
+        positions[i * 3] = Math.cos(a) * ring * radius;
+        positions[i * 3 + 1] = z * radius;
+        positions[i * 3 + 2] = Math.sin(a) * ring * radius;
+        seeds[i] = seeded(i, 23);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+      const material = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 }, uBoost: bodyUniforms.uBoost, uPixelRatio: bodyUniforms.uPixelRatio },
+        vertexShader: `
+          uniform float uTime, uBoost, uPixelRatio; attribute float aSeed; varying float vSeed;
+          void main(){
+            vec3 p=position;
+            float angle=uTime*(.45+aSeed*.9)+(p.y+aSeed)*4.0;
+            mat2 r=mat2(cos(angle),-sin(angle),sin(angle),cos(angle));
+            p.xz=r*p.xz;
+            p*=1.0+sin(uTime*3.0+aSeed*19.0)*.07+uBoost*.16;
+            vec4 mv=modelViewMatrix*vec4(p,1.0); gl_Position=projectionMatrix*mv;
+            gl_PointSize=(4.0+aSeed*9.0+uBoost*2.0)*uPixelRatio/-mv.z; vSeed=aSeed;
+          }`,
+        fragmentShader: `
+          varying float vSeed; uniform float uBoost;
+          void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;float a=smoothstep(.5,0.,d);
+          vec3 c=mix(vec3(.1,1.,.68),vec3(.75,.4,1.),vSeed);c=mix(c,vec3(1.),.34+uBoost*.25);
+          gl_FragColor=vec4(c,a*a*(.20+vSeed*.28));}`,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      const shell = new THREE.Points(geometry, material);
+      shell.frustumCulled = false;
+      group.add(shell);
+      world.add(group);
+      return { group, core, shell, sprites: group.children.filter(child => child.isSprite) };
+    }
+
+    function makeDust() {
+      const count = mobile ? 1800 : 4200;
+      const p = new Float32Array(count * 3);
+      const c = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        p[i * 3] = (seeded(i, 31) - .5) * 11;
+        p[i * 3 + 1] = (seeded(i, 37) - .5) * 7;
+        p[i * 3 + 2] = -1.2 - seeded(i, 41) * 2;
+        const warm = seeded(i, 43) > .82;
+        c.set(warm ? [1, .82, .28] : seeded(i, 47) > .5 ? [.08, 1, .7] : [.62, .29, 1], i * 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+      const m = new THREE.PointsMaterial({
+        size: .012, vertexColors: true, transparent: true, opacity: .28,
+        depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+      });
+      const dust = new THREE.Points(g, m);
+      world.add(dust);
+      return dust;
+    }
+
+    const ribbonVertex = `
+      attribute float aAlong; varying float vAlong;
+      void main(){vAlong=aAlong;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}
+    `;
+    const ribbonFragment = `
+      uniform vec3 uColor; uniform float uOpacity, uBoost; varying float vAlong;
+      void main(){float ends=smoothstep(0.,.09,vAlong)*smoothstep(1.,.72,vAlong);
+      float pulse=.72+.28*sin(vAlong*24.+uBoost*2.);gl_FragColor=vec4(uColor,ends*pulse*uOpacity);}
+    `;
+    function makeRibbons(anchor) {
+      const palette = [0x00ffc3, 0x18d9a4, 0xa749ff, 0x6c42ff, 0xffd35c];
+      const ribbons = [];
+      const segments = 92;
+      for (let r = 0; r < 12; r++) {
+        const positions = new Float32Array((segments + 1) * 2 * 3);
+        const along = new Float32Array((segments + 1) * 2);
+        const index = [];
+        for (let i = 0; i <= segments; i++) {
+          along[i * 2] = along[i * 2 + 1] = i / segments;
+          if (i < segments) {
+            const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+            index.push(a, b, c, b, d, c);
+          }
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('aAlong', new THREE.BufferAttribute(along, 1));
+        geometry.setIndex(index);
+        const uniforms = {
+          uColor: { value: new THREE.Color(palette[r % palette.length]) },
+          uOpacity: { value: r === 4 || r === 9 ? .24 : .14 },
+          uBoost: bodyUniforms.uBoost,
+        };
+        const material = new THREE.ShaderMaterial({
+          uniforms, vertexShader: ribbonVertex, fragmentShader: ribbonFragment,
+          side: THREE.DoubleSide, transparent: true, depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.renderOrder = 0;
+        world.add(mesh);
+        ribbons.push({ mesh, positions, anchor, phase: seeded(r, 51) * Math.PI * 2,
+          spread: .82 + seeded(r, 53) * 1.25, twist: 3.0 + seeded(r, 59) * 3.8,
+          drop: r < 8 ? 3.6 + seeded(r, 61) * 2.0 : .7 + seeded(r, 67),
+          width: .022 + seeded(r, 71) * .045, speed: .10 + seeded(r, 73) * .18 });
+      }
+      return ribbons;
+    }
+
+    function updateRibbon(ribbon, time, boost) {
+      const { positions, phase, spread, twist, drop, width, speed, anchor } = ribbon;
+      const segments = positions.length / 6 - 1;
+      const point = (s) => {
+        const angle = phase + s * twist - time * speed;
+        const radius = Math.pow(s, .72) * spread * (1 + boost * .13);
+        const outward = s * (phase > Math.PI ? -.32 : .18);
+        return new THREE.Vector3(
+          anchor.x + Math.cos(angle) * radius + outward,
+          anchor.y - s * drop + Math.sin(angle) * radius * .72,
+          -.62 - Math.sin(angle * .7) * .18 - s * .2,
+        );
+      };
+      for (let i = 0; i <= segments; i++) {
+        const s = i / segments;
+        const p = point(s);
+        const before = point(Math.max(0, s - .008));
+        const after = point(Math.min(1, s + .008));
+        const tangent = after.sub(before).normalize();
+        const normal = new THREE.Vector3(-tangent.y, tangent.x, 0).normalize();
+        const taper = Math.sin(Math.PI * s) ** .55;
+        const half = width * taper * (1 + boost * .5);
+        const left = p.clone().addScaledVector(normal, half);
+        const right = p.clone().addScaledVector(normal, -half);
+        positions.set([left.x, left.y, left.z, right.x, right.y, right.z], i * 6);
+      }
+      ribbon.mesh.geometry.attributes.position.needsUpdate = true;
+      ribbon.mesh.material.uniforms.uOpacity.value = (.10 + boost * .16)
+        * (ribbon.width > .045 ? 1.35 : 1);
+    }
+
+    const pointer = new THREE.Vector2();
+    addEventListener('pointermove', event => {
+      pointer.x = event.clientX / innerWidth * 2 - 1;
+      pointer.y = -(event.clientY / innerHeight * 2 - 1);
+    });
+
+    let start = performance.now();
+    let overloadUntil = 0;
+    let boost = 0;
+    const dust = makeDust();
+    let claude, orb, ribbons, heroDetails;
+    try {
+      claude = await loadClaude();
+      heroDetails = makeHeroDetails();
+      orb = makeOrb(claude.orb);
+      ribbons = makeRibbons(claude.orb);
+      document.querySelector('#loading').classList.add('done');
+    } catch (error) {
+      document.querySelector('#loading').textContent = `Could not load Claude · ${error.message}`;
+      throw error;
+    }
+
+    function overload() { overloadUntil = performance.now() + 1800; }
+    document.querySelector('#overload').addEventListener('click', overload);
+    canvas.addEventListener('pointerdown', overload);
+    document.querySelector('#replay').addEventListener('click', () => { start = performance.now(); });
+
+    const clock = new THREE.Clock();
+    function frame() {
+      const dt = Math.min(clock.getDelta(), .05);
+      const time = clock.elapsedTime;
+      const revealTime = (performance.now() - start) / 1000;
+      const targetBoost = performance.now() < overloadUntil ? 1 : 0;
+      boost += (targetBoost - boost) * (1 - Math.exp(-(targetBoost ? 7 : 2.2) * dt));
+      bodyUniforms.uTime.value = time;
+      bodyUniforms.uReveal.value = Math.min(1, Math.max(0, (revealTime - .18) / 2.2));
+      bodyUniforms.uBoost.value = boost;
+      const detailReveal = THREE.MathUtils.smoothstep(bodyUniforms.uReveal.value, .34, .88);
+      heroDetails.forEach((detail, index) => {
+        const stagger = THREE.MathUtils.clamp(detailReveal * 1.35 - index * .035, 0, 1);
+        detail.material.opacity = detail.userData.targetOpacity * stagger;
+      });
+      bloom.strength = .72 + boost * .46;
+
+      world.rotation.y += ((pointer.x * .12) - world.rotation.y) * (1 - Math.exp(-2.2 * dt));
+      world.rotation.x += ((-pointer.y * .04) - world.rotation.x) * (1 - Math.exp(-2.2 * dt));
+      dust.rotation.z = time * .009;
+      dust.rotation.y = Math.sin(time * .11) * .05;
+      orb.shell.material.uniforms.uTime.value = time;
+      orb.group.scale.setScalar(1 + Math.sin(time * 2.8) * .035 + boost * .11);
+      orb.core.scale.setScalar(1 + Math.sin(time * 4.3) * .1 + boost * .2);
+      orb.sprites.forEach((sprite, i) => {
+        sprite.material.opacity = [.34, .13, .045][i] * (1 + boost * .45);
+      });
+      ribbons.forEach(ribbon => updateRibbon(ribbon, time, boost));
+      composer.render();
+      requestAnimationFrame(frame);
+    }
+    frame();
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      composer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    });
+  </script>
+</body>
+</html>

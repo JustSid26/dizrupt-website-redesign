@@ -1,0 +1,9 @@
+.vercel
+.DS_Store
+__pycache__/
+*.pyc
+# Blender autosave backups
+*.blend1
+# Render output from the mascot pipeline (regenerable, ~57 MB)
+mascot3d/renders/
+mascot3d/claude/renders/

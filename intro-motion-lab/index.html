@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dizrupt — intro motion lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    html,body{height:auto;min-height:100%;overflow:auto}.hub{position:relative;z-index:2;min-height:100vh;padding:126px 38px 72px}.hub-head,.grid,.note{width:min(1100px,100%);margin-inline:auto}.hub-head{margin-bottom:54px}.kicker{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#8cd4ff}.hub h1{font-size:clamp(52px,8.6vw,124px);line-height:.87;letter-spacing:-.058em;font-weight:450;margin-top:19px;max-width:8ch}.hub-copy{max-width:620px;color:rgba(240,244,250,.48);font-size:14px;line-height:1.62;margin-top:28px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{position:relative;min-height:270px;padding:27px;border:1px solid rgba(218,231,255,.14);border-radius:25px;background:linear-gradient(145deg,rgba(16,22,31,.82),rgba(4,6,9,.9));overflow:hidden;display:flex;flex-direction:column;transition:transform .5s var(--ease),border-color .4s}.card:hover{transform:translateY(-6px);border-color:rgba(140,212,255,.38)}.card small{font-size:9px;letter-spacing:.15em;color:#8cd4ff}.card i{position:absolute;right:25px;top:22px;font-style:normal;color:rgba(255,255,255,.4)}.mini{position:absolute;left:27px;top:82px;font-size:clamp(28px,3.2vw,47px);font-weight:500;letter-spacing:-.05em;color:rgba(255,255,255,.16);transition:letter-spacing .7s var(--ease),color .5s,transform .7s var(--ease)}.card:hover .mini{letter-spacing:.02em;color:rgba(255,255,255,.36);transform:translateX(5px)}.card strong{margin-top:auto;font-size:clamp(26px,3vw,42px);font-weight:450;letter-spacing:-.03em}.card p{max-width:47ch;margin-top:9px;color:rgba(240,244,250,.44);font-size:12px;line-height:1.5}.card:last-child{grid-column:1/-1}.note{margin-top:34px;color:rgba(240,244,250,.3);font-size:9px;letter-spacing:.11em;text-transform:uppercase}@media(max-width:720px){.hub{padding:96px 18px 48px}.grid{grid-template-columns:1fr}.card:last-child{grid-column:auto}.lab-nav{position:absolute}.mini{font-size:39px}}
+  </style>
+</head>
+<body>
+  <canvas class="ambient" aria-hidden="true"></canvas><div class="grain"></div>
+  <header class="lab-nav"><a class="lab-brand" href="../index.html">DI<span>Z</span>RUPT</a><span class="lab-index">Intro motion lab</span></header>
+  <main class="hub">
+    <header class="hub-head">
+      <p class="kicker">Bespoke masked typography</p>
+      <h1>Built for the word.</h1>
+      <p class="hub-copy">Five full-scale intro studies built around DIZRUPT itself. Each uses custom glyph layers and its own reveal logic—not the same stagger with different easing.</p>
+    </header>
+    <section class="grid">
+      <a class="card" href="01-vault.html"><small>01 / 05</small><i>↗</i><span class="mini">DIZRUPT</span><strong>Vault Lift</strong><p>A deeper masked rise with trailing glyph echoes, perspective and a controlled overshoot.</p></a>
+      <a class="card" href="02-counterflow.html"><small>02 / 05</small><i>↗</i><span class="mini">DIZRUPT</span><strong>Counterflow</strong><p>Alternating vertical directions meet on one baseline, creating tension without visual noise.</p></a>
+      <a class="card" href="03-split.html"><small>03 / 05</small><i>↗</i><span class="mini">DIZRUPT</span><strong>Split Glyph</strong><p>Every letter is cut into upper and lower planes that slide together and fuse.</p></a>
+      <a class="card" href="04-aperture.html"><small>04 / 05</small><i>↗</i><span class="mini">DIZRUPT</span><strong>Aperture Lock</strong><p>A narrow typographic window opens outward while the word settles behind it.</p></a>
+      <a class="card" href="05-slices.html"><small>05 / 05</small><i>↗</i><span class="mini">DIZRUPT</span><strong>Slice Assembly</strong><p>Three horizontal bands per glyph arrive at different velocities, then become solid type.</p></a>
+    </section>
+    <p class="note">Click a study · press R, space, or click the stage to replay</p>
+  </main>
+  <script type="module" src="hub.js"></script>
+</body>
+</html>

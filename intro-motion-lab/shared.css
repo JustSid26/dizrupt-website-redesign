@@ -1,0 +1,69 @@
+:root{--bg:#030407;--fg:#f4f3ef;--dim:rgba(236,240,247,.48);--line:rgba(219,231,250,.17);--ease:cubic-bezier(.16,1,.3,1);--cinema:cubic-bezier(.77,0,.175,1)}
+*{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden}body{background:var(--bg);color:var(--fg);font-family:"Inter Tight",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:inherit;text-decoration:none}button{font:inherit;color:inherit}
+.ambient,.aura,.grain{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}.ambient{z-index:0}.aura{z-index:0;background:radial-gradient(circle at 50% 48%,rgba(32,63,88,.18),transparent 30%),radial-gradient(circle at 70% 60%,rgba(55,31,78,.09),transparent 33%)}.grain{z-index:40;inset:-70%;width:240%;height:240%;opacity:.04;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:grain .8s steps(5) infinite}@keyframes grain{0%,100%{transform:translate(0)}25%{transform:translate(-3%,4%)}50%{transform:translate(4%,-3%)}75%{transform:translate(2%,5%)}}
+.lab-nav{position:fixed;z-index:50;left:0;right:0;top:0;height:76px;padding:0 38px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;font-size:9px;letter-spacing:.17em;text-transform:uppercase}.lab-brand{justify-self:start;font-weight:600}.lab-brand span{display:inline-block;transform:scaleX(-1);margin-right:.12em}.lab-index{color:var(--dim)}.lab-nav nav{justify-self:end;display:flex;gap:4px}.lab-nav nav a{display:grid;place-items:center;width:29px;height:29px;border:1px solid transparent;border-radius:50%;color:var(--dim);transition:.3s}.lab-nav nav a:hover,.lab-nav nav a[aria-current=page]{color:#fff;border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.04)}
+.stage{position:fixed;z-index:2;inset:0;display:grid;place-items:center;cursor:pointer}.stage::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.68) 100%);pointer-events:none}.stage-grid{position:absolute;inset:0;opacity:.06;background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);background-size:80px 80px;mask-image:radial-gradient(circle at center,#000,transparent 67%)}
+.intro-copy{position:relative;z-index:2;text-align:center;width:100%;perspective:1200px}.word-window{width:100%;padding:.1em 0;overflow:visible}.intro-word{display:flex;justify-content:center;align-items:baseline;font-size:clamp(78px,15vw,232px);font-weight:500;line-height:.82;letter-spacing:-.05em;white-space:nowrap;transform-style:preserve-3d}.glyph-shell{display:inline-block;position:relative;transform-style:preserve-3d}.glyph-base{display:block;position:relative;will-change:transform,opacity,filter}.glyph-echo,.glyph-slice{position:absolute;inset:0;display:block;pointer-events:none;will-change:transform,opacity,filter}.flip-z{transform:scaleX(-1);margin-right:-.018em}.tag-mask{overflow:hidden;margin:clamp(30px,4vw,54px) auto 0;width:min(480px,80%)}.intro-tag{font-size:clamp(12px,1vw,15px);line-height:1.55;color:var(--dim);text-wrap:balance;will-change:transform,opacity,filter}.enter-cue{position:fixed;z-index:8;left:50%;bottom:34px;translate:-50% 0;border:0;background:none;text-transform:uppercase;letter-spacing:.18em;font-size:8px;color:rgba(255,255,255,.42);display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0}.enter-cue i{display:block;width:1px;height:28px;background:linear-gradient(transparent,#fff);transform-origin:top}.is-running .enter-cue{animation:cueIn .7s ease 1.75s both}.is-running .enter-cue i{animation:cueLine 1.8s var(--ease) 1.9s infinite}@keyframes cueIn{to{opacity:1}}@keyframes cueLine{0%,100%{transform:scaleY(.15);opacity:.25}45%{transform:scaleY(1);opacity:1}}
+.lab-caption{position:fixed;z-index:52;left:38px;bottom:31px;width:min(390px,38vw);display:grid;grid-template-columns:55px 1fr;gap:12px;align-items:start;pointer-events:none}.lab-caption>span{font-size:9px;letter-spacing:.13em;color:rgba(153,211,247,.82);padding-top:2px}.lab-caption strong{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:500}.lab-caption p{margin-top:5px;font-size:9px;letter-spacing:.05em;color:var(--dim)}.replay{position:fixed;z-index:52;right:38px;bottom:30px;height:44px;padding:0 14px 0 20px;border:1px solid var(--line);border-radius:999px;background:rgba(6,8,12,.68);backdrop-filter:blur(14px);display:flex;align-items:center;gap:23px;text-transform:uppercase;letter-spacing:.13em;font-size:8px;cursor:pointer}.replay i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.1);font-style:normal}.instruction{position:fixed;z-index:51;left:50%;bottom:36px;translate:-50% 0;color:rgba(255,255,255,.28);font-size:7px;letter-spacing:.15em;text-transform:uppercase}
+
+/* Shared reset: only a variant's intended layer is visible. */
+.glyph-echo,.glyph-slice{opacity:0}.intro-tag{opacity:0;transform:translateY(120%)}
+.is-running .intro-tag{animation:tagRise 1s var(--ease) 1.05s both}@keyframes tagRise{0%{opacity:0;transform:translateY(120%);filter:blur(3px)}100%{opacity:1;transform:none;filter:none}}
+
+/* 01 — Vault Lift */
+[data-motion=vault] .glyph-shell{overflow:hidden;padding:.08em .005em .12em;margin-bottom:-.12em;perspective:900px}
+[data-motion=vault] .glyph-base{opacity:0;transform:translateY(118%) rotateX(-58deg) scaleY(1.14);transform-origin:50% 100%;filter:blur(2px)}
+[data-motion=vault] .glyph-echo{opacity:0;transform:translateY(125%);color:#8ecfff;filter:blur(6px)}
+[data-motion=vault].is-running .glyph-base{animation:vaultGlyph 1.28s var(--ease) calc(.12s + var(--i)*.075s) both}
+[data-motion=vault].is-running .glyph-echo{animation:vaultEcho 1.08s var(--ease) calc(.08s + var(--i)*.075s) both}
+@keyframes vaultGlyph{0%{opacity:0;transform:translateY(118%) rotateX(-58deg) scaleY(1.14);filter:blur(2px)}72%{opacity:1;transform:translateY(-4%) rotateX(4deg) scaleY(.985);filter:blur(0)}100%{opacity:1;transform:none;filter:none}}
+@keyframes vaultEcho{0%{opacity:0;transform:translateY(125%);filter:blur(7px)}45%{opacity:.28}82%{opacity:.08;transform:translateY(-7%);filter:blur(3px)}100%{opacity:0;transform:none}}
+
+/* 02 — Counterflow */
+[data-motion=counterflow] .glyph-shell{overflow:hidden;padding:.11em .005em;margin:-.11em 0;perspective:850px}
+[data-motion=counterflow] .glyph-base{opacity:0;transform-origin:50% 50%}
+[data-motion=counterflow] .glyph-shell:nth-child(odd) .glyph-base{transform:translateY(118%) rotateX(-70deg)}
+[data-motion=counterflow] .glyph-shell:nth-child(even) .glyph-base{transform:translateY(-118%) rotateX(70deg)}
+[data-motion=counterflow].is-running .intro-word{animation:counterTrack 1.5s var(--cinema) .06s both}
+[data-motion=counterflow].is-running .glyph-base{animation:counterGlyph 1.2s var(--ease) calc(.1s + var(--i)*.065s) both}
+@keyframes counterTrack{0%{letter-spacing:.035em;transform:scaleX(.94)}100%{letter-spacing:-.05em;transform:none}}
+@keyframes counterGlyph{0%{opacity:0}70%{opacity:1;transform:translateY(calc((var(--i) - 3)*.3%)) rotateX(0)}100%{opacity:1;transform:none}}
+
+/* 03 — Split Glyph */
+[data-motion=split] .glyph-base{opacity:0}
+[data-motion=split] .slice-a,[data-motion=split] .slice-c{opacity:0}
+[data-motion=split] .slice-a{clip-path:inset(0 0 49% 0);transform:translateX(-.62em) translateY(-.06em) skewX(-8deg)}
+[data-motion=split] .slice-c{clip-path:inset(49% 0 0 0);transform:translateX(.62em) translateY(.06em) skewX(8deg)}
+[data-motion=split].is-running .slice-a{animation:splitTop 1.2s var(--ease) calc(.12s + var(--i)*.07s) both}
+[data-motion=split].is-running .slice-c{animation:splitBottom 1.2s var(--ease) calc(.12s + var(--i)*.07s) both}
+[data-motion=split].is-running .glyph-base{animation:solidIn .35s ease calc(1.02s + var(--i)*.07s) both}
+@keyframes splitTop{0%{opacity:0;transform:translateX(-.62em) translateY(-.06em) skewX(-8deg);filter:blur(2px)}35%{opacity:1}82%{opacity:1;transform:translateX(.018em)}100%{opacity:0;transform:none}}
+@keyframes splitBottom{0%{opacity:0;transform:translateX(.62em) translateY(.06em) skewX(8deg);filter:blur(2px)}35%{opacity:1}82%{opacity:1;transform:translateX(-.018em)}100%{opacity:0;transform:none}}
+@keyframes solidIn{from{opacity:0}to{opacity:1}}
+
+/* 04 — Aperture Lock */
+[data-motion=aperture] .word-window{overflow:hidden;clip-path:inset(47% 50% 47% 50% round 3px)}
+[data-motion=aperture] .glyph-base{opacity:0;transform:translateY(.22em) scale(1.08);filter:blur(5px)}
+[data-motion=aperture].is-running .word-window{animation:apertureOpen 1.58s var(--cinema) .08s both}
+[data-motion=aperture].is-running .intro-word{animation:apertureTrack 1.55s var(--cinema) .08s both}
+[data-motion=aperture].is-running .glyph-base{animation:apertureGlyph 1.25s var(--ease) calc(.18s + var(--i)*.045s) both}
+@keyframes apertureOpen{0%{clip-path:inset(47% 50% 47% 50% round 3px)}42%{clip-path:inset(42% 0 42% 0 round 3px)}100%{clip-path:inset(0 0 0 0 round 0)}}
+@keyframes apertureTrack{0%{letter-spacing:.12em;transform:scaleX(.88)}100%{letter-spacing:-.05em;transform:none}}
+@keyframes apertureGlyph{0%{opacity:0;transform:translateY(.22em) scale(1.08);filter:blur(5px)}35%{opacity:.6}100%{opacity:1;transform:none;filter:none}}
+
+/* 05 — Slice Assembly */
+[data-motion=slices] .glyph-base{opacity:0}
+[data-motion=slices] .glyph-slice{opacity:0}
+[data-motion=slices] .slice-a{clip-path:inset(0 0 67% 0);transform:translateX(-.8em) translateY(-.05em)}
+[data-motion=slices] .slice-b{clip-path:inset(32% 0 33% 0);transform:translateX(.92em) scaleX(1.08)}
+[data-motion=slices] .slice-c{clip-path:inset(66% 0 0 0);transform:translateX(-.55em) translateY(.05em)}
+[data-motion=slices].is-running .slice-a{animation:sliceA 1.15s var(--ease) calc(.08s + var(--i)*.065s) both}
+[data-motion=slices].is-running .slice-b{animation:sliceB 1.28s var(--ease) calc(.12s + var(--i)*.065s) both}
+[data-motion=slices].is-running .slice-c{animation:sliceC 1.05s var(--ease) calc(.18s + var(--i)*.065s) both}
+[data-motion=slices].is-running .glyph-base{animation:solidIn .34s ease calc(1.02s + var(--i)*.065s) both}
+@keyframes sliceA{0%{opacity:0;transform:translateX(-.8em) translateY(-.05em);filter:blur(2px)}28%,82%{opacity:1}82%{transform:translateX(.015em)}100%{opacity:0;transform:none}}
+@keyframes sliceB{0%{opacity:0;transform:translateX(.92em) scaleX(1.08);filter:blur(2px)}28%,82%{opacity:1}82%{transform:translateX(-.015em)}100%{opacity:0;transform:none}}
+@keyframes sliceC{0%{opacity:0;transform:translateX(-.55em) translateY(.05em);filter:blur(2px)}28%,82%{opacity:1}82%{transform:translateX(.012em)}100%{opacity:0;transform:none}}
+
+@media(max-width:720px){.lab-nav{height:64px;padding:0 18px;grid-template-columns:1fr auto}.lab-index{display:none}.lab-nav nav{gap:1px}.lab-nav nav a{width:25px;height:25px}.intro-word{font-size:clamp(54px,15.2vw,108px)}.lab-caption{left:18px;bottom:19px;width:55vw;grid-template-columns:42px 1fr}.lab-caption p{display:none}.replay{right:18px;bottom:18px}.instruction{display:none}.enter-cue{bottom:84px}.tag-mask{width:76%}}
+@media(prefers-reduced-motion:reduce){.grain{animation:none}}
