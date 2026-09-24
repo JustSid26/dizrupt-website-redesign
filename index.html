@@ -29,7 +29,10 @@
       <span class="logo-word" aria-hidden="true">DI<span class="flip-z">Z</span>RUPT</span>
       <span class="shuffle-mark logo-mark" id="logo-mark" aria-hidden="true"></span>
     </span>
-    <button class="sound" id="sound" aria-label="Toggle sound"><i></i><i></i><i></i><i></i></button>
+    <div class="nav-right">
+      <button class="sound" id="sound" aria-label="Toggle sound"><i></i><i></i><i></i><i></i></button>
+      <button class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="menu"><span class="menu-btn-label">Menu</span><i></i><i></i></button>
+    </div>
   </header>
 
   <!-- Intro: the landing screen. It holds until you scroll. The veil is the flat black over the
@@ -143,7 +146,31 @@
     <div class="project-frame" aria-hidden="true"><img class="project-frame-img" alt=""></div>
   </section>
 
+  <!-- Menu: the screen changes channel. Bands of signal slide in from alternating sides, then the
+       links decode. Hovering a solution turns the particle field into that solution's shape. -->
+  <div class="menu" id="menu" role="dialog" aria-modal="true" aria-label="Menu" hidden>
+    <div class="menu-bands" aria-hidden="true"></div>
+    <div class="menu-inner">
+      <nav class="menu-nav" aria-label="Site">
+        <p class="menu-label"><span class="hud-no">//</span> Navigate</p>
+        <ul>
+          <li><button data-go="work"><span class="menu-no">01</span><span class="menu-word">Work</span></button></li>
+          <li><button data-go="contact"><span class="menu-no">02</span><span class="menu-word">Contact</span></button></li>
+        </ul>
+        <div class="menu-foot">
+          <a class="u-link" href="mailto:shamit.g@dizrupt.in">shamit.g@dizrupt.in</a>
+          <span>Mumbai · <span data-mumbai-time>--:--</span> IST</span>
+        </div>
+      </nav>
+      <section class="menu-solutions" aria-labelledby="menu-sol-title">
+        <p class="menu-label" id="menu-sol-title"><span class="hud-no">06</span> Solutions</p>
+        <ol id="menu-solutions"></ol>
+      </section>
+    </div>
+  </div>
+
   <div class="cursor" id="cursor"></div>
   <script type="module" src="main.js"></script>
+  <script type="module" src="menu.js"></script>
 </body>
 </html>

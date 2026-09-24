@@ -1425,7 +1425,8 @@ uniforms.uBustHalf.value = BUST_HEIGHT / 2;
    landing shows him, a head the height of the frame sits squarely over the card you are meant to
    be looking at — so on the Index he stands back and lifts, and only his crown clears the cards. */
 const INDEX_SCALE = 0.40;
-const CASE_SHIFT = 2.35; // how far right the client's model moves while its case study is open
+const CASE_SHIFT = 2.35;
+const MENU_SHIFT = 2.95; // where a hovered solution's shape turns while the menu is open // how far right the client's model moves while its case study is open
 const INDEX_LIFT = 0.5;
 /* The mascot now ships everywhere. To hold him back on a host (e.g. while a new figure is being
    signed off) set MASCOT_EVERYWHERE to false: he then only appears on localhost. Either way,
@@ -1707,6 +1708,7 @@ const state = {
   tweenMs: TRANSITION_MS,
   tweening: false,
   lockUntil: 0,
+  menuPreview: false, // true while a solution in the menu is shaping the field
   colorA: new THREE.Color(PROJECTS[0].colors[0]),
   colorB: new THREE.Color(PROJECTS[0].colors[1]),
 };
@@ -1854,7 +1856,7 @@ function scheduleMascotGlitch() {
 }
 scheduleMascotGlitch();
 
-const handoff = { p: 0, target: 0, morphing: false, turn: 0, disperse: 0, size: 0 };
+const handoff = { exit: 0, p: 0, target: 0, morphing: false, turn: 0, disperse: 0, size: 0 };
 
 // Build the contact headline from real, accessible text into independently masked glyphs. This is
 // the same counterflow language as the landing word: neighbouring letters arrive from opposite
@@ -1928,7 +1930,8 @@ const smooth = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
 function applyHandoff(p) {
-  index.setExit(smooth(clamp01(p / 0.45)));         // the cards are gone before the field scatters
+  handoff.exit = smooth(clamp01(p / 0.45));        // the cards are gone before the field scatters
+  index.setExit(Math.max(handoff.exit, menuOpen() ? 1 : 0));
   const morph = smooth(clamp01((p - 0.2) / 0.58));  // spine → screen, whole before the page lands
   if (handoff.morphing) uniforms.uProgress.value = morph;
 
@@ -2425,6 +2428,7 @@ function stepIntroBack() {
    this is a re-entry and not a replay: no beam, no decode, nothing counted again. */
 function reopenIntro() {
   if (intro.active || !mascotNeutralAttr || !mascotFlexAttr) return false;
+  document.body.classList.remove('intro-done');
   const now = performance.now();
   Object.assign(intro, {
     active: true, handover: true, mascotSequence: true, revealIndex: false, streaming: false,
@@ -2698,6 +2702,7 @@ function streamAway() {
 
 function endIntro() {
   if (!intro.active) return;
+  document.body.classList.add('intro-done');
   points.scale.setScalar(1);
   points.position.x = 0;
   intro.held = false;
@@ -2769,6 +2774,7 @@ let lastAbs = 0;   // for spotting a trackpad coasting to a stop
 let decayRun = 0;
 let coasting = false;
 addEventListener('wheel', (e) => {
+  if (document.body.classList.contains('menu-open')) return;
   const way = e.deltaY;
   if (intro.active) {
     // the landing reads its stops in both directions; scrolling back up steps back through them
@@ -2837,6 +2843,7 @@ const isAdvance = (e) => bare(e) && ADVANCE.has(e.key);
 const isRetreat = (e) => bare(e) && RETREAT.has(e.key);
 
 addEventListener('keydown', (e) => {
+  if (document.body.classList.contains('menu-open')) return;
   if (intro.active) {
     if (isRetreat(e)) { stepIntroBack(); return; }
     if (!isAdvance(e)) return;
@@ -2872,6 +2879,7 @@ addEventListener('touchstart', (e) => {
 // it and uncover the field. The cue below the word is the button for it.
 $('#intro-enter').addEventListener('click', handOver);
 addEventListener('touchmove', (e) => {
+  if (document.body.classList.contains('menu-open')) return;
   if (state.panel === 'contact' && touchY !== null) {
     if (e.touches[0].clientY - touchY > 60) leaveContact();
     return;
@@ -3181,7 +3189,7 @@ function tick() {
   const inContact = state.panel === 'contact';
   // Keep the Index invariant explicit: its shared particle field is always the spine, never a
   // project model left behind by an interrupted panel/intro transition.
-  if (inIndex && !intro.active && handoff.p <= 0 && geometry.attributes.aTarget !== centrepiece()) {
+  if (inIndex && !intro.active && handoff.p <= 0 && !state.menuPreview && geometry.attributes.aTarget !== centrepiece()) {
     showSpine();
   }
   index.update(dt, inIndex || handoff.p > 0, clock.elapsedTime);
@@ -3222,8 +3230,10 @@ function tick() {
     /* The spine was a column: it turned with the spiral and climbed on its own period so it never
        appeared to end. The mascot does neither — he faces you and stays put, and the only thing that
        moves is his head, following the cursor. */
-    points.rotation.y = mascotAttr ? damp(points.rotation.y, 0, 6, dt) : index.angle();
-    points.position.y = mascotAttr
+    points.rotation.y = state.menuPreview ? points.rotation.y + dt * 0.35
+      : mascotAttr ? damp(points.rotation.y, 0, 6, dt) : index.angle();
+    points.position.y = state.menuPreview ? damp(points.position.y, isMobile ? 1.9 : 0, 4, dt)
+      : mascotAttr
       ? damp(points.position.y, INDEX_LIFT, 4, dt)
       : ((index.lift() % SPINE_GAP) + SPINE_GAP) % SPINE_GAP;
   } else if (PROJECTS[state.index].spin) {
@@ -3240,12 +3250,14 @@ function tick() {
      thins out, and it turns there while you read. */
   const caseIn = projectWhite();
   if (!intro.active && handoff.p <= 0) {
-    points.position.x = damp(points.position.x, isMobile ? 0 : caseIn * CASE_SHIFT, 3, dt);
+    const xTarget = state.menuPreview ? (isMobile ? 0 : MENU_SHIFT) : caseIn * CASE_SHIFT;
+    points.position.x = damp(points.position.x, isMobile && !state.menuPreview ? 0 : xTarget, 3, dt);
   }
   // the intro drives his scale itself; everywhere else he is at rest, and small behind the spiral
   if (!intro.active) {
     const contactScale = isMobile ? 0.5 : 0.92;
-    const rest = inIndex && mascotAttr ? INDEX_SCALE
+    const rest = state.menuPreview ? (isMobile ? 0.5 : 0.8)
+      : inIndex && mascotAttr ? INDEX_SCALE
       : handoff.p > 0 ? INDEX_SCALE + (contactScale - INDEX_SCALE) * handoff.p
       : 1;
     points.scale.setScalar(damp(points.scale.x, rest * (1 - caseIn * 0.22), 4, dt));
@@ -3277,7 +3289,41 @@ function tick() {
 tick();
 
 // Handy for live tweaking in the devtools console, e.g. site.uniforms.uSize.value = 30
-window.site = { revealStats, statFault, uniforms, state, introStatic, centrepiece, triggerGlitch, wordAttr, spineAttr, bloom, goTo, openPanel, index, scene, points, camera, intro, handoff, setHandoff, startIntro, introReady, streamAway, handOver, endIntro, enterContact, leaveContact };
+/* ---------- Menu hooks (menu.js) ---------- */
+function menuOpen() { return document.body.classList.contains('menu-open'); }
+// The spiral's cards step out while the menu has the screen, the same way they leave for contact.
+new MutationObserver(() => index.setExit(Math.max(handoff.exit, menuOpen() ? 1 : 0)))
+  .observe(document.body, { attributes: true, attributeFilter: ['class'] });
+// While the menu is open a hovered solution takes over the field; closing it gives the field back
+// to whatever the page underneath needs.
+function previewShape(shape, colors) {
+  if (intro.active || state.panel === 'contact' || handoff.p > 0) return;
+  const i = PROJECTS.findIndex((p) => p.shape === shape);
+  if (i < 0) return;
+  state.menuPreview = true;
+  morphTo(shapeAttrs[i], 1400);
+  state.colorA.set(colors[0]);
+  state.colorB.set(colors[1]);
+  audio?.sweep();
+}
+function endPreview() {
+  if (!state.menuPreview) return;
+  state.menuPreview = false;
+  if (state.panel === 'project') goTo(state.index, { force: true });
+  else if (state.panel === 'index') showSpine();
+}
+function menuGo(where) {
+  if (intro.active) return;
+  if (where === 'work') {
+    if (state.panel === 'contact') leaveContact();
+    else if (state.panel === 'project') openPanel('index');
+  } else if (where === 'contact') {
+    if (state.panel === 'project') { openPanel('index'); setTimeout(enterContact, 950); }
+    else if (state.panel !== 'contact') enterContact();
+  }
+}
+
+window.site = { revealStats, statFault, uniforms, state, introStatic, centrepiece, triggerGlitch, wordAttr, spineAttr, bloom, goTo, openPanel, index, scene, points, camera, intro, handoff, setHandoff, startIntro, introReady, streamAway, handOver, endIntro, enterContact, leaveContact, previewShape, endPreview, menuGo };
 
 /* ---------- Loading ---------- */
 (function load() {
