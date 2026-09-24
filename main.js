@@ -22,6 +22,7 @@ import { openProject, closeProject, onFlight, projectWhite, onNext, showNext, on
    spin:      true → rotate continuously (for symmetric shapes); otherwise sway around the front view
    summary:   short overview; the project then appears in the Index view and gets a "View overview" button
    caseStudy: { ask, solution, dizruption } → adds the three case study sections to the overview
+   results:   [{ value, suffix, label }] → headline numbers that count up on the case page (real only)
    cta:       { label, panel } → button that opens a panel (about | solutions | contact)
    ========================================================= */
 const PROJECTS = [
@@ -46,6 +47,11 @@ const PROJECTS = [
       solution: 'Our team provided Slickfix with social media, SEO and paid media management solutions, which includes thorough industry research, competitive analysis, brand and communication strategy, monthly content plans and boosting strategy.',
       dizruption: 'With our strategic social solutions, the brand experienced a revitalised online presence, with over 300% increase in sales, 80% increase in following, an expansion of their online community by almost 2x, and a notable uptick in product visibility. This also helped position Slickfix as a dynamic and influential presence in the fashion accessory landscape.',
     },
+    results: [
+      { value: 300, suffix: '%', label: 'increase in sales' },
+      { value: 80, suffix: '%', label: 'increase in following' },
+      { value: 2, suffix: '×', label: 'online community' },
+    ],
   },
   {
     title: 'Alwrite',
@@ -1419,6 +1425,7 @@ uniforms.uBustHalf.value = BUST_HEIGHT / 2;
    landing shows him, a head the height of the frame sits squarely over the card you are meant to
    be looking at — so on the Index he stands back and lifts, and only his crown clears the cards. */
 const INDEX_SCALE = 0.40;
+const CASE_SHIFT = 2.35; // how far right the client's model moves while its case study is open
 const INDEX_LIFT = 0.5;
 /* The mascot now ships everywhere. To hold him back on a host (e.g. while a new figure is being
    signed off) set MASCOT_EVERYWHERE to false: he then only appears on localhost. Either way,
@@ -1787,12 +1794,13 @@ $('#project-next').addEventListener('click', () => {
 });
 
 function openCaseStudy(p, hit = null) {
-  /* The field goes white as it blows apart, so the particles turn into the page rather than fading
-     out behind it — the same trick the contact hand-over uses, on a timer instead of a scrub. */
-  state.colorA.set('#ffffff');
-  state.colorB.set('#ffffff');
   openProject(p, hit, null, clients.indexOf(p) + 1);
   openPanel('project');
+  /* Now the Index no longer holds the field, it becomes the client's own model — in its colours —
+     and stays beside the case study while you read. (The Index keeps the field as the mascot/spine,
+     so a morph started while the card is still presenting gets pulled back; this is the one that
+     sticks.) */
+  goTo(PROJECTS.indexOf(p), { force: true });
 }
 $('#project-back').addEventListener('click', () => openPanel('index'));
 $('#contact-back').addEventListener('click', () => leaveContact());
@@ -3067,7 +3075,7 @@ function tick() {
     const white = projectWhite();
     const disperseTarget = intro.active ? 0
       : !state.ready ? 4
-      : 3.2 * white;
+      : 0.25 * white; // the case page no longer blows the field apart: the model stays whole beside it
     const settle = intro.handover ? 5 : !state.ready ? 10 : white > 0.001 ? 9 : 1.6;
     uniforms.uDisperse.value = damp(uniforms.uDisperse.value, disperseTarget, settle, dt);
   }
@@ -3075,7 +3083,8 @@ function tick() {
   uniforms.uSize.value = damp(uniforms.uSize.value, sizeTarget, 3, dt);
   const mascotField = intro.active && intro.handover && intro.mascotSequence
     && now - intro.sweepStarted >= 560; // the eyes come up as the last of the word goes
-  const fieldOpacity = intro.active && !intro.revealIndex && !mascotField ? 0 : 1 - projectWhite();
+  // Behind a case study the client's model stays lit (dimmer on phones, where it sits under the copy).
+  const fieldOpacity = intro.active && !intro.revealIndex && !mascotField ? 0 : 1 - projectWhite() * (isMobile ? 0.7 : 0.1);
   const opacitySettle = projectWhite() > 0.001 ? 9 : 4;
   uniforms.uOpacity.value = damp(uniforms.uOpacity.value, fieldOpacity, opacitySettle, dt);
   /* The bloom is eased back while the curtain is the only thing in frame: it is already a broad
@@ -3231,9 +3240,16 @@ function tick() {
     const diff = Math.atan2(Math.sin(target - points.rotation.y), Math.cos(target - points.rotation.y));
     points.rotation.y += diff * (1 - Math.exp(-1.5 * dt));
   }
+  /* A case study slides the client's model across to the right half of the frame, where the pane
+     thins out, and it turns there while you read. */
+  const caseIn = projectWhite();
+  if (!intro.active && handoff.p <= 0) {
+    points.position.x = damp(points.position.x, isMobile ? 0 : caseIn * CASE_SHIFT, 3, dt);
+  }
   // the intro drives his scale itself; everywhere else he is at rest, and small behind the spiral
   if (!intro.active) {
-    points.scale.setScalar(damp(points.scale.x, inIndex && mascotAttr ? INDEX_SCALE : 1, 4, dt));
+    const rest = inIndex && mascotAttr ? INDEX_SCALE : 1;
+    points.scale.setScalar(damp(points.scale.x, rest * (1 - caseIn * 0.22), 4, dt));
   }
   const upright = inIndex || intro.active || handoff.p > 0; // the screen must not lean with the pointer
   group.rotation.x = damp(group.rotation.x, upright ? 0 : -pointer.y * 0.2, 2, dt);

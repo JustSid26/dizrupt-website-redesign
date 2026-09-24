@@ -10,7 +10,13 @@
   /* The one exception, and only for the count: a readout should look like something a machine
      wrote. Taken from the system rather than loaded — every platform has a good one, and none of
      them is worth a second font request for four lines of type. */
-  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, 'Roboto Mono', 'Courier New', monospace;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  /* Display face for the big lines: case titles, contact, menu, the profile line. The wordmark and
+     the body stay Inter Tight — the brand is set in it. */
+  --display: 'Bricolage Grotesque', 'Inter Tight', system-ui, sans-serif;
+  --violet: #a310e7;
+  --violet-soft: #c9b8ff;
+  --signal: #58c4ff;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,7 +67,7 @@ ul { list-style: none; }
   padding: var(--gutter);
   font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
   /* darkens as the white contact page comes up under it, or it would vanish into it */
-  color: color-mix(in srgb, var(--fg), #0b0b0e calc(max(var(--contact-in, 0), var(--project-in, 0)) * 100%));
+  color: var(--fg); /* every page is dark now, so the nav never has to change colour */
 }
 .logo {
   position: relative; display: block; width: 120px; height: 48px;

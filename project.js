@@ -1,4 +1,5 @@
-/* The project page: white ground, the client's banner, the case study under it.
+/* The project page: the client's banner, the case study under it, and the client's particle model
+   kept alive beside the copy — the page is a dark pane in the same world, not a white sheet over it.
 
    Opening it is a click-driven version of the "scroll expand" move. The banner starts as the card
    you clicked — same place, same size, on the spiral — and grows into the page's hero band, its
@@ -123,13 +124,26 @@ function fill(p, position = null) {
   $('#project-services').textContent = p.client ?? '';
   $('#project-sector').textContent = sector ?? '';
 
-  const chapters = $('#project-chapters');
-  chapters.hidden = !p.caseStudy;
-  if (p.caseStudy) {
-    $('#project-ask').textContent = p.caseStudy.ask;
-    $('#project-solution').textContent = p.caseStudy.solution;
-    $('#project-dizruption').textContent = p.caseStudy.dizruption;
-  }
+  /* Every project gets chapters. A full case study tells the ask, the solution and the result; the
+     rest still get a brief and what was delivered, so no page ends on a summary and a gap. */
+  const cs = p.caseStudy;
+  $('#project-ask-h').textContent = cs ? 'The Ask' : 'The Brief';
+  $('#project-solution-h').textContent = cs ? 'The Solution' : 'What we delivered';
+  $('#project-ask').textContent = cs ? cs.ask : (p.summary ?? '');
+  $('#project-solution').textContent = cs ? cs.solution : `${p.client}${p.tags ? ` — for ${p.tags.split('·').pop().trim()}` : ''}.`;
+  $('#project-dizruption-c').hidden = !cs;
+  if (cs) $('#project-dizruption').textContent = cs.dizruption;
+
+  // Headline numbers, only where they are real. They count up once the page has landed.
+  const results = $('#project-results');
+  results.replaceChildren(...(p.results ?? []).map((r) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<strong data-to="${r.value}" data-suffix="${r.suffix ?? ''}">0${r.suffix ?? ''}</strong><span></span>`;
+    li.querySelector('span').textContent = r.label;
+    li.setAttribute('aria-label', `${r.value}${r.suffix ?? ''} ${r.label}`);
+    return li;
+  }));
+  results.hidden = !p.results?.length;
 
   nextProject = nextHandler?.(p) ?? null;
   const next = $('#project-next');
@@ -222,6 +236,7 @@ export function openProject(p, from = null, done = null, position = null) {
   animate(0, 1, OPEN_MS, cardRect, end, () => {
     page.classList.add('settled');
     page.classList.remove('moving');
+    countResults();
     done?.();
   });
 }
@@ -250,6 +265,22 @@ export function closeProject(done = null) {
 
 export const projectOpen = () => isOpen;
 
+function countResults() {
+  page.querySelectorAll('.project-results strong').forEach((el, i) => {
+    const to = Number(el.dataset.to);
+    const suffix = el.dataset.suffix;
+    if (reduceMotion) { el.textContent = `${to}${suffix}`; return; }
+    const t0 = performance.now() + i * 140;
+    const step = (now) => {
+      const k = clamp01((now - t0) / 1600);
+      const e = 1 - Math.pow(1 - k, 4);
+      el.textContent = `${Math.round(to * e)}${suffix}`;
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 /* Moving to the next case does not fly anywhere. The page stays where it is, the copy goes out and
    the next one comes in under a banner that cross-fades — the flight belongs to arriving at the
    work from the spiral and leaving it, not to turning a page. */
@@ -261,6 +292,7 @@ export function showNext(position = null, done = null) {
     scroller.scrollTop = 0; // under the fade, so the jump back to the top is never seen
     fill(project, position);
     page.classList.remove('turning');
+    countResults();
     done?.(project);
   }, 420);
 }

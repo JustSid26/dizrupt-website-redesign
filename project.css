@@ -1,15 +1,21 @@
 /* ---------- Project page ----------
-   The case study: white ground, black type, the client's banner running the full width of the
+   The case study: a dark pane over the live scene, light type, the client's banner running the full width of the
    screen and the work set out under it in three numbered chapters. `--project-in` is the white
    rising under the growing frame and `--project-text` the copy arriving once it has landed; both
    are driven from project.js frame by frame, so nothing here has a clock of its own. */
 #project {
   position: fixed; inset: 0; z-index: 8;
-  --ink: #0b0b0e;
-  --ink-dim: rgba(11, 11, 14, 0.52);
-  --rule: rgba(11, 11, 14, 0.14);
+  --ink: #f2f0eb;
+  --ink-dim: rgba(242, 240, 235, 0.5);
+  --rule: rgba(242, 240, 235, 0.14);
   color: var(--ink);
-  background: rgba(255, 255, 255, var(--project-in, 0));
+  /* Dark, but not a wall: it thins out to the right, where the client's particle model keeps
+     turning beside the copy. */
+  background:
+    linear-gradient(90deg,
+      rgba(5, 5, 7, calc(0.96 * var(--project-in, 0))) 0%,
+      rgba(5, 5, 7, calc(0.9 * var(--project-in, 0))) 52%,
+      rgba(5, 5, 7, calc(0.25 * var(--project-in, 0))) 100%);
   visibility: hidden; pointer-events: none;
 }
 #project.open { visibility: visible; }
@@ -43,7 +49,7 @@
 #project.no-banner .project-hero-word { display: flex; }
 
 .project-inner {
-  width: 100%; max-width: 1240px; margin: 0 auto;
+  width: 100%; max-width: 1400px; margin: 0 auto;
   padding: clamp(56px, 8vw, 128px) var(--gutter) clamp(72px, 9vw, 150px);
 }
 
@@ -62,12 +68,14 @@
 }
 .project-no::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
 .project-title {
-  font-family: var(--sans); font-weight: 500;
-  font-size: clamp(46px, 9vw, 150px); line-height: 0.95; letter-spacing: -0.04em;
+  font-family: var(--display); font-weight: 700; font-stretch: 78%;
+  font-variation-settings: 'opsz' 96;
+  font-size: clamp(52px, 10vw, 176px); line-height: 0.86; letter-spacing: -0.035em;
+  text-transform: uppercase;
   margin: 0;
 }
 .project-lead {
-  max-width: 34ch; margin-left: auto;
+  max-width: 34ch; margin-left: 0;
   font-size: clamp(17px, 1.6vw, 24px); line-height: 1.45; letter-spacing: -0.01em;
 }
 
@@ -99,26 +107,50 @@
   position: sticky; top: 28px; align-self: start;
 }
 .chapter h3 {
-  font-family: var(--sans); font-weight: 500;
+  font-family: var(--display); font-weight: 600; font-stretch: 85%;
   font-size: clamp(26px, 3.4vw, 52px); line-height: 1.05; letter-spacing: -0.03em;
   margin: 0 0 clamp(16px, 1.8vw, 26px);
 }
-.chapter p { max-width: 62ch; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.7; color: rgba(11, 11, 14, 0.78); }
+.chapter p { max-width: 62ch; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.7; color: rgba(242, 240, 235, 0.74); }
+.chapter[hidden] { display: none; }
+/* the copy column keeps to the left; the right is the client's model, alive in the scene */
+.project-head, .project-results, .project-meta, .project-chapters { max-width: 820px; }
+.chapter-no { color: var(--violet-soft); }
+
+/* ---------- the numbers ---------- */
+.project-results {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(16px, 2.4vw, 36px);
+  margin: clamp(48px, 6vw, 90px) 0 0; list-style: none;
+}
+.project-results[hidden] { display: none; }
+.project-results li { border-top: 1px solid var(--rule); padding-top: 18px; }
+.project-results strong {
+  display: block;
+  font-family: var(--display); font-weight: 700; font-stretch: 78%;
+  font-size: clamp(44px, 6vw, 96px); line-height: 0.9; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(100deg, var(--project-a, var(--violet-soft)), var(--project-b, #fff));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.project-results span {
+  display: block; margin-top: 12px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-dim);
+}
 
 /* ---------- the way out ---------- */
 .project-foot {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap;
   margin-top: clamp(48px, 6vw, 96px);
 }
-#project .back { margin: 0; border-color: rgba(11, 11, 14, 0.2); color: var(--ink); }
-#project .back:hover { background: var(--ink); color: #fff; }
+#project .back { margin: 0; border-color: var(--rule); color: var(--ink); }
+#project .back:hover { background: var(--ink); color: #050507; }
 .project-next {
   display: grid; gap: 8px; text-align: right; margin-left: auto;
   padding: 0; color: var(--ink);
 }
 .project-next-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
 .project-next strong {
-  font-family: var(--sans); font-weight: 500;
+  font-family: var(--display); font-weight: 700; font-stretch: 80%; text-transform: uppercase;
   font-size: clamp(28px, 4.5vw, 64px); line-height: 1; letter-spacing: -0.03em;
   /* the rule draws itself in from the side you are heading towards */
   background-image: linear-gradient(currentColor, currentColor);
@@ -154,6 +186,8 @@
 #project.no-banner .project-frame-img { display: none; }
 
 @media (max-width: 900px) {
+  #project { background: rgba(5, 5, 7, calc(0.94 * var(--project-in, 0))); }
+  .project-results { grid-template-columns: 1fr; }
   .project-lead { max-width: none; margin-left: 0; }
   .project-meta { grid-template-columns: 1fr; gap: 22px; }
   .chapter { grid-template-columns: 1fr; gap: 10px; }
