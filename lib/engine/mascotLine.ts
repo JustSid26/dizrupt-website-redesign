@@ -139,7 +139,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       uniform float uReveal, uDim; varying vec2 vUv;
       void main() {
         if (vUv.x > uReveal - 0.015) discard; // laid just behind its particles
-        vec3 col = vec3(0.035, 0.03, 0.055); // a dark deck; its edges are the lights
+        vec3 col = vec3(0.006, 0.005, 0.01); // a dark deck (linear light); its edges are the lights
         gl_FragColor = vec4(col * uDim, 1.0);
       }`,
   }));
@@ -243,7 +243,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     const out = side.dot(new THREE.Vector3(P.x, 0, P.z)) > 0 ? side.clone() : side.clone().negate();
     const platform = new THREE.Mesh(
       new THREE.BoxGeometry(2.2, 0.25, 7),
-      new THREE.MeshBasicMaterial({ color: '#141022' }),
+      new THREE.MeshBasicMaterial({ color: '#07060c' }),
     );
     platform.position.copy(P).addScaledVector(out, 1.8).add(new THREE.Vector3(0, -0.2, 0));
     platform.lookAt(platform.position.clone().add(tan));

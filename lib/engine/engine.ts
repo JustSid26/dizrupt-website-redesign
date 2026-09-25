@@ -91,7 +91,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.setPixelRatio(pixelRatio);
   composer.setSize(innerWidth, innerHeight);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 0.15);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 0.26);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 

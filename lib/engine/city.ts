@@ -31,8 +31,10 @@ attribute vec3 aTint;
 attribute float aStyle;  // 0 house, 1 flats, 2 office, 3 glass tower
 attribute float aStart;
 attribute float aSeed;
+attribute vec2 aStack; // this block's base, and its building's whole height
 varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
 varying float vStyle, vSeed, vGrow;
+varying vec2 vStack;
 void main() {
   float g = clamp((uBuild - aStart * 0.6) / 0.4, 0.0, 1.0);
   g = g * g * (3.0 - 2.0 * g);
@@ -41,7 +43,7 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * world;
   vLocal = local; // floors stay where they are in the world, so rising uncovers them one by one
   vNormal = normal;
-  vTint = aTint; vSize = aSize; vStyle = aStyle; vSeed = aSeed; vGrow = g; vWorld = world.xyz;
+  vTint = aTint; vSize = aSize; vStyle = aStyle; vSeed = aSeed; vGrow = g; vWorld = world.xyz; vStack = aStack;
 }`;
 
 const buildingFragment = /* glsl */ `
@@ -49,6 +51,7 @@ uniform float uTime, uDim;
 uniform vec3 uFog, uCam;
 varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
 varying float vStyle, vSeed, vGrow;
+varying vec2 vStack;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + vSeed * 91.3) * 43758.5453); }
 void main() {
   if (vGrow < 0.001) discard;
@@ -57,7 +60,7 @@ void main() {
   float y = vLocal.y;
   // built only as far as the particles have landed; the roof goes on last
   // the particles land first; the solid building fades in a little way below them
-  float front = clamp((vGrow - 0.22) / 0.78, 0.0, 1.0) * h;
+  float front = clamp((vGrow - 0.22) / 0.78, 0.0, 1.0) * vStack.y - vStack.x;
   float fresh = smoothstep(front - 0.8, front, y); // the newest floors are still only particles
   if (y > front + 0.001 || (n.y > 0.5 && vGrow < 0.999)) discard;
   vec3 col;
@@ -102,7 +105,8 @@ void main() {
   // the line of light at the top while it is still going up
   col *= 1.0 - fresh * (1.0 - step(0.999, vGrow)) * 0.85;
   // the light is all in the particles; the mesh is only the dark mass they are on
-  col = vTint * 0.015 + vec3(0.006, 0.007, 0.012);
+  // (in linear light: what looks near-black on screen is a very small number here)
+  col = vTint * (0.003 + 0.004 * (vLocal.y + vStack.x) / max(vStack.y, 1.0)) + vec3(0.0015, 0.002, 0.0035);
   float d = distance(vWorld, uCam);
   col = mix(col, uFog, smoothstep(40.0, 130.0, d) * 0.6);
   gl_FragColor = vec4(col * uDim, 1.0);
@@ -246,7 +250,10 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   const TALL = mascotTop - GROUND; // the tallest towers stand as tall as he does
 
   /* ---- plan the buildings ---- */
-  type B = { x: number; z: number; w: number; d: number; h: number; style: number; tint: THREE.Color; start: number };
+  /* A building is a stack of blocks — podium, shaft, setbacks, crown — each drawn and built as
+     part of the whole: `base` is where the block starts above the ground, `total` the height of the
+     building it belongs to (the build runs over the whole of that), `top` whether it is the roof. */
+  type B = { x: number; z: number; w: number; d: number; h: number; style: number; tint: THREE.Color; start: number; base: number; total: number; top: boolean; part: string };
   const blds: B[] = [];
   const glass = ['#2ad4ff', '#58c4ff', '#3fe0c0', '#7fd8ff', '#ff5ba8'];
   const office = ['#9fc4ff', '#dfe8ff', '#6fb0ff', '#ffd27a'];
@@ -265,8 +272,24 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       const start = startAt(cx, cz);
       // keep the billboard in view: nothing near it stands above it
       const cap = nearBoard < 12 ? billboard.center.y - billboard.height / 2 - GROUND - 0.5 : Infinity;
-      const put = (x: number, z: number, w: number, d: number, h: number, style: number, tint: THREE.Color) =>
-        blds.push({ x, z, w, d, h: Math.min(h, cap), style, tint, start });
+      const put = (x: number, z: number, w: number, d: number, h0: number, style: number, tint: THREE.Color) => {
+        const H = Math.min(h0, cap);
+        // how the building is stacked, by type
+        const tiers: [number, number, number, string][] = []; // from, to (fractions of H), footprint scale, part
+        if (style === 3 && H > 6) {
+          const pod = Math.min(0.14, 1.6 / H);
+          tiers.push([0, pod, 1.18, 'podium']);
+          const s1 = 0.62 + rnd() * 0.15, s2 = 0.86 + rnd() * 0.06;
+          if (rnd() < 0.7) tiers.push([pod, s1, 1, 'shaft'], [s1, s2, 0.82, 'setback'], [s2, 1, 0.6, 'crown']);
+          else tiers.push([pod, s2, 1, 'shaft'], [s2, 1, 0.72, 'crown']);
+        } else if (style === 2 && H > 5 && rnd() < 0.55) {
+          const s1 = 0.7 + rnd() * 0.15;
+          tiers.push([0, s1, 1, 'shaft'], [s1, 1, 0.78, 'setback']);
+        } else tiers.push([0, 1, 1, 'shaft']);
+        tiers.forEach(([f0, f1, k, part], i) => blds.push({
+          x, z, w: w * k, d: d * k, h: H * (f1 - f0), style, tint, start, base: H * f0, total: H, top: i === tiers.length - 1, part,
+        }));
+      };
       const inView = cz > 0 && Math.abs(cx) < 16 + cz * 0.25; // the wedge the camera looks at him through
       if (inView && zone < 0.45) {
         const n = 1 + Math.floor(rnd() * 2);
@@ -302,15 +325,16 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   }
   // the billboard's tower
   const bb = billboard;
+  const bbH = bb.center.y - bb.height / 2 - 0.3 - GROUND;
   blds.push({
     x: bb.center.x - bb.normal.x * 1.2, z: bb.center.z - bb.normal.z * 1.2, w: 2.4, d: 2.4,
-    h: bb.center.y - bb.height / 2 - 0.3 - GROUND, style: 2, tint: new THREE.Color('#dfe8ff'), start: 0,
+    h: bbH, style: 2, tint: new THREE.Color('#dfe8ff'), start: 0, base: 0, total: bbH, top: true, part: 'shaft',
   });
 
   /* ---- build them: one instanced box pass ---- */
   const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const N = blds.length;
-  const size = new Float32Array(N * 3), tint = new Float32Array(N * 3), style = new Float32Array(N), start = new Float32Array(N), bseed = new Float32Array(N);
+  const size = new Float32Array(N * 3), tint = new Float32Array(N * 3), style = new Float32Array(N), start = new Float32Array(N), bseed = new Float32Array(N), bbase = new Float32Array(N * 2);
   const buildingUniforms = {
     uBuild: { value: 1 }, uTime: { value: 0 }, uDim: { value: 1 },
     uFog: { value: FOG }, uCam: { value: new THREE.Vector3() },
@@ -319,8 +343,9 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   const bMesh = new THREE.InstancedMesh(boxGeo, bMat, N);
   const m = new THREE.Matrix4();
   blds.forEach((b, i) => {
-    m.makeTranslation(b.x, GROUND, b.z);
+    m.makeTranslation(b.x, GROUND + b.base, b.z);
     bMesh.setMatrixAt(i, m);
+    bbase.set([b.base, b.total], i * 2);
     size.set([b.w, b.h, b.d], i * 3);
     tint.set([b.tint.r, b.tint.g, b.tint.b], i * 3);
     style[i] = b.style;
@@ -332,6 +357,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   boxGeo.setAttribute('aStyle', new THREE.InstancedBufferAttribute(style, 1));
   boxGeo.setAttribute('aStart', new THREE.InstancedBufferAttribute(start, 1));
   boxGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(bseed, 1));
+  boxGeo.setAttribute('aStack', new THREE.InstancedBufferAttribute(bbase, 2));
   bMesh.frustumCulled = false;
   group.add(bMesh);
 
@@ -404,58 +430,115 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
      Points sampled over its faces stream in from a loose cloud around it and land on its surface in
      order of height, bottom first, the way the mascot is lit from the top down; the solid facade is
      only drawn below the line where they have landed. Once it is up they burn out. */
-  const cp: number[] = [], cf: number[] = [], cr: number[] = [], cc: number[] = [];
-  const dense = isMobile ? 0.5 : 1;
-  const push = (x: number, y: number, z: number, b: B, col: THREE.Color, k = 1) => {
+  const cp: number[] = [], cf: number[] = [], cr: number[] = [], cc: number[] = [], cs: number[] = [];
+  const dense = isMobile ? 0.55 : 1;
+  // size: 1 for the fine structure (edges, dust, fins), larger for a lit window, which should read as a pane
+  const push = (x: number, y: number, z: number, b: B, col: THREE.Color, k = 1, size = 1) => {
     cp.push(x, y, z);
-    cf.push((y - GROUND) / b.h, b.start, b.h);
+    cs.push(size);
+    cf.push((y - GROUND) / b.total, b.start, b.total);
     cr.push(rnd(), rnd(), rnd(), rnd());
     cc.push(col.r * k, col.g * k, col.b * k);
   };
-  const warmLamp = new THREE.Color(1.0, 0.76, 0.42), coolLamp = new THREE.Color(0.72, 0.88, 1.0);
+  const warmLamp = new THREE.Color(1.0, 0.76, 0.42), coolLamp = new THREE.Color(0.72, 0.88, 1.0), lobby = new THREE.Color(1.0, 0.85, 0.6);
   const lampCol = new THREE.Color();
-  /* The buildings are made of their particles and stay that way: every lit window is a little
-     cluster of warm or cool light, the wall between them a sparse dust in the building's own colour,
-     and each corner and the roof's edge a fine line of points. The mesh behind is only a dark body. */
+  const white = new THREE.Color(0.85, 0.88, 0.95);
+  /* Every building is drawn in its particles, the way a real one reads at night:
+       glass towers  full-height panes between vertical fins, a line of light at every floor slab
+       offices       ribbon windows, a dark band of wall between one floor and the next
+       flats         a regular grid of windows, balconies on alternate floors
+       houses        a couple of windows and a door
+     with a lit lobby along the ground, corners and roof edges drawn as fine lines, and the roof
+     furnished: plant boxes on offices, a water tank on flats, a helipad or a mast on a tower. */
   for (const b of blds) {
-    const fh = b.style === 0 ? 0.34 : b.style === 1 ? 0.4 : b.style === 2 ? 0.42 : 0.5;
-    const bay = b.style < 3 ? 0.3 : 0.46;
-    const litP = b.style === 0 ? 0.45 : 0.55;
-    const warm = b.style <= 1 ? 0.8 : b.style === 2 ? 0.35 : 0.12;
+    const fh = b.style === 0 ? 0.36 : b.style === 1 ? 0.38 : b.style === 2 ? 0.42 : 0.46;
+    const bay = b.style === 3 ? 0.42 : b.style === 2 ? 0.36 : 0.34;
+    const litP = b.style === 0 ? 0.5 : b.style === 1 ? 0.5 : 0.6;
+    const warm = b.style <= 1 ? 0.8 : b.style === 2 ? 0.3 : 0.1;
+    const y0 = GROUND + b.base, y1 = y0 + b.h;
     const faces = [
       { n: [0, 0, 1], w: b.w, a: 'x' }, { n: [0, 0, -1], w: b.w, a: 'x' },
       { n: [1, 0, 0], w: b.d, a: 'z' }, { n: [-1, 0, 0], w: b.d, a: 'z' },
     ];
     for (const f of faces) {
-      const at = (u: number) => ({
-        x: (f.a === 'x' ? b.x + u : b.x + f.n[0] * b.w * 0.5) + f.n[0] * 0.02,
-        z: (f.a === 'x' ? b.z + f.n[2] * b.d * 0.5 : b.z + u) + f.n[2] * 0.02,
+      const at = (u: number, out = 0.02) => ({
+        x: (f.a === 'x' ? b.x + u : b.x + f.n[0] * b.w * 0.5) + f.n[0] * out,
+        z: (f.a === 'x' ? b.z + f.n[2] * b.d * 0.5 : b.z + u) + f.n[2] * out,
       });
-      const bays = Math.max(1, Math.floor((f.w - 0.2) / bay));
-      const floors = Math.max(1, Math.floor((b.h - fh * 0.6) / fh));
+      const bays = Math.max(1, Math.round((f.w - 0.16) / bay));
+      const bw = (f.w - 0.16) / bays;
+      const floors = Math.max(1, Math.floor((b.h - (b.base === 0 ? fh * 0.9 : 0.1)) / fh));
+      const first = y0 + (b.base === 0 ? fh * 0.9 : 0.05);
+      // the lobby: a lit band along the ground floor of anything but a house
+      if (b.base === 0 && b.style >= 1) {
+        for (let u = -f.w / 2 + 0.1; u < f.w / 2 - 0.1; u += 0.07 / dense) {
+          const p = at(u);
+          push(p.x, y0 + 0.12 + rnd() * 0.18, p.z, b, lobby, rnd() < 0.8 ? 0.9 : 0.3, 1.6);
+        }
+      }
       for (let fl = 0; fl < floors; fl++) {
-        const floorOn = rnd() > 0.15;
+        const fy = first + fl * fh; // this floor's slab
+        const floorOn = rnd() > 0.12;
+        if (b.style === 3) {
+          // the slab edge, a fine line of light across the glass
+          for (let u = -f.w / 2 + 0.05; u < f.w / 2 - 0.05; u += 0.11 / dense) {
+            const p = at(u);
+            push(p.x, fy, p.z, b, b.tint, 0.3);
+          }
+        }
         for (let bi = 0; bi < bays; bi++) {
-          const cu = -f.w / 2 + 0.1 + (bi + 0.5) * ((f.w - 0.2) / bays);
-          const cy = GROUND + fh * 0.8 + fl * fh;
-          if (floorOn && rnd() < litP) {
-            lampCol.copy(rnd() < warm ? warmLamp : coolLamp).multiplyScalar(0.6 + rnd() * 0.5);
-            const n = Math.max(1, Math.round((b.style === 3 ? 4 : 3) * dense));
-            for (let k = 0; k < n; k++) {
-              const p = at(cu + (rnd() - 0.5) * bay * 0.45);
-              push(p.x, cy + (rnd() - 0.5) * fh * 0.4, p.z, b, lampCol);
+          const cu = -f.w / 2 + 0.08 + (bi + 0.5) * bw;
+          const lit = floorOn && rnd() < litP;
+          lampCol.copy(rnd() < warm ? warmLamp : coolLamp).multiplyScalar(0.55 + rnd() * 0.5);
+          if (b.style === 3) {
+            // a full-height pane: a grid of points when lit, a faint glint when not
+            const nx = 2, ny = 2;
+            for (let ix = 0; ix < nx; ix++) for (let iy = 0; iy < ny; iy++) {
+              if (!lit && rnd() > 0.12) continue;
+              const p = at(cu + ((ix + 0.5) / nx - 0.5) * bw * 0.72);
+              push(p.x, fy + 0.07 + ((iy + 0.5) / ny) * (fh - 0.14), p.z, b, lit ? lampCol : b.tint, lit ? 1 : 0.2, lit ? 2.2 : 1);
             }
-          } else if (rnd() < 0.7 * dense) {
-            const p = at(cu + (rnd() - 0.5) * bay);
-            push(p.x, cy + (rnd() - 0.5) * fh, p.z, b, b.tint, 0.3);
+          } else if (b.style === 2) {
+            // ribbon windows: a continuous strip at window height, lit bay by bay
+            if (!lit) continue;
+            for (let k = 0; k < 3; k++) {
+              const p = at(cu + ((k + 0.5) / 3 - 0.5) * bw);
+              push(p.x, fy + fh * 0.45, p.z, b, lampCol, 1, 2.2);
+            }
+          } else {
+            // punched windows: a small square of light
+            if (lit) {
+              for (let ix = 0; ix < 2; ix++) {
+                const p = at(cu + (ix - 0.5) * bw * 0.28);
+                push(p.x, fy + fh * 0.48, p.z, b, lampCol, 1, 2.4);
+              }
+            }
+            // balconies on the flats: a rail on alternate floors, standing proud of the wall
+            if (b.style === 1 && fl % 2 === 1 && bi % 2 === 0) {
+              for (let t = -0.5; t <= 0.5; t += 0.25) {
+                const p = at(cu + t * bw * 0.8, 0.12);
+                push(p.x, fy + 0.04, p.z, b, white, 0.4);
+              }
+            }
           }
         }
       }
+      // glass towers: the vertical fins between the panes
+      if (b.style === 3) {
+        for (let bi = 0; bi <= bays; bi++) {
+          const p = at(-f.w / 2 + 0.08 + bi * bw, 0.04);
+          for (let y = y0; y < y1; y += 0.15 / dense) push(p.x, y, p.z, b, b.tint, 0.32);
+        }
+      }
+      // a house: a door and a window or two
+      if (b.style === 0) {
+        const p = at((rnd() - 0.5) * f.w * 0.5);
+        for (let y = y0; y < y0 + 0.3; y += 0.05) push(p.x, y, p.z, b, warmLamp, 0.7);
+      }
     }
-    // the corners and the roof's edge, as lines of points in its colour
-    const cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-    for (const [sx, sz] of cs) {
-      for (let y = 0; y < b.h; y += 0.07 / dense) push(b.x + sx * b.w * 0.5, GROUND + y, b.z + sz * b.d * 0.5, b, b.tint, 0.9);
+    // the corners, and the edge of each roof
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      for (let y = y0; y < y1; y += 0.07 / dense) push(b.x + sx * b.w * 0.5, y, b.z + sz * b.d * 0.5, b, b.tint, 0.9);
     }
     const per = 2 * (b.w + b.d);
     for (let t = 0; t < per; t += 0.06 / dense) {
@@ -463,7 +546,40 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         : t < b.w + b.d ? [b.w / 2, -b.d / 2 + (t - b.w)]
         : t < 2 * b.w + b.d ? [b.w / 2 - (t - b.w - b.d), b.d / 2]
         : [-b.w / 2, b.d / 2 - (t - 2 * b.w - b.d)];
-      push(b.x + x, GROUND + b.h, b.z + z, b, b.tint, 1.1);
+      push(b.x + x, y1, b.z + z, b, b.tint, 1.1);
+    }
+    if (!b.top) continue;
+    // what stands on the roof
+    const box = (cx: number, cz: number, w: number, d: number, h: number, col: THREE.Color, k: number) => {
+      for (let t = 0; t < 2 * (w + d); t += 0.05) {
+        const [x, z] = t < w ? [-w / 2 + t, -d / 2] : t < w + d ? [w / 2, -d / 2 + (t - w)] : t < 2 * w + d ? [w / 2 - (t - w - d), d / 2] : [-w / 2, d / 2 - (t - 2 * w - d)];
+        push(cx + x, y1 + h, cz + z, b, col, k);
+        push(cx + x, y1 + h * 0.3, cz + z, b, col, k * 0.5);
+      }
+    };
+    if (b.style === 2) {
+      // plant: two or three boxes of air handling
+      const n = 2 + Math.floor(rnd() * 2);
+      for (let i = 0; i < n; i++) box(b.x + (rnd() - 0.5) * b.w * 0.5, b.z + (rnd() - 0.5) * b.d * 0.5, 0.35, 0.28, 0.22, white, 0.45);
+    } else if (b.style === 1 && rnd() < 0.7) {
+      // a water tank on legs
+      const tx = b.x + (rnd() - 0.5) * b.w * 0.4, tz = b.z + (rnd() - 0.5) * b.d * 0.4;
+      for (let i = 0; i < 90; i++) {
+        const a = rnd() * Math.PI * 2;
+        push(tx + Math.cos(a) * 0.18, y1 + 0.25 + rnd() * 0.3, tz + Math.sin(a) * 0.18, b, white, 0.45);
+      }
+    } else if (b.style === 3 && rnd() < 0.45) {
+      // a helipad: a ring and an H
+      const r = Math.min(b.w, b.d) * 0.3;
+      for (let i = 0; i < 80; i++) {
+        const a = (i / 80) * Math.PI * 2;
+        push(b.x + Math.cos(a) * r, y1 + 0.03, b.z + Math.sin(a) * r, b, lobby, 0.9);
+      }
+      for (let t = -0.5; t <= 0.5; t += 0.1) {
+        push(b.x - r * 0.35, y1 + 0.03, b.z + t * r * 0.9, b, white, 0.9);
+        push(b.x + r * 0.35, y1 + 0.03, b.z + t * r * 0.9, b, white, 0.9);
+        push(b.x + t * r * 0.7, y1 + 0.03, b.z, b, white, 0.9);
+      }
     }
   }
   // the railway goes up the same way: pillars rise out of the particles, then the deck is laid on top
@@ -476,6 +592,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       const ang = rnd() * Math.PI * 2;
       const y = rnd() * RAIL_H;
       cp.push(px + Math.cos(ang) * 0.19, GROUND + y, pz + Math.sin(ang) * 0.19);
+      cs.push(1);
       cf.push(y / RAIL_H, st, RAIL_H);
       cr.push(rnd(), rnd(), rnd(), rnd());
       cc.push(railTint.r, railTint.g, railTint.b);
@@ -486,6 +603,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     const rr = RAIL_R + (rnd() - 0.5) * 0.9;
     const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
     cp.push(x, RAIL_Y + (rnd() - 0.5) * 0.12, z);
+    cs.push(1);
     // the deck lands after the pillars under it have topped out
     cf.push(0.97 + rnd() * 0.03, railStart(x, z), RAIL_H);
     cr.push(rnd(), rnd(), rnd(), rnd());
@@ -496,6 +614,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   cGeo.setAttribute('aFrac', new THREE.Float32BufferAttribute(cf, 3));
   cGeo.setAttribute('aRand', new THREE.Float32BufferAttribute(cr, 4));
   cGeo.setAttribute('aTint', new THREE.Float32BufferAttribute(cc, 3));
+  cGeo.setAttribute('aSize', new THREE.Float32BufferAttribute(cs, 1));
   const constructUniforms = { uBuild: { value: 1 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio }, uDim: { value: 1 } };
   const construct = new THREE.Points(cGeo, new THREE.ShaderMaterial({
     uniforms: constructUniforms,
@@ -504,6 +623,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       attribute vec3 aFrac;   // x: how high up it sits (0..1), y: its building's start, z: that building's height
       attribute vec4 aRand;
       attribute vec3 aTint;
+      attribute float aSize;
       varying vec3 vTint; varying float vA, vShine;
       void main() {
         float g = clamp((uBuild - aFrac.y * 0.6) / 0.4, 0.0, 1.0);
@@ -519,12 +639,12 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         /* Alive once it lands, the way the mascot is: each point drifts on its own small orbit, and
            slow bands of brighter light climb up through the building like the rays in his aurora. */
         float ph = aRand.w * 6.2832;
-        p += vec3(sin(uTime * (0.7 + aRand.x) + ph), sin(uTime * (0.9 + aRand.y) + ph * 1.7) * 0.6, cos(uTime * (0.8 + aRand.z) + ph)) * 0.045 * e;
+        p += vec3(sin(uTime * (0.7 + aRand.x) + ph), sin(uTime * (0.9 + aRand.y) + ph * 1.7) * 0.6, cos(uTime * (0.8 + aRand.z) + ph)) * 0.014 * e;
         float ray = 0.5 + 0.5 * sin(position.y * 1.6 - uTime * 1.4 + (position.x + position.z) * 0.35);
-        vShine = 0.75 + 1.1 * pow(ray, 3.0) + 0.5 * step(0.985, fract(aRand.w * 37.0 + uTime * 0.13));
+        vShine = 0.85 + 0.6 * pow(ray, 3.0) + 0.4 * step(0.99, fract(aRand.w * 37.0 + uTime * 0.13));
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = max(1.8, (2.4 + 4.2 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
+        gl_PointSize = max(1.1 * aSize, (1.8 * aSize + 4.4 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
         // on its way and just landed it is bright; once the facade has come up behind it, it settles to a sparkle
         vA = step(0.001, t);
         // white while it flies, its own colour once it lands
@@ -667,11 +787,12 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   }
   // the towers' beacons and LED spines
   for (const b of blds) {
-    if (b.style < 2) continue;
-    if (b.style === 3 || b.h > 9) {
+    if (b.style < 2 || !b.top) continue;
+    if (b.style === 3 || b.total > 9) {
       const spire = 0.6 + rnd() * 1.4;
-      for (let y = 0; y < spire; y += 0.08) add(b.x, GROUND + b.h + y, b.z, LED, b.start);
-      add(b.x, GROUND + b.h + spire, b.z, BEACON, b.start);
+      const roof = GROUND + b.base + b.h;
+      for (let y = 0; y < spire; y += 0.08) add(b.x, roof + y, b.z, LED, b.start);
+      add(b.x, roof + spire, b.z, BEACON, b.start);
     }
   }
   // his plinth: rings of light
@@ -813,7 +934,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         void main() {
           // laid only once its particles have landed on top of the pillars
           if (growAt(vW) < 0.985) discard;
-          gl_FragColor = vec4(vec3(0.07, 0.08, 0.12) * uDim, 1.0);
+          gl_FragColor = vec4(vec3(0.008, 0.009, 0.014) * uDim, 1.0);
         }`,
     }),
   );
@@ -828,7 +949,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         // solid only below where its particles have landed, as the buildings are
         float front = clamp((growAt(vBase) - 0.22) / 0.78, 0.0, 1.0) * uH;
         if (vW.y - uGround > front) discard;
-        gl_FragColor = vec4(vec3(0.1, 0.12, 0.17) * uDim, 1.0);
+        gl_FragColor = vec4(vec3(0.01, 0.012, 0.018) * uDim, 1.0);
       }`,
   }), pillarCount);
   for (let i = 0; i < pillarCount; i++) {
