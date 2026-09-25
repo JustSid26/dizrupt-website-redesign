@@ -665,6 +665,9 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     const screen = add(new THREE.PlaneGeometry(BW, BH), screenMat, BX - 0.01, BY, 0);
     screens.push(screen);
     screen.rotation.y = -Math.PI / 2; // facing the track
+    // and the same picture on its back, so it reads from the city side too
+    const back = add(new THREE.PlaneGeometry(BW, BH), screenMat, BX + 0.26, BY, 0);
+    back.rotation.y = Math.PI / 2;
     const texs: THREE.Texture[] = [first];
     const [photo, ...work] = st.images;
     if (photo) {

@@ -1286,3 +1286,6 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 
 /* at contact the city is the picture: the pane is a light veil, not a wall */
 .contact-pin { background: linear-gradient(90deg, transparent 0%, transparent 50%, rgba(5, 5, 7, 0.35) 68%, rgba(5, 5, 7, 0.55) 100%) !important; }
+
+/* contact is the city itself: its links are the towers, no copy over it */
+.contact-inner { display: none !important; }

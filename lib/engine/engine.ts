@@ -274,8 +274,33 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
       const w = Math.min(4.8, Math.max(2.8, (b.maxX - b.minX) * 1.1)); // big enough to read and click from the city view
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.8, 0.8, 0.8), depthTest: false }));
-      sign.renderOrder = 60; // never hidden behind a nearer tower: every link stays in view
+      void tex;
+      // the hit area: an invisible square where the logo is lit
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ visible: false }));
+      /* The logo is the tower's own windows: a grid of panes on its face, those inside the mark lit
+         in the brand's colour, the rest left as ordinary dim windows — the way buildings spell
+         things out at night. */
+      const G = 26;
+      const img = x.getImageData(0, 0, 512, 512).data;
+      const lp: number[] = [], lc: number[] = [];
+      const brand = new THREE.Color(soc.color), dimW = new THREE.Color(0.35, 0.3, 0.22);
+      for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) {
+        const px = Math.floor(((gx + 0.5) / G) * 512), py = Math.floor(((gy + 0.5) / G) * 512);
+        const i4 = (py * 512 + px) * 4;
+        const lum = (img[i4] + img[i4 + 1] + img[i4 + 2]) / 765;
+        const onMark = lum > 0.35 && !(px < 30 || py < 30 || px > 482 || py > 482); // not the old frame
+        lp.push((gx / (G - 1) - 0.5) * w, (0.5 - gy / (G - 1)) * w, 0);
+        const c = onMark ? brand : dimW;
+        const k = onMark ? 4 : Math.random() < 0.4 ? 0.35 : 0.04;
+        lc.push(c.r * k, c.g * k, c.b * k);
+      }
+      const lg = new THREE.BufferGeometry();
+      lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+      lg.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3));
+      const panes = new THREE.Points(lg, new THREE.PointsMaterial({ size: (w / G) * 0.9, vertexColors: true, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
+      panes.frustumCulled = false;
+      panes.renderOrder = 60; // a lit mark is never lost behind a nearer tower
+      sign.add(panes);
       sign.position.set(b.cx, GROUND + b.h * 0.78, b.maxZ + 0.08);
       sign.visible = false;
       scene.add(sign);
@@ -316,6 +341,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const camPos = new THREE.Vector3();
   const camLook = new THREE.Vector3();
   const tmpV = new THREE.Vector3();
+  const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
   const tmpDir = new THREE.Vector3(), tmpOut = new THREE.Vector3(), tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpUp = new THREE.Vector3();
 
   field.place(field.shape('mascot:neutral'));
@@ -590,6 +616,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     points.rotation.x = damp(points.rotation.x, 0, 4, dt);
     points.rotation.z = damp(points.rotation.z, 0, 4, dt);
     points.position.x = damp(points.position.x, tx, onIntro ? 2.2 : 3, dt);
+    points.position.z = damp(points.position.z, 0, 3, dt); // the train left him wherever it stopped
+    if (!riding && rot !== null) { const q = tmpQ.setFromEuler(tmpE.set(0, rot, 0)); points.quaternion.slerp(q, 1 - Math.exp(-3 * dt)); }
     if (key === 'stats' && onIntro) {
       points.rotation.x = damp(points.rotation.x, -signals.pointer.y * 0.1, 3, dt);
       points.rotation.y = damp(points.rotation.y, signals.pointer.x * 0.16, 3, dt);
