@@ -225,7 +225,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   /* ---------- the social banners: once he stands whole again at contact, light streams out of his
      hands and builds four banners in the air — two on his left, two on his right — each one of the
      studio's links (clickable, see SocialTowers.tsx), built bottom to top by the particles landing ---------- */
-  type Banner = { mesh: THREE.Mesh; clip: THREE.Plane; pts: THREE.Points; u: Record<string, { value: unknown }>; bottom: number; h: number; side: number };
+  type Banner = { mesh: THREE.Mesh; clip: THREE.Plane; pts: THREE.Points; u: Record<string, { value: unknown }>; bottom: number; h: number; side: number; ghosts: THREE.Mesh[]; base: THREE.Vector3; next: number; until: number };
   const socialBanners: Banner[] = [];
   // his hands, in his own frame: the outermost points at mid height of the full figure
   const hands = { l: new THREE.Vector3(-1.4, -0.8, 0.2), r: new THREE.Vector3(1.4, -0.8, 0.2) };
@@ -277,6 +277,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     mesh.visible = false;
     scene.add(mesh);
     mesh.updateMatrixWorld();
+    // red and cyan copies of the mark, only seen while it glitches
+    const ghosts = [new THREE.Color(1, 0.1, 0.3), new THREE.Color(0.1, 0.9, 1)].map((gc) => {
+      const gm = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: gc.multiplyScalar(0.6), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      gm.visible = false;
+      mesh.add(gm);
+      return gm;
+    });
     // the particles: each has its spot on the banner, and flies there from his hand, bottom row first
     const n = isMobile ? 2200 : 5000;
     const tgt = new Float32Array(n * 3), rnd = new Float32Array(n), col = new Float32Array(n * 3);
@@ -336,7 +343,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     pts.frustumCulled = false;
     pts.visible = false;
     scene.add(pts);
-    socialBanners.push({ mesh, clip, pts, u, bottom, h: BHt, side: sp.side });
+    socialBanners.push({ mesh, clip, pts, u, bottom, h: BHt, side: sp.side, ghosts, base: mesh.position.clone(), next: 2 + Math.random() * 3, until: 0 });
   });
   billboard.measure();
 
@@ -908,6 +915,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         (bn.u.uHand.value as THREE.Vector3).copy(bn.side < 0 ? hands.l : hands.r).applyMatrix4(points.matrixWorld);
         bn.pts.visible = t > 0.001 && t < 0.999;
         bn.mesh.visible = t > 0.35;
+        /* It loses the signal now and then, like his Z: the mark jumps, its red and cyan pull
+           apart, it stretches for a frame — in short bursts, at intervals rolled fresh each time. */
+        if (time > bn.next) { bn.until = time + 0.15 + Math.random() * 0.25; bn.next = bn.until + 1.5 + Math.random() * 3; }
+        const tearing = t >= 0.999 && time < bn.until && !reducedMotion;
+        const jig = tearing ? (Math.random() - 0.5) * 0.5 : 0;
+        bn.mesh.position.copy(bn.base);
+        bn.mesh.translateX(jig);
+        bn.mesh.scale.set(tearing && Math.random() < 0.3 ? 1.15 : 1, tearing && Math.random() < 0.2 ? 0.9 : 1, 1);
+        bn.ghosts.forEach((gm, gi) => {
+          gm.visible = tearing;
+          gm.position.set((gi ? 1 : -1) * (0.12 + Math.random() * 0.35), (Math.random() - 0.5) * 0.12, 0.01);
+        });
         bn.clip.constant = t >= 0.999 ? 1e4 : bn.bottom + bn.h * Math.min(1, Math.max(0, (t * 1.35 - 0.35) / 0.9));
         const out = signals.socials[i];
         out.on = t >= 0.999;

@@ -880,7 +880,33 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     return { pos: pos.clone().add(new THREE.Vector3(0, 0.03, 0)), dir: dir.clone(), quat: quat.clone(), u };
   }
 
+  /* Every stop loses the signal now and then, as the rest of the house does: the whole structure
+     jumps a hair, and its screen splits into red and cyan copies that slip apart. */
+  const faults = stationBuildings.map((sg, k) => {
+    const scr = screens[k];
+    const ghosts = [new THREE.Color(1, 0.1, 0.3), new THREE.Color(0.1, 0.9, 1)].map((gc) => {
+      const gm = new THREE.Mesh(scr.geometry, new THREE.MeshBasicMaterial({ toneMapped: false, color: gc.multiplyScalar(0.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      gm.visible = false;
+      scr.add(gm);
+      return gm;
+    });
+    return { sg, scr, ghosts, base: sg.position.clone(), next: 2 + Math.random() * 4, until: 0 };
+  });
+  const reduced = typeof window !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1) {
+    for (const f of faults) {
+      if (time > f.next) { f.until = time + 0.15 + Math.random() * 0.25; f.next = f.until + 1.8 + Math.random() * 3.5; }
+      const tearing = !reduced && time < f.until && f.sg.visible;
+      f.sg.position.copy(f.base);
+      if (tearing) f.sg.translateZ((Math.random() - 0.5) * 0.35);
+      const map = (f.scr.material as THREE.MeshBasicMaterial).map;
+      f.ghosts.forEach((gm, gi) => {
+        gm.visible = tearing;
+        (gm.material as THREE.MeshBasicMaterial).map = map;
+        gm.position.set((gi ? 1 : -1) * (0.15 + Math.random() * 0.45), (Math.random() - 0.5) * 0.15, gi ? 0.012 : 0.008);
+      });
+    }
     if (reveal > 0.001) liveBoards.forEach((b) => b.draw(time));
     for (const b of banners) {
       if (time > b.next && b.texs.length > 1) {
