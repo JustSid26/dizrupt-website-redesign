@@ -234,7 +234,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   if (mascot) {
     // left of his chest (his left, your right), just in front of the surface
     const a3 = mascot.neutral.array as Float32Array;
-    const cy = mascot.pivot.y - 1.45, cx = 0.4;
+    const cy = mascot.pivot.y - 1.45, cx = 1.0;
     let fz = 0;
     for (let i = 0; i < a3.length; i += 3) if (Math.abs(a3[i + 1] - cy) < 0.2 && Math.abs(a3[i] - cx) < 0.2) fz = Math.max(fz, a3[i + 2]);
     heart.position.set(cx, cy, fz + 0.05);
