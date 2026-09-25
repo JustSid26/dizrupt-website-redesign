@@ -438,7 +438,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let scrubFrom = '';
   const ride = { s: 0, v: 0 };
   const contactLook = new THREE.Vector3();
-  let wasContact = false; // and what it is scrubbing away from
+  let wasContact = false;
+  let formedAt = -1; // when he stood whole at contact (the banners build from then) // and what it is scrubbing away from
 
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
      (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
@@ -910,9 +911,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     }
     {
       const atContact = section === 'contact' && !view;
+      const whole = atContact && key === 'mascot:full' && u.uProgress.value >= 0.999 && mascotVisible > 0.95 && fieldOpacity > 0.9 && s.contact > 0.55;
+      if (whole && formedAt < 0) formedAt = time;
+      if (!atContact) formedAt = -1;
       socialBanners.forEach((bn, i) => {
         // he stands for a moment, then the banners build one after another
-        const t = atContact ? Math.min(1, Math.max(0, (s.contact - 0.7 - i * 0.04) / 0.18)) : 0;
+        // only once he is whole again: then they build on their own clock, one after another
+        const t = atContact && formedAt > 0 ? Math.min(1, Math.max(0, (time - formedAt - 0.6 - i * 0.45) / 2.4)) : 0;
         bn.u.uT.value = t;
         bn.u.uTime.value = time;
         (bn.u.uHand.value as THREE.Vector3).copy(bn.side < 0 ? hands.l : hands.r).applyMatrix4(points.matrixWorld);
