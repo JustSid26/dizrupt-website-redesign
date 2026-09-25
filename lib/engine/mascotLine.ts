@@ -384,7 +384,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const stops = [nearestU(S), ...stationAngles.map((t) => nearestU(new THREE.Vector3(Math.cos(t) * R, TRACK_Y, Math.sin(t) * R)))];
 
   /* ---- the track: a deck with violet light strips, on pillars, built by particles ---- */
-  const trackUniforms = { uFrom: { value: 0 }, uReveal: { value: 0 }, uDim: { value: 1 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio } };
+  const trackUniforms = { uLead: { value: 0.01 }, uFrom: { value: 0 }, uReveal: { value: 0 }, uDim: { value: 1 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio } };
   const deckGeo = new THREE.TubeGeometry(curve, 600, 0.55, 4, false);
   const deck = new THREE.Mesh(deckGeo, new THREE.ShaderMaterial({
     uniforms: trackUniforms,
@@ -398,6 +398,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         gl_FragColor = vec4(col * uDim, 1.0);
       }`,
   }));
+  deck.visible = false; // the line is made of light: its particles are the track
   group.add(deck);
 
   // light strips along both edges, the particles that build it, and the pillars under it
@@ -412,20 +413,22 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     curve.getPointAt(u, P);
     curve.getTangentAt(u, tan);
     side.crossVectors(tan, up).normalize();
-    for (const s of [-0.62, 0.62]) {
-      sp.push(P.x + side.x * s, P.y + 0.08, P.z + side.z * s);
+    for (const s of [-1.12, 1.12]) {
+      sp.push(P.x + side.x * s, P.y + 0.02, P.z + side.z * s);
       su.push(u); sk.push(0); sr.push(Math.random());
     }
   }
   // building particles: a cloud that rises into the deck just ahead of where it is laid
-  const builders = isMobile ? 6000 : 14000;
+  const builders = isMobile ? 16000 : 42000;
   for (let i = 0; i < builders; i++) {
     const u = Math.random();
     curve.getPointAt(u, P);
     curve.getTangentAt(u, tan);
     side.crossVectors(tan, up).normalize();
-    const s = (Math.random() - 0.5) * 1.2;
-    sp.push(P.x + side.x * s, P.y + (Math.random() - 0.5) * 0.3, P.z + side.z * s);
+    // a deck of light: wider than the train, and with depth under it, so it shows round the train's sides
+    const s = (Math.random() - 0.5) * 2.2;
+    const y = -0.08 - Math.random() * Math.random() * 0.55;
+    sp.push(P.x + side.x * s, P.y + y, P.z + side.z * s);
     su.push(u); sk.push(1); sr.push(Math.random());
   }
   // pillars every few metres, once it is up off the ground
@@ -448,7 +451,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const lights = new THREE.Points(lineGeo, new THREE.ShaderMaterial({
     uniforms: trackUniforms,
     vertexShader: /* glsl */ `
-      uniform float uReveal, uTime, uPixelRatio, uFrom;
+      uniform float uReveal, uTime, uPixelRatio, uFrom, uLead;
       attribute float aU, aKind, aRand;
       varying float vA, vKind;
       void main() {
@@ -458,11 +461,11 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         vA = 1.0;
         if (aKind > 0.5 && aKind < 1.5) {
           // builders: rise from below and swirl in as the build front reaches them
-          float t = clamp(1.0 - ahead / 0.06, 0.0, 1.0);
+          float t = clamp(1.0 - ahead / uLead, 0.0, 1.0); // they gather in the last couple of metres ahead of the train
           float e = t * t * (3.0 - 2.0 * t);
           float a = aRand * 40.0 + (1.0 - e) * 6.0;
           p += vec3(cos(a) * 2.5, -3.0 - aRand * 4.0, sin(a) * 2.5) * (1.0 - e);
-          vA = step(0.001, t) * (1.0 - smoothstep(0.0, 0.08, -ahead) * 0.55);
+          vA = step(0.001, t) * (1.0 - smoothstep(0.0, 0.08, -ahead) * 0.3);
           p += vec3(sin(uTime * 0.9 + aRand * 50.0), sin(uTime * 1.2 + aRand * 31.0) * 0.5, cos(uTime * 0.8 + aRand * 17.0)) * 0.05 * e;
         } else {
           // pulses of light running along the line, his way round
@@ -470,8 +473,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         }
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        float s = aKind < 0.5 ? 1.1 : aKind < 1.5 ? 3.2 : 0.8;
-        gl_PointSize = max(1.5, s * 6.0 * uPixelRatio / -mv.z);
+        float s = aKind < 0.5 ? 1.8 : aKind < 1.5 ? 2.2 : 1.2;
+        gl_PointSize = max(2.0, s * 16.0 * uPixelRatio / -mv.z);
         vKind = aKind;
       }`,
     fragmentShader: /* glsl */ `
@@ -479,9 +482,9 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       void main() {
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5 || vA < 0.01) discard;
-        vec3 col = vKind < 0.5 ? vec3(0.5, 0.28, 0.75) : vKind < 1.5 ? vec3(0.8, 0.65, 1.0) : vec3(0.2, 0.13, 0.32);
+        vec3 col = vKind < 0.5 ? vec3(0.85, 0.55, 1.0) : vKind < 1.5 ? vec3(0.62, 0.36, 1.0) : vec3(0.45, 0.28, 0.75);
         float core = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(col * uDim * 1.2, (core * core * 0.6 + exp(-d * d * 40.0) * 0.8) * vA);
+        gl_FragColor = vec4(col * uDim * 1.6, (core * core * 0.7 + exp(-d * d * 40.0) * 0.9) * vA);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
@@ -643,6 +646,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
 
   const station = buildStation(stationModel, pixelRatio);
   station.group.position.copy(S);
+  trackUniforms.uLead.value = 2.5 / LEN;
   trackUniforms.uFrom.value = nearestU(S.clone().addScaledVector(SDIR, 10.5));
   station.group.rotation.y = Math.atan2(SDIR.x, SDIR.z);
   group.add(station.group);
@@ -683,7 +687,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       h.mat.uniforms.uOn.value += (near * near * (3 - 2 * near) - h.mat.uniforms.uOn.value) * 0.08;
       h.points.rotation.y = time * 0.35 + k;
       h.points.position.y = h.base.y + Math.sin(time * 0.8 + k) * 0.25;
-      h.points.visible = reveal > stops[k + 1];
+      h.points.visible = false; // no floating models: the billboard carries the solution
       // the station rises out of the ground as the line reaches it
       // it rises as the track reaches the near end of its platform, done by the time the track reaches its middle
       const up = Math.min(1, Math.max(0.001, (reveal - (stops[k + 1] - 5 / LEN)) / (5 / LEN)));

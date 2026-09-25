@@ -1128,3 +1128,9 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 }
 #solutions.sol-docked .sol-pin::before { opacity: 1; }
 .sol-pin { isolation: isolate; }
+
+/* the solutions copy stands on the right, the train and its billboard on the left */
+@media (min-width: 901px) {
+  .sol-pin { justify-content: flex-end; }
+  .sol-pin::before { background: linear-gradient(270deg, rgba(5, 5, 9, 0.72) 0%, rgba(5, 5, 9, 0.45) 32%, transparent 55%); }
+}

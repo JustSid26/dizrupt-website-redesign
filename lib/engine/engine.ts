@@ -643,10 +643,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const radial = tmpB.set(pose.pos.x, 0, pose.pos.z).normalize();
       const out = beside.lerp(radial, smooth(33, 36, r)).normalize(); // only once it is on the loop itself
       const chase = tmpA.copy(pose.pos).addScaledVector(out, 9).addScaledVector(flat, -5).add(tmpUp.set(0, 6, 0));
-      const target = tmpB.copy(pose.pos).addScaledVector(flat, 7).add(tmpUp.set(0, 1.2, 0)); // ahead, where the track is being laid
+      // between the train and its billboard (which stands on the far side of the track), a little ahead
+      const target = tmpB.copy(pose.pos).addScaledVector(flat, 5).addScaledVector(out, -2.5).add(tmpUp.set(0, 2.2, 0));
       // the copy is on the left: lean the view so the train sits right of centre
       const left = tmpUp.copy(target).sub(chase).normalize().cross(new THREE.Vector3(0, -1, 0)).normalize();
-      target.addScaledVector(left, innerWidth > 900 ? 6.5 : 0);
+      target.addScaledVector(left, innerWidth > 900 ? -3 : 0); // the copy is on the right: train and board sit left
       camPos.lerp(chase, b);
       camLook.lerp(target, b);
       camera.position.copy(camPos);
@@ -676,7 +677,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
     const at0 = line.stops[0] + 0.012;
-    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + (TRAIN_HALF + 1) / line.length) : 1.02; // laid a metre ahead of the train's nose, as it goes
+    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + (TRAIN_HALF + 1.5) / line.length) : 1.02; // laid a metre ahead of the train's nose, as it goes
     line.update(time, lineReveal, cityDim, s.trainS, stationT);
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
