@@ -234,7 +234,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   if (mascot) {
     // left of his chest (his left, your right), just in front of the surface
     const a3 = mascot.neutral.array as Float32Array;
-    const cy = mascot.pivot.y - 1.45, cx = 1.0;
+    const cy = mascot.pivot.y - 1.85, cx = 1.0;
     let fz = 0;
     for (let i = 0; i < a3.length; i += 3) if (Math.abs(a3[i + 1] - cy) < 0.2 && Math.abs(a3[i] - cx) < 0.2) fz = Math.max(fz, a3[i + 2]);
     heart.position.set(cx, cy, fz + 0.05);
@@ -973,7 +973,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     }
     {
       // lub-dub: two beats close together, then a rest
-      const P = 1.05, ph = time % P;
+      const P = 1.0, ph = time % P; // one beat a second
       const beat = Math.exp(-Math.pow((ph - 0.05) / 0.06, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.3) / 0.07, 2));
       const show = key.startsWith('mascot:') && !scrubbing && u.uAurora.value > 0.5 && (!onIntro || reveal > 0.95) ? fieldOpacity * mascotVisible : 0;
       heartShow = damp(heartShow, show, 4, dt);
