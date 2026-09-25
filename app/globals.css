@@ -1257,8 +1257,7 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .mac-folder { width: 34px; height: 26px; border-radius: 4px; background: linear-gradient(#74c0fc, #339af0); position: relative; }
 .mac-folder::before { content: ""; position: absolute; left: 2px; top: -5px; width: 14px; height: 7px; border-radius: 3px 3px 0 0; background: #74c0fc; }
 .mac-layer { z-index: 150; }
-.mac-desktop::after { content: "DIZRUPT"; position: absolute; left: 50%; top: 50%; translate: -50% -50%; font-family: var(--sans); font-weight: 600; font-size: clamp(60px, 10vw, 150px); letter-spacing: -0.02em; color: rgba(255, 255, 255, 0.06); pointer-events: none; z-index: 0; }
-.mac-desktop > * { position: relative; z-index: 1; }
+.mac-desktop::before { content: "DIZRUPT"; position: absolute; left: 50%; top: 50%; translate: -50% -50%; font-family: var(--sans); font-weight: 600; font-size: clamp(60px, 10vw, 150px); letter-spacing: -0.02em; color: rgba(255, 255, 255, 0.06); pointer-events: none; } /* painted first, so everything sits over it */
 /* files */
 .mac-files { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 18px; padding: 18px; align-content: start; overflow-y: auto; }
 .mac-file { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 6px; border-radius: 8px; text-align: center; cursor: pointer; background: none; border: 0; color: inherit; font: inherit; }
