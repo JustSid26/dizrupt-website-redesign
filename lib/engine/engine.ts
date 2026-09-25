@@ -222,6 +222,26 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const stationCamLook = line.stationAt.clone().add(new THREE.Vector3(0, 2.2, 6));
   const aerialLook = new THREE.Vector3(0, GROUND + 12, 0);
 
+  const api0: Record<string, unknown> = {};
+  /* ---------- his heart: the DIZRUPT mark, beating in his chest ---------- */
+  const heartTex = new THREE.TextureLoader().load('/heart.png');
+  heartTex.colorSpace = THREE.SRGBColorSpace;
+  const heartMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color(0.95, 0.8, 1.15), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const heart = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), heartMat);
+  const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color("#b46bff"), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  heart.add(heartGlow);
+  heart.renderOrder = 40;
+  if (mascot) {
+    // left of his chest (his left, your right), just in front of the surface
+    const a3 = mascot.neutral.array as Float32Array;
+    const cy = mascot.pivot.y - 1.45, cx = 0.4;
+    let fz = 0;
+    for (let i = 0; i < a3.length; i += 3) if (Math.abs(a3[i + 1] - cy) < 0.2 && Math.abs(a3[i] - cx) < 0.2) fz = Math.max(fz, a3[i + 2]);
+    heart.position.set(cx, cy, fz + 0.05);
+  }
+  points.add(heart);
+  (api0 as { heart?: THREE.Mesh }).heart = heart;
+
   /* ---------- the social banners: once he stands whole again at contact, light streams out of his
      hands and builds four banners in the air — two on his left, two on his right — each one of the
      studio's links (clickable, see SocialTowers.tsx), built bottom to top by the particles landing ---------- */
@@ -439,7 +459,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const ride = { s: 0, v: 0 };
   const contactLook = new THREE.Vector3();
   let wasContact = false;
-  let formedAt = -1; // when he stood whole at contact (the banners build from then) // and what it is scrubbing away from
+  let formedAt = -1;
+  let heartShow = 0; // when he stood whole at contact (the banners build from then) // and what it is scrubbing away from
 
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
      (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
@@ -950,11 +971,23 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       });
       for (let i = socialBanners.length; i < signals.socials.length; i++) signals.socials[i].on = false;
     }
+    {
+      // lub-dub: two beats close together, then a rest
+      const P = 1.05, ph = time % P;
+      const beat = Math.exp(-Math.pow((ph - 0.05) / 0.06, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.3) / 0.07, 2));
+      const show = key.startsWith('mascot:') && !scrubbing && u.uAurora.value > 0.5 && (!onIntro || reveal > 0.95) ? fieldOpacity * mascotVisible : 0;
+      heartShow = damp(heartShow, show, 4, dt);
+      heart.visible = heartShow > 0.01;
+      heart.scale.setScalar(1 + beat * 0.22);
+      heartMat.opacity = heartShow * (0.55 + 0.45 * beat);
+      heartGlow.scale.setScalar(1.25 + beat * 0.5);
+      (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18;
+    }
     composer.render();
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
