@@ -311,11 +311,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const onIntro = section === 'intro' && !view && !preview;
     const reveal = onIntro ? smooth(0.22, 0.4, ip) : 1;
     u.uBeamOn.value = onIntro ? 1 : 0;
-    u.uBeam.value = BUST_HEIGHT / 2 + 0.25 - reveal * (BUST_HEIGHT / 2 - (mascot ? mascot.feet : -6) + 0.8);
+    // from below his feet up past his crown: he is built foot to head
+    const feetY = mascot ? mascot.feet : -6;
+    u.uBeam.value = feetY - 0.4 + reveal * (BUST_HEIGHT / 2 - feetY + 1.0);
     u.uBodyReveal.value = onIntro ? reveal : 1;
     u.uEyeReveal.value = onIntro ? reveal : 1;
     const whole = key === 'mascot:full' || scrubbing ? 1 - (scrubbing ? u.uProgress.value : 0) : 0;
-    u.uFill.value = whole * 0.6;
+    u.uFill.value = whole * 0.85;
     u.uKindle.value = (0.94 + 0.06 * Math.sin(now * 0.0042) + 0.02 * Math.sin(now * 0.017)) * (1 + whole * 1.6);
 
     /* ---- where it stands ---- */

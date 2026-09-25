@@ -71,6 +71,7 @@ uniform float uHeadPitch;
 uniform vec3 uHeadPivot;  // the neck, in the mascot's own space
 attribute float aHead;    // >0: weighted neck/head turn; <0: full head turn for legacy eye samples
 uniform float uDisperse;
+uniform float uBeam, uBeamOn;
 uniform float uSize;
 uniform float uPixelRatio;
 uniform vec3 uMouse;
@@ -195,7 +196,14 @@ void main() {
   pos += n * (0.05 + uDisperse * 1.2);
   pos *= 1.0 + uDisperse * 0.6;
 
-  vLocalY = pos.y;   // read after the head turn, so the beam travels down him and not past him
+  vLocalY = pos.y;   // read after the head turn, so the beam travels with him
+  /* Built from the feet up: while the build line (uBeam) climbs him, the points just above it are
+     still arriving — they spiral in from around him and settle as the line passes them. */
+  if (uBeamOn > 0.5) {
+    float incoming = smoothstep(uBeam - 0.1, uBeam + 1.4, vLocalY);
+    float a = aRandom * 40.0 + uTime * 1.5;
+    pos += vec3(cos(a), 0.4 + fract(aRandom * 7.3), sin(a)) * incoming * (1.5 + fract(aRandom * 3.1) * 2.5);
+  }
 
   vec4 world = modelMatrix * vec4(pos, 1.0);
   vec2 dir = world.xy - uMouse.xy;
@@ -298,7 +306,7 @@ void main() {
        the aurora runs over it. */
     float glow = soft * (0.45 + 0.62 * vRay) * uKindle * rim;
     col = mix(col, aurora, vAurora);
-    alpha = mix(alpha, glow * (0.019 + 0.060 * vAlpha), vAurora);
+    alpha = mix(alpha, glow * (0.019 + 0.060 * vAlpha) * (1.0 + uFill * 2.8), vAurora);
   }
 
   /* The beam. Everything it has already passed is lit and stays lit; everything below it is still
@@ -306,9 +314,10 @@ void main() {
      whole of his arrival. */
   float reveal = uBodyReveal;
   if (uBeamOn > 0.5) {
-    float passed = smoothstep(uBeam - 0.05, uBeam + 0.22, vLocalY);
+    float passed = 1.0 - smoothstep(uBeam - 0.05, uBeam + 0.22, vLocalY);
     float crest = exp(-pow((vLocalY - uBeam) * 5.5, 2.0));
-    reveal = passed;
+    // what is still arriving shows faintly above the line, so you see him being gathered
+    reveal = max(passed, (1.0 - smoothstep(uBeam, uBeam + 1.4, vLocalY)) * 0.45);
     alpha += crest * a * 0.05 * vAurora * smoothstep(0.02, 0.35, vEdge);
   }
   gl_FragColor = vec4(col, alpha * uOpacity * reveal);
