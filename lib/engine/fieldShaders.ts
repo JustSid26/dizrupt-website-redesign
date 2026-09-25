@@ -140,22 +140,15 @@ void main() {
     float activePatch = max(fullBody, regionHit);
     float tear = cellNoise - 0.5;
 
-    if (uGlitchLayer < 0.5) {
-      pos.x += activePatch * tear * 0.075 * glitch;
-      pos.y += activePatch * (fract(cellNoise * 7.3) - 0.5) * 0.022 * glitch;
-      // Tiny comic-book pop flecks: rare and close to the silhouette, never an exploding cloud.
-      float chip = activePatch * step(0.993, fract(aRandom * 91.7 + uGlitchSeed));
-      pos.x += chip * (fract(aRandom * 7.1) - 0.5) * 0.32 * glitch;
-      pos.y += chip * (fract(aRandom * 3.3) - 0.5) * 0.10 * glitch;
-      vChip = chip * (1.0 + floor(fract(aRandom * 5.7) * 2.0)) * glitch;
-    } else {
-      float direction = uGlitchLayer < 1.5 ? -1.0 : 1.0;
-      pos.x += activePatch * direction * (0.070 + abs(tear) * 0.09) * glitch;
-      pos.y += activePatch * direction * (0.010 + fract(cellNoise * 5.1) * 0.014) * glitch;
-      // Preserve most of each patch so it reads as an offset ink plate, not random confetti.
-      float plate = step(0.14, fract(aRandom * 37.1 + cellNoise * 9.0));
-      vEcho = activePatch * plate * glitch;
-    }
+    /* An RGB split. He is drawn three times while it lasts — green here, red and blue in the two
+       extra passes — and the three tear together, band by band, then come apart sideways: red one
+       way, blue the other, further on the bands that tore. Where they still line up they add back
+       to his own colour, so nothing brightens; the fault shows only as coloured fringes. */
+    pos.x += activePatch * tear * 0.09 * glitch;
+    pos.y += activePatch * (fract(cellNoise * 7.3) - 0.5) * 0.02 * glitch;
+    float chan = uGlitchLayer < 0.5 ? 0.0 : uGlitchLayer < 1.5 ? -1.0 : 1.0;
+    pos.x += chan * (0.035 + 0.06 * mode + activePatch * (0.05 + abs(tear) * 0.08)) * glitch;
+    pos.y += chan * activePatch * 0.012 * glitch;
   }
 
   /* ---------- Aurora ----------
@@ -228,6 +221,7 @@ void main() {
 }`;
 
 export const fragmentShader = /* glsl */ `
+uniform float uGlitch;
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform float uOpacity;
@@ -255,13 +249,6 @@ void main() {
   float tone = mix(vRandom, smoothstep(0.72, 0.8, vRandom), uSplit);
   vec3 col = mix(uColorA, uColorB, tone);
   float alpha = a * a * vAlpha;
-  if (uGlitchLayer > 0.5) {
-    col = uGlitchLayer < 1.5 ? vec3(1.0, 0.05, 0.34) : vec3(0.04, 0.92, 1.0);
-    alpha = a * a * vAlpha * vEcho * 0.62;
-  } else if (vChip > 0.5) { // brief magenta/cyan print flecks
-    col = vChip < 1.5 ? vec3(1.0, 0.08, 0.38) : vec3(0.05, 0.92, 1.0);
-    alpha = a * 0.95;
-  }
 
   /* ---------- Aurora ----------
      The sprite loses its edge entirely. A disc with a smoothstep falloff still has a boundary, and
@@ -320,5 +307,9 @@ void main() {
     reveal = max(passed, (1.0 - smoothstep(uBeam, uBeam + 1.4, vLocalY)) * 0.45);
     alpha += crest * a * 0.05 * vAurora * smoothstep(0.02, 0.35, vEdge);
   }
+  // during an RGB split each pass carries one channel of him (see the vertex shader)
+  float split = step(0.015, uGlitch) * step(0.02, vAurora);
+  vec3 channel = uGlitchLayer < 0.5 ? vec3(0.0, 1.0, 0.0) : uGlitchLayer < 1.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+  col *= mix(vec3(1.0), channel, split);
   gl_FragColor = vec4(col, alpha * uOpacity * reveal);
 }`;
