@@ -686,8 +686,9 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       /* Tech & Automation: a silver MacBook Pro, giant, standing open beside the line on a steel
          deck, its screen a macOS desktop with the projects folder on it. Clicking it opens the Mac. */
       const steel = new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
-      const alu = new THREE.MeshStandardMaterial({ color: '#c9ccd2', roughness: 0.28, metalness: 0.9 });
-      const aluDark = new THREE.MeshStandardMaterial({ color: '#8e929a', roughness: 0.35, metalness: 0.85 });
+      // lit from within a little, so it glows against the night rather than going black
+      const alu = new THREE.MeshStandardMaterial({ color: '#c9ccd2', roughness: 0.28, metalness: 0.6, emissive: '#aab0c4', emissiveIntensity: 0.32 });
+      const aluDark = new THREE.MeshStandardMaterial({ color: '#8e929a', roughness: 0.35, metalness: 0.6, emissive: '#7c8196', emissiveIntensity: 0.25 });
       const black = new THREE.MeshStandardMaterial({ color: '#0b0b0e', roughness: 0.5, metalness: 0.2 });
       const W = 7.2, D = 5.0, T = 0.26, CX = 4.2, Y0 = 0.35; // base: across the track (x), along it (z)
       const addM = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = sg) => {
@@ -744,7 +745,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         });
         const ktex = new THREE.CanvasTexture(kc);
         ktex.colorSpace = THREE.SRGBColorSpace;
-        const keys = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.76, D * 0.34), new THREE.MeshBasicMaterial({ map: ktex, toneMapped: false, color: new THREE.Color(0.75, 0.75, 0.75) }));
+        const keys = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.76, D * 0.34), new THREE.MeshBasicMaterial({ map: ktex, toneMapped: false, color: new THREE.Color(1.3, 1.3, 1.4) }));
         // lie flat in the well, rows running along the hinge, the top row nearest it
         keys.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
         keys.position.set(0.35, T / 2 + 0.017, 0);
@@ -783,9 +784,14 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       g.fillText('click to open', c.width / 2, fy + 290);
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
-      const screenMat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.55, 0.55, 0.55) });
+      const screenMat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.95, 0.95, 0.95) });
       const screen = addM(new THREE.PlaneGeometry(W - 0.3, LH - 0.34), screenMat, -0.02, LH / 2 + 0.05, 0, hinge);
       screen.rotation.y = -Math.PI / 2; // facing the track
+      // a glowing rim round the lid and along the base's front lip
+      const rim = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.72, 1.0), toneMapped: false });
+      addM(new THREE.BoxGeometry(0.03, 0.05, W + 0.02), rim, 0.02, LH + 0.02, 0, hinge);
+      for (const z of [-W / 2, W / 2]) addM(new THREE.BoxGeometry(0.03, LH, 0.05), rim, 0.02, LH / 2, z, hinge);
+      addM(new THREE.BoxGeometry(0.05, 0.04, W + 0.02), rim, -D / 2 - 0.01, T / 2, 0, base);
       // the notch
       addM(new THREE.BoxGeometry(0.02, 0.16, 0.7), black, -0.03, LH - 0.13, 0, hinge);
       screens.push(screen);

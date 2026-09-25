@@ -59,8 +59,18 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
     const ox = pin?.left ?? 0, oy = pin?.top ?? 0;
     if (pin && pin.height < 10) return; // not laid out: keep what we have
     glyphs = [];
+    /* Layout positions, not on-screen ones: the letters are forever animating (arriving, the Z
+       tearing), and reading their transformed boxes caught them mid-move and scattered the word.
+       Offsets ignore transforms, so the board always gets the word as it rests. */
+    const pinEl = document.querySelector<HTMLElement>('.intro-pin');
+    const offset = (el: HTMLElement) => {
+      let x = 0, y = 0, e: HTMLElement | null = el;
+      while (e && e !== pinEl) { x += e.offsetLeft; y += e.offsetTop; e = e.offsetParent as HTMLElement | null; }
+      return { x, y };
+    };
     document.querySelectorAll<HTMLElement>('#intro-word .char').forEach((el) => {
-      const r = el.getBoundingClientRect();
+      const o = offset(el);
+      const r = { left: o.x + ox, top: o.y + oy, width: el.offsetWidth };
       const cs = getComputedStyle(el);
       const flip = !!el.closest('.flip');
       glyphs.push({
