@@ -154,8 +154,8 @@ export function Intro() {
       if (foreign !== null) lab.classList.toggle("is-foreign", foreign);
     };
     const drawStat = (n: HTMLElement, text: string) => {
-      n.innerHTML = `<i class="stat-key">${n.dataset.key}·</i>${text}`;
-      n.dataset.text = `${n.dataset.key}·${text}`;
+      n.innerHTML = `<i class="stat-key">${n.dataset.key}</i>${text}`;
+      n.dataset.text = text; // the key sits above, out of the line, so the ghosts carry the number only
     };
     const realValue = (n: HTMLElement) => `${n.dataset.to}${n.dataset.suffix ?? ""}`;
     const encode = (n: HTMLElement) => {
@@ -345,7 +345,7 @@ export function Intro() {
           {site.stats.map((s) => (
             <div key={s.key} className="stat">
               <dt className="stat-n" data-key={s.key} data-to={s.to} data-suffix={s.suffix} data-resolved="1">
-                <i className="stat-key">{s.key}·</i>
+                <i className="stat-key">{s.key}</i>
                 {s.to}
                 {s.suffix}
               </dt>
