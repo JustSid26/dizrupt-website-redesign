@@ -101,8 +101,10 @@ void main() {
   }
   // the line of light at the top while it is still going up
   col *= 1.0 - fresh * (1.0 - step(0.999, vGrow)) * 0.85;
+  // the light is all in the particles; the mesh is only the dark mass they are on
+  col = vTint * 0.015 + vec3(0.006, 0.007, 0.012);
   float d = distance(vWorld, uCam);
-  col = mix(col, uFog, smoothstep(40.0, 130.0, d));
+  col = mix(col, uFog, smoothstep(40.0, 130.0, d) * 0.6);
   gl_FragColor = vec4(col * uDim, 1.0);
 }`;
 
@@ -403,30 +405,69 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
      order of height, bottom first, the way the mascot is lit from the top down; the solid facade is
      only drawn below the line where they have landed. Once it is up they burn out. */
   const cp: number[] = [], cf: number[] = [], cr: number[] = [], cc: number[] = [];
-  const budget = isMobile ? 60000 : 160000;
-  const area = blds.reduce((a, b) => a + (2 * (b.w + b.d) * b.h + b.w * b.d), 0);
-  const perUnit = budget / area;
+  const dense = isMobile ? 0.5 : 1;
+  const push = (x: number, y: number, z: number, b: B, col: THREE.Color, k = 1) => {
+    cp.push(x, y, z);
+    cf.push((y - GROUND) / b.h, b.start, b.h);
+    cr.push(rnd(), rnd(), rnd(), rnd());
+    cc.push(col.r * k, col.g * k, col.b * k);
+  };
+  const warmLamp = new THREE.Color(1.0, 0.76, 0.42), coolLamp = new THREE.Color(0.72, 0.88, 1.0);
+  const lampCol = new THREE.Color();
+  /* The buildings are made of their particles and stay that way: every lit window is a little
+     cluster of warm or cool light, the wall between them a sparse dust in the building's own colour,
+     and each corner and the roof's edge a fine line of points. The mesh behind is only a dark body. */
   for (const b of blds) {
+    const fh = b.style === 0 ? 0.34 : b.style === 1 ? 0.4 : b.style === 2 ? 0.42 : 0.5;
+    const bay = b.style < 3 ? 0.3 : 0.46;
+    const litP = b.style === 0 ? 0.45 : 0.55;
+    const warm = b.style <= 1 ? 0.8 : b.style === 2 ? 0.35 : 0.12;
     const faces = [
       { n: [0, 0, 1], w: b.w, a: 'x' }, { n: [0, 0, -1], w: b.w, a: 'x' },
       { n: [1, 0, 0], w: b.d, a: 'z' }, { n: [-1, 0, 0], w: b.d, a: 'z' },
     ];
     for (const f of faces) {
-      const k = Math.round(f.w * b.h * perUnit);
-      for (let i = 0; i < k; i++) {
-        const u = (rnd() - 0.5) * f.w;
-        const y = rnd() * b.h;
-        const x = f.a === 'x' ? b.x + u : b.x + f.n[0] * b.w * 0.5;
-        const z = f.a === 'x' ? b.z + f.n[2] * b.d * 0.5 : b.z + u;
-        cp.push(x + f.n[0] * 0.01, GROUND + y, z + f.n[2] * 0.01);
-        cf.push(y / b.h, b.start, b.h);
-        cr.push(rnd(), rnd(), rnd(), rnd());
-        cc.push(b.tint.r, b.tint.g, b.tint.b);
+      const at = (u: number) => ({
+        x: (f.a === 'x' ? b.x + u : b.x + f.n[0] * b.w * 0.5) + f.n[0] * 0.02,
+        z: (f.a === 'x' ? b.z + f.n[2] * b.d * 0.5 : b.z + u) + f.n[2] * 0.02,
+      });
+      const bays = Math.max(1, Math.floor((f.w - 0.2) / bay));
+      const floors = Math.max(1, Math.floor((b.h - fh * 0.6) / fh));
+      for (let fl = 0; fl < floors; fl++) {
+        const floorOn = rnd() > 0.15;
+        for (let bi = 0; bi < bays; bi++) {
+          const cu = -f.w / 2 + 0.1 + (bi + 0.5) * ((f.w - 0.2) / bays);
+          const cy = GROUND + fh * 0.8 + fl * fh;
+          if (floorOn && rnd() < litP) {
+            lampCol.copy(rnd() < warm ? warmLamp : coolLamp).multiplyScalar(0.6 + rnd() * 0.5);
+            const n = Math.max(1, Math.round((b.style === 3 ? 4 : 3) * dense));
+            for (let k = 0; k < n; k++) {
+              const p = at(cu + (rnd() - 0.5) * bay * 0.45);
+              push(p.x, cy + (rnd() - 0.5) * fh * 0.4, p.z, b, lampCol);
+            }
+          } else if (rnd() < 0.7 * dense) {
+            const p = at(cu + (rnd() - 0.5) * bay);
+            push(p.x, cy + (rnd() - 0.5) * fh, p.z, b, b.tint, 0.3);
+          }
+        }
       }
+    }
+    // the corners and the roof's edge, as lines of points in its colour
+    const cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    for (const [sx, sz] of cs) {
+      for (let y = 0; y < b.h; y += 0.07 / dense) push(b.x + sx * b.w * 0.5, GROUND + y, b.z + sz * b.d * 0.5, b, b.tint, 0.9);
+    }
+    const per = 2 * (b.w + b.d);
+    for (let t = 0; t < per; t += 0.06 / dense) {
+      const [x, z] = t < b.w ? [-b.w / 2 + t, -b.d / 2]
+        : t < b.w + b.d ? [b.w / 2, -b.d / 2 + (t - b.w)]
+        : t < 2 * b.w + b.d ? [b.w / 2 - (t - b.w - b.d), b.d / 2]
+        : [-b.w / 2, b.d / 2 - (t - 2 * b.w - b.d)];
+      push(b.x + x, GROUND + b.h, b.z + z, b, b.tint, 1.1);
     }
   }
   // the railway goes up the same way: pillars rise out of the particles, then the deck is laid on top
-  const railTint = new THREE.Color('#5fe3ff');
+  const railTint = new THREE.Color('#2f7d96'); // dimmer than the buildings: the rail is structure, not light
   for (let i = 0; i < pillarCount; i++) {
     const a = (i / pillarCount) * Math.PI * 2;
     const px = Math.cos(a) * RAIL_R, pz = Math.sin(a) * RAIL_R;
@@ -477,11 +518,11 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         vec3 p = position + start;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = max(2.0, (3.2 + 3.5 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
+        gl_PointSize = max(1.6, (1.9 + 4.5 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
         // on its way and just landed it is bright; once the facade has come up behind it, it settles to a sparkle
-        float settled = smoothstep(0.1, 0.45, g - aFrac.x * 0.8 - 0.22);
-        vA = step(0.001, t) * mix(1.0, 0.12, settled) * (1.0 - smoothstep(0.97, 1.0, g) * 0.85);
-        vTint = mix(vec3(1.0, 0.98, 0.95), aTint * 1.3, 0.35 + e * 0.5);
+        vA = step(0.001, t);
+        // white while it flies, its own colour once it lands
+        vTint = mix(vec3(0.95, 0.95, 1.0), aTint, e);
       }`,
     fragmentShader: /* glsl */ `
       uniform float uDim;
@@ -490,7 +531,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5 || vA < 0.01) discard;
         float core = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(vTint * uDim * (0.7 + core), core * vA);
+        gl_FragColor = vec4(vTint * uDim * (0.8 + core * 0.6), core * vA);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
@@ -849,7 +890,6 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     constructUniforms.uBuild.value = build;
     constructUniforms.uTime.value = time;
     constructUniforms.uDim.value = dim;
-    construct.visible = build < 0.999;
     buildingUniforms.uBuild.value = build;
     buildingUniforms.uTime.value = time;
     buildingUniforms.uDim.value = dim;

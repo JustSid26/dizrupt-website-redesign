@@ -10,6 +10,7 @@ export const signals = {
     intro: 0, // 0..1 through the pinned landing
     solutions: 0, // 0..1 through the pinned solutions
     solutionIndex: 0, // which solution is on (integer)
+    trainS: 0, // where his train is on its line: 0 the plaza, 1..6 the stations
     projects: 0, // 0..1 through the pinned work
     projectIndex: 0, // float index of the front card
     projectsIn: 0, // 0..1 how much the work section holds the screen

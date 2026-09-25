@@ -7,9 +7,9 @@ import { useStore } from "@/lib/store";
 import { SOLUTIONS } from "@/content/solutions";
 import { useSection } from "@/components/home/useSection";
 
-/* What Dizrupt does, six channels long. The section holds the screen while you scroll through it;
-   each solution takes a screen's worth of scroll, and the particle field re-forms into its model on
-   the right (the engine reads signals.scroll.solutionIndex). The copy changes channel with it. */
+/* What Dizrupt does, six stations long. The mascot turns himself into a train and rides his own
+   line round the city; at each station the solution's model turns over the platform (the engine
+   reads signals.scroll.trainS), and the copy here changes channel with it. */
 const N = SOLUTIONS.length;
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -30,11 +30,17 @@ export function Solutions() {
       onUpdate: (self) => {
         const p = self.progress;
         signals.scroll.solutions = p;
-        const i = Math.min(N - 1, Math.floor(p * N));
-        signals.scroll.solutionIndex = i;
-        setActive(i);
-        // how far through this channel you are
-        if (bar.current) bar.current.style.transform = `scaleX(${(p * N - i).toFixed(3)})`;
+        /* His train leaves the plaza and stops at each of the six stations in turn: x counts the stops,
+           and within each one it travels, then stands, so each solution is read while it is still. */
+        const x = Math.min(1, Math.max(0, (p - 0.08) / 0.92)) * N;
+        const i = Math.min(N - 1, Math.floor(x));
+        const f = x - Math.floor(x);
+        const k = Math.min(1, Math.max(0, (f - 0.35) / 0.55));
+        signals.scroll.trainS = Math.min(N, Math.floor(x) + k * k * (3 - 2 * k));
+        const at = Math.min(N - 1, Math.max(0, Math.round(signals.scroll.trainS) - 1));
+        signals.scroll.solutionIndex = at;
+        setActive(at);
+        if (bar.current) bar.current.style.transform = `scaleX(${(p >= 1 ? 1 : x - i).toFixed(3)})`;
       },
     });
     return () => st.kill();
@@ -65,7 +71,7 @@ export function Solutions() {
   }, [active, reduce]);
 
   return (
-    <section ref={section} id="solutions" aria-labelledby="solutions-title" style={{ height: `${N * 100}svh` }}>
+    <section ref={section} id="solutions" aria-labelledby="solutions-title" style={{ height: `${N * 110 + 60}svh` }}>
       <div className="sol-pin">
         <div className="sol-copy">
           <h2 id="solutions-title" className="eyebrow">

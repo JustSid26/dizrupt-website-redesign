@@ -11,6 +11,7 @@ import { createWindowField } from './windowField';
 import { createAtmosphere } from './atmosphere';
 import { createCity } from './city';
 import { BOARD_HEIGHT, createBillboard } from './billboard';
+import { createMascotLine, trainShape } from './mascotLine';
 import { signals } from '@/lib/signals';
 import { clients, slugOf, type Project } from '@/content/projects';
 import { SOLUTIONS } from '@/content/solutions';
@@ -135,6 +136,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const billboard = createBillboard(boardAt, boardFacing);
   const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP, BUST_DROP + BUST_HEIGHT / 2);
   scene.add(city.group, billboard.group);
+  // his own line, with a station for each solution
+  const line = createMascotLine(pixelRatio, GROUND, PLINTH_TOP, isMobile ? 34 : 48,
+    SOLUTIONS.map((sol) => ({ name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors })));
+  scene.add(line.group);
+  field.register('train', new THREE.BufferAttribute(trainShape(), 3));
+  const aerialPos = new THREE.Vector3(0, GROUND + 22, 54);
+  const aerialLook = new THREE.Vector3(0, GROUND + 12, 0);
   billboard.measure();
 
   /* The landing's camera move. It starts square on to the board at the distance where the board
@@ -169,6 +177,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const camPos = new THREE.Vector3();
   const camLook = new THREE.Vector3();
   const tmpV = new THREE.Vector3();
+  const tmpDir = new THREE.Vector3(), tmpOut = new THREE.Vector3(), tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpUp = new THREE.Vector3();
 
   field.place(field.shape('mascot:neutral'));
   field.colorA.set(MASCOT_COLORS[0]);
@@ -250,13 +259,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     } else if (section === 'intro') {
       want = ip >= 0.58 ? 'mascot:flex' : ip >= 0.42 ? 'mascot:neutral' : 'mascot:full';
     } else if (section === 'solutions') {
-      const sol = SOLUTIONS[s.solutionIndex];
-      want = sol.shape;
-      colors = sol.colors;
+      // he stands whole in the city for a moment, then becomes his train
+      want = s.solutions < 0.035 ? 'mascot:full' : 'train';
     } else if (section === 'projects') {
       want = key; // hidden: its particles are out being the cards
-      const sol = SOLUTIONS.find((x) => x.shape === key);
-      colors = sol ? sol.colors : MASCOT_COLORS;
     } else {
       want = 'mascot:neutral'; // he sees you out
     }
@@ -306,17 +312,30 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       ty = BUST_DROP;
       sc = 1;
       rot = turned ? -Math.PI / 2 : 0;
-    } else if (section === 'solutions' || section === 'projects') {
-      tx = isMobile ? 0 : 2.3;
-      ty = isMobile ? 1.3 : 0;
-      sc = isMobile ? 0.55 : 0.85;
+    } else if (key === 'train') {
       rot = null;
+    } else if (section === 'solutions' || section === 'projects') {
+      tx = 0;
+      ty = BUST_DROP;
+      sc = 1;
+      rot = 0;
     } else {
       tx = isMobile ? 0 : -CONTACT_SHIFT;
       ty = isMobile ? 1.35 : BUST_DROP;
       sc = isMobile ? 0.5 : 0.92;
       rot = isMobile ? 0 : CONTACT_YAW;
     }
+    const riding = key === 'train' && !view && !preview;
+    const pose = line.poseAt(s.trainS);
+    if (riding) {
+      // on the line: eased onto it while the morph lands, then held to it exactly
+      const k = u.uProgress.value >= 1 ? 1 : 1 - Math.exp(-5 * dt);
+      points.position.lerp(pose.pos, k);
+      points.quaternion.slerp(pose.quat, k);
+      points.scale.setScalar(damp(points.scale.x, 1, 5, dt));
+    } else {
+    points.rotation.x = damp(points.rotation.x, 0, 4, dt);
+    points.rotation.z = damp(points.rotation.z, 0, 4, dt);
     points.position.x = damp(points.position.x, tx, onIntro ? 2.2 : 3, dt);
     points.position.y = onIntro ? ty : damp(points.position.y, ty, 4, dt);
     points.scale.setScalar(onIntro ? sc : damp(points.scale.x, sc, 4, dt));
@@ -328,10 +347,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const diff = Math.atan2(Math.sin(target - points.rotation.y), Math.cos(target - points.rotation.y));
       points.rotation.y += diff * (1 - Math.exp(-1.5 * dt));
     }
+    }
     for (const g of field.ghosts) {
       g.position.copy(points.position);
       g.rotation.copy(points.rotation);
       g.scale.copy(points.scale);
+      g.quaternion.copy(points.quaternion);
     }
 
     /* ---- light: the aurora belongs to him, not to the models ---- */
@@ -364,7 +385,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     ndc.set(p.x, p.y);
     raycaster.setFromCamera(ndc, camera);
     if (raycaster.ray.intersectPlane(plane, mouseWorld)) u.uMouse.value.lerp(mouseWorld, 1 - Math.exp(-8 * dt));
-    u.uMouseStrength.value = damp(u.uMouseStrength.value, p.active && !isMascot && !view ? 1 : 0, 3, dt);
+    u.uMouseStrength.value = damp(u.uMouseStrength.value, p.active && !isMascot && !view && key !== 'train' ? 1 : 0, 3, dt);
 
     /* ---- the spiral ---- */
     if (wasCase && !view) {
@@ -386,7 +407,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     field.update(now, time, dt);
 
     bloom.strength = onIntro && ip < 0.2 ? 0.45 * smooth(0.015, 0.12, ip) : damp(bloom.strength, 0.45, 3, dt);
-    const upright = onIntro || section === 'contact' || section === 'projects';
+    const upright = onIntro || section === 'contact' || section === 'projects' || section === 'solutions';
     field.group.rotation.x = damp(field.group.rotation.x, upright ? 0 : -p.y * 0.2, 2, dt);
     field.group.rotation.z = damp(field.group.rotation.z, upright ? 0 : -p.x * 0.08, 2, dt);
     if (onIntro && ip < CAM_KEYS[CAM_KEYS.length - 1]) {
@@ -396,6 +417,27 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.position.copy(camPos);
       camera.position.x += p.x * 0.35 * lean;
       camera.position.y += p.y * 0.2 * lean;
+      camera.lookAt(camLook);
+    } else if (section === 'solutions' && !view && !preview) {
+      const sp = s.solutions;
+      const a = smooth(0, 0.05, sp), b = smooth(0.06, 0.17, sp);
+      camPos.set(0, 0, CAMERA_Z).lerp(aerialPos, a);
+      camLook.set(0, 0, 0).lerp(aerialLook, a);
+      // alongside the train, on the outside of the loop, a little behind and above it
+      const flat = tmpDir.set(pose.dir.x, 0, pose.dir.z).normalize();
+      const out = tmpOut.set(pose.pos.x, 0, pose.pos.z);
+      if (out.lengthSq() < 4) out.set(flat.z, 0, -flat.x); // still in the plaza: off to its side
+      out.normalize();
+      const chase = tmpA.copy(pose.pos).addScaledVector(out, 9.5).addScaledVector(flat, -7).add(tmpUp.set(0, 4.5, 0));
+      const target = tmpB.copy(pose.pos).addScaledVector(flat, 3).add(tmpUp.set(0, 0.8, 0));
+      // the copy is on the left: lean the view so the train sits right of centre
+      const left = tmpUp.copy(target).sub(chase).normalize().cross(new THREE.Vector3(0, -1, 0)).normalize();
+      target.addScaledVector(left, innerWidth > 900 ? 3.2 : 0);
+      camPos.lerp(chase, b);
+      camLook.lerp(target, b);
+      camera.position.copy(camPos);
+      camera.position.x += p.x * 0.3;
+      camera.position.y += p.y * 0.2;
       camera.lookAt(camLook);
     } else {
       camera.position.x = damp(camera.position.x, p.x * 0.35, 2, dt);
@@ -410,9 +452,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    cityDim = damp(cityDim, onIntro && ip < 0.5 ? 1 : view ? 0.15 : 0.35, 2, dt);
+    cityDim = damp(cityDim, (onIntro && ip < 0.5) || (section === 'solutions' && !preview) ? 1 : view ? 0.15 : 0.35, 2, dt);
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position);
     billboard.material.opacity = Math.min(1, cityDim * 1.5);
+    const lineReveal = section === 'intro' ? 0 : section === 'solutions' ? Math.min(1.02, smooth(0, 0.14, s.solutions) * 1.02) : 1.02;
+    line.update(time, lineReveal, cityDim, s.trainS);
     if (onIntro && ip < 0.3) billboard.draw(time);
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();
 
