@@ -242,7 +242,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       if (a2[i] > rx) { rx = a2[i]; hands.r.set(a2[i], y, a2[i + 2]); }
     }
   }
-  const BWd = 6.6, BHt = 4.3;
+  const BWd = 4.6, BHt = 4.6; // just the mark, in light
   const spots = [
     { x: -14, y: GROUND + 9, side: -1 }, { x: -8.5, y: GROUND + 14.5, side: -1 },
     { x: 8.5, y: GROUND + 14.5, side: 1 }, { x: 14, y: GROUND + 9, side: 1 },
@@ -250,30 +250,28 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   SOCIALS.slice(0, 4).forEach((soc, k) => {
     const sp = spots[k];
     const c = document.createElement('canvas');
-    c.width = 1040; c.height = 680;
+    c.width = c.height = 512;
     const x = c.getContext('2d')!;
-    x.fillStyle = '#06060b'; x.fillRect(0, 0, 1040, 680);
-    x.strokeStyle = soc.color; x.lineWidth = 14; x.strokeRect(14, 14, 1012, 652);
-    const lc = soc.color;
-    x.save(); x.translate(180, 170); x.fillStyle = lc; x.strokeStyle = lc;
-    if (soc.path) { x.scale(300 / 24, 300 / 24); x.fill(new Path2D(soc.path)); }
+    // the mark alone, drawn in light: its colour lifted towards white, glowing round its edges
+    const lit = new THREE.Color(soc.color).lerp(new THREE.Color(1, 1, 1), 0.35);
+    const lc = `#${lit.getHexString()}`;
+    x.shadowColor = lc; x.shadowBlur = 28;
+    x.save(); x.translate(56, 56); x.fillStyle = lc; x.strokeStyle = lc;
+    if (soc.path) { x.scale(400 / 24, 400 / 24); x.fill(new Path2D(soc.path)); }
     else if (soc.mark === 'in') {
-      x.lineWidth = 26;
-      x.beginPath(); x.moveTo(40, 0); x.arcTo(300, 0, 300, 300, 40); x.arcTo(300, 300, 0, 300, 40); x.arcTo(0, 300, 0, 0, 40); x.arcTo(0, 0, 300, 0, 40); x.closePath(); x.stroke();
-      x.font = '800 200px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('in', 150, 162);
+      x.lineWidth = 30;
+      x.beginPath(); x.moveTo(50, 10); x.arcTo(390, 10, 390, 390, 50); x.arcTo(390, 390, 10, 390, 50); x.arcTo(10, 390, 10, 10, 50); x.arcTo(10, 10, 390, 10, 50); x.closePath(); x.stroke();
+      x.font = '800 260px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('in', 200, 214);
     } else {
-      x.lineWidth = 24; x.lineJoin = 'round'; x.strokeRect(0, 40, 300, 220);
-      x.beginPath(); x.moveTo(0, 40); x.lineTo(150, 160); x.lineTo(300, 40); x.stroke();
+      x.lineWidth = 30; x.lineJoin = 'round'; x.strokeRect(20, 70, 360, 260);
+      x.beginPath(); x.moveTo(20, 70); x.lineTo(200, 215); x.lineTo(380, 70); x.stroke();
     }
     x.restore();
-    x.fillStyle = '#ffffff'; x.font = '800 96px system-ui, sans-serif'; x.textBaseline = 'middle';
-    x.fillText(soc.name, 540, 290);
-    x.fillStyle = 'rgba(255,255,255,0.6)'; x.font = '500 38px ui-monospace, Menlo, monospace';
-    x.fillText(soc.href.replace(/^mailto:|^https?:\/\/(www\.)?/, '').replace(/\/$/, '').slice(0, 26), 540, 380);
+    const mark = x.getImageData(0, 0, 512, 512).data;
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BWd, BHt), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.9, 0.9, 0.9), clippingPlanes: [clip], side: THREE.DoubleSide }));
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BWd, BHt), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(1.2, 1.2, 1.2), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     mesh.position.set(sp.x, sp.y, 3);
     mesh.lookAt(aerialPos.x, sp.y, aerialPos.z);
     mesh.visible = false;
@@ -284,15 +282,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const tgt = new Float32Array(n * 3), rnd = new Float32Array(n), col = new Float32Array(n * 3);
     const v = new THREE.Vector3(), brand = new THREE.Color(soc.color).lerp(new THREE.Color(1, 1, 1), 0.3);
     for (let i = 0; i < n; i++) {
-      const edge = Math.random() < 0.45;
-      const u = Math.random(), w2 = Math.random();
-      if (edge) { const t = Math.random() * 4; const sd = Math.floor(t); const f = t - sd; v.set(sd === 0 ? f - 0.5 : sd === 2 ? 0.5 - f : sd === 1 ? 0.5 : -0.5, sd === 1 ? f - 0.5 : sd === 3 ? 0.5 - f : sd === 0 ? -0.5 : 0.5, 0); }
-      else v.set(u - 0.5, w2 - 0.5, 0);
+      let px = 0, py = 0;
+      for (let tries = 0; tries < 40; tries++) {
+        px = Math.random() * 512; py = Math.random() * 512;
+        if (mark[(Math.floor(py) * 512 + Math.floor(px)) * 4 + 3] > 120) break;
+      }
+      const edge = true;
+      v.set(px / 512 - 0.5, 0.5 - py / 512, 0);
       v.x *= BWd; v.y *= BHt;
       v.applyMatrix4(mesh.matrixWorld);
       tgt.set([v.x, v.y, v.z], i * 3);
       rnd[i] = Math.random();
-      const cc = edge ? brand : new THREE.Color(0.85, 0.8, 1.0);
+      const cc = edge ? brand : brand;
       col.set([cc.r, cc.g, cc.b], i * 3);
     }
     const g = new THREE.BufferGeometry();
