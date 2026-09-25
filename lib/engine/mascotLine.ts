@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { COUNT, isMobile } from './config';
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
 /* =========================================================
    The mascot's own line.
@@ -17,53 +18,225 @@ export type Station = { name: string; shape: Float32Array; colors: [string, stri
 
 const VIOLET = new THREE.Color('#a855ff');
 
-/** A train made of points: a streamlined engine and three carriages, facing +z, wheels at y = 0. */
+/** A bullet train made of points, facing +z with its wheels at y = 0: a long duck-billed nose,
+    three more cars with rounded roofs, a band of windows, skirts and bogies, a pantograph, and
+    DIZRUPT along both sides of the middle cars, set densely so it reads brighter than the body. */
 export function trainShape(): Float32Array {
   const arr = new Float32Array(COUNT * 3);
-  const W = 1.25, H = 1.35, CAR = 3.1, GAP = 0.28, N = 4;
+  const W = 1.3, H = 1.5, CAR = 3.2, GAP = 0.18, N = 4, NOSE = 2.1;
   const total = N * CAR + (N - 1) * GAP;
   let seed = 3;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const carBack = (c: number) => total / 2 - c * (CAR + GAP) - CAR; // car 0 is the lead, at +z
+  // the body's cross-section at distance z along a car: a rounded box, squeezed down the nose
+  const section = (c: number, z: number) => {
+    let w = W, h = H, drop = 0;
+    const front = carBack(c) + CAR;
+    if (c === 0 && z > front - NOSE) {
+      const t = (z - (front - NOSE)) / NOSE; // 0 where the nose starts, 1 at its tip
+      const e = t * t * (3 - 2 * t);
+      w = W * (1 - 0.62 * e);
+      h = H * (1 - 0.78 * Math.pow(t, 1.4));
+      drop = 0.12 * e;
+    }
+    return { w, h, drop };
+  };
+  // DIZRUPT, from a canvas, as the points of its letters
+  const cv = document.createElement('canvas');
+  cv.width = 700; cv.height = 110;
+  const cx = cv.getContext('2d')!;
+  cx.fillStyle = '#fff';
+  cx.font = '800 100px system-ui, sans-serif';
+  cx.textBaseline = 'middle';
+  cx.fillText('DIZRUPT', 8, 58);
+  const px = cx.getImageData(0, 0, cv.width, cv.height).data;
+  const letter: [number, number][] = [];
+  for (let y = 0; y < cv.height; y += 2) for (let x = 0; x < cv.width; x += 2) if (px[(y * cv.width + x) * 4 + 3] > 120) letter.push([x / cv.width, 1 - y / cv.height]);
+  const LZ0 = carBack(2) + 0.4, LZ1 = carBack(1) + CAR - 0.4; // across the two middle cars
   for (let i = 0; i < COUNT; i++) {
-    const c = Math.floor(rnd() * N); // which car
-    const z0 = total / 2 - c * (CAR + GAP) - CAR; // its back
-    let x, y, z;
     const k = rnd();
-    if (k < 0.08) {
-      // wheels: two rings a side under each car
-      const wz = z0 + (rnd() < 0.5 ? 0.55 : CAR - 0.55);
+    let x: number, y: number, z: number;
+    if (k < 0.12 && letter.length) {
+      const [u, v] = letter[Math.floor(rnd() * letter.length)];
+      // one side only: the train is made of light, so lettering on the far side would show through backwards
+      const side = -1;
+      z = side < 0 ? LZ0 + u * (LZ1 - LZ0) : LZ1 - u * (LZ1 - LZ0); // reads the right way from both sides
+      y = 0.42 + v * 0.42;
+      x = side * (W / 2 + 0.02);
+    } else if (k < 0.2) {
+      // the window band, a dense dark-bright strip down each side
+      const c = Math.floor(rnd() * N);
+      z = carBack(c) + 0.3 + rnd() * (CAR - (c === 0 ? NOSE + 0.2 : 0.6));
+      const sc = section(c, z);
+      y = 0.98 + rnd() * 0.24 - sc.drop;
+      x = (rnd() < 0.5 ? 1 : -1) * (sc.w / 2 + 0.01);
+    } else if (k < 0.25) {
+      // bogies and wheels under each car
+      const c = Math.floor(rnd() * N);
+      const bz = carBack(c) + (rnd() < 0.5 ? 0.6 : CAR - 0.6);
       const a = rnd() * Math.PI * 2;
-      x = (rnd() < 0.5 ? -1 : 1) * W * 0.46;
-      y = 0.22 + Math.sin(a) * 0.2;
-      z = wz + Math.cos(a) * 0.2;
+      x = (rnd() < 0.5 ? 1 : -1) * W * 0.36;
+      y = 0.2 + Math.sin(a) * 0.17;
+      z = bz + (rnd() < 0.5 ? -0.22 : 0.22) + Math.cos(a) * 0.17;
+    } else if (k < 0.27) {
+      // the pantograph on the second car
+      const t = rnd();
+      z = carBack(1) + CAR * 0.5 + (t - 0.5) * 0.9;
+      y = H + 0.05 + Math.abs(t - 0.5) * 0.7;
+      x = (rnd() - 0.5) * 0.5;
+    } else if (k < 0.29) {
+      // the gangways between cars
+      const c = Math.floor(rnd() * (N - 1)) + 1;
+      z = carBack(c) + CAR + rnd() * GAP;
+      const a = rnd() * Math.PI * 2;
+      x = Math.cos(a) * W * 0.42;
+      y = 0.4 + (Math.sin(a) * 0.5 + 0.5) * (H - 0.5);
     } else {
-      // the body: a box with a rounded roof, the engine's nose tapering to a point
-      const u = rnd(), v = rnd();
-      z = z0 + u * CAR;
-      const nose = c === 0 ? Math.max(0, (z - (z0 + CAR * 0.55)) / (CAR * 0.45)) : 0;
-      const w = W * (1 - nose * 0.55), h = H * (1 - nose * 0.45);
-      const side = rnd();
-      if (side < 0.62) {
-        // the sides, with a band of window frames that catches more points
-        x = (rnd() < 0.5 ? -1 : 1) * w / 2;
-        y = 0.35 + (rnd() < 0.35 ? 0.62 + (rnd() - 0.5) * 0.3 : v * (h - 0.35));
-      } else if (side < 0.9) {
-        // the curved roof
-        const a = (rnd() - 0.5) * Math.PI;
-        x = Math.sin(a) * w / 2;
-        y = h - 0.28 + Math.cos(a) * 0.28;
-      } else {
-        // the ends
-        x = (rnd() - 0.5) * w;
-        y = 0.35 + v * (h - 0.35);
-        z = rnd() < 0.5 ? z0 : z0 + CAR;
-      }
+      // the shell: a rounded box, sampled round its section
+      const c = Math.floor(rnd() * N);
+      z = carBack(c) + rnd() * CAR;
+      const sc = section(c, z);
+      const a = rnd() * Math.PI * 2;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      // superellipse: flat sides, rounded shoulders
+      const r = 1 / Math.pow(Math.pow(Math.abs(ca), 4) + Math.pow(Math.abs(sa), 4), 0.25);
+      x = ca * r * sc.w / 2;
+      y = 0.3 + (sa * r * 0.5 + 0.5) * (sc.h - 0.3) - sc.drop * (sa < 0 ? 0 : 1);
+      // a skirt line low down, and the roof line, picked out
+      if (rnd() < 0.12) y = rnd() < 0.5 ? 0.34 : sc.h - 0.02 - sc.drop;
     }
     arr[i * 3] = x;
     arr[i * 3 + 1] = y;
     arr[i * 3 + 2] = z;
   }
   return arr;
+}
+
+/* The start station, in real materials: a concrete viaduct on columns, a platform with its yellow
+   safety line, a white canopy on steel columns with strip lights under it, a glass screen behind,
+   and the station's name board. Built up out of particles in each material's own colour, and shown
+   solid below the line those have reached. Local frame: +z along the track, +x to the platform. */
+function buildStation(GROUND: number, pixelRatio: number) {
+  const group = new THREE.Group();
+  const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
+  const parts: THREE.Mesh[] = [];
+  const std = (color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
+    new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, clippingPlanes: [clip], ...extra });
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    group.add(m);
+    parts.push(m);
+    return m;
+  };
+  const L = 17;
+  const concrete = std('#9a9da3'), concreteDark = std('#6f737a'), steel = std('#3a3f48', { metalness: 0.7, roughness: 0.35 });
+  add(new THREE.BoxGeometry(4.6, 0.6, L + 2), concrete, 0.9, -0.62, 0); // the deck, under track and platform
+  add(new THREE.BoxGeometry(2.3, 0.62, L), std('#c3c6cb'), 2.05, 0.0, 0); // the platform
+  add(new THREE.BoxGeometry(0.16, 0.02, L), std('#f2c318', { emissive: '#4a3a00' }), 0.98, 0.32, 0); // the yellow line
+  for (const x of [-0.35, 0.35]) add(new THREE.BoxGeometry(0.08, 0.1, L + 2), steel, x, -0.28, 0); // the rails
+  for (let z = -L / 2 + 1; z <= L / 2 - 1; z += 3.2) {
+    add(new THREE.BoxGeometry(0.14, 3.0, 0.14), steel, 2.9, 1.8, z); // canopy columns, at the back of the platform
+    add(new THREE.BoxGeometry(0.9, 1.2, 0.8), concreteDark, 0.9, -0.62 - 0.6 - 0.3, z); // the pier cap
+    const h = -0.62 - 1.5 - GROUND;
+    add(new THREE.CylinderGeometry(0.42, 0.55, h, 12), concreteDark, 0.9, GROUND + h / 2, z); // the pier
+  }
+  add(new THREE.BoxGeometry(4.2, 0.18, L + 0.6), std('#eef0f2'), 1.1, 3.35, 0); // the canopy
+  add(new THREE.BoxGeometry(4.3, 0.06, L + 0.7), steel, 1.1, 3.22, 0); // its fascia
+  add(new THREE.BoxGeometry(0.06, 0.04, L - 1), std('#ffffff', { emissive: '#fff4dc', emissiveIntensity: 0.7 }), 1.6, 3.18, 0); // strip light
+  add(new THREE.BoxGeometry(0.06, 0.04, L - 1), std('#ffffff', { emissive: '#fff4dc', emissiveIntensity: 0.7 }), 0.2, 3.18, 0);
+  add(new THREE.BoxGeometry(0.05, 2.6, L), std('#7fb2d6', { transparent: true, opacity: 0.28, metalness: 0.3, roughness: 0.1 }), 3.2, 1.6, 0); // glass screen
+  // the name board, hanging from the canopy, facing across the track
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#12203a'; g.fillRect(0, 0, 1024, 256);
+  g.fillStyle = '#ffffff'; g.font = '700 110px system-ui, sans-serif'; g.textBaseline = 'middle';
+  g.fillText('DIZRUPT', 40, 110);
+  g.fillStyle = '#f2c318'; g.fillRect(40, 190, 944, 10);
+  g.fillStyle = '#9fb6d6'; g.font = '500 44px system-ui, sans-serif';
+  g.fillText('CENTRAL · PLATFORM 1', 520, 110);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const board = add(new THREE.BoxGeometry(0.08, 0.6, 2.4), [
+    std('#12203a'), std('#12203a'), std('#12203a'), std('#12203a'), std('#12203a'), std('#12203a'),
+  ] as unknown as THREE.Material, 2.0, 2.55, 3.5);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex, clippingPlanes: [clip] }));
+  face.rotation.y = -Math.PI / 2;
+  face.position.set(-0.05, 0, 0);
+  board.add(face);
+  const light = new THREE.HemisphereLight('#b8c8ff', '#2a2230', 1.6);
+  const sun = new THREE.DirectionalLight('#ffd9b0', 1.4);
+  sun.position.set(-4, 8, 6);
+  group.add(light, sun);
+
+  // the particles that build it, in each material's own colour
+  group.updateMatrixWorld(true);
+  const pos: number[] = [], col: number[] = [], rnd: number[] = [];
+  const v = new THREE.Vector3(), n = new THREE.Vector3(), colr = new THREE.Color();
+  for (const m of parts) {
+    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial;
+    const geo = m.geometry.clone().applyMatrix4(m.matrix);
+    const area = (() => { geo.computeBoundingBox(); const s3 = geo.boundingBox!.getSize(v); return 2 * (s3.x * s3.y + s3.y * s3.z + s3.x * s3.z); })();
+    const cnt = Math.min(2500, Math.round(area * (isMobile ? 18 : 40)));
+    const sampler = new MeshSurfaceSampler(new THREE.Mesh(geo)).build();
+    colr.copy(mat.color);
+    if (mat.emissive && mat.emissive.getHex()) colr.add(mat.emissive);
+    for (let i = 0; i < cnt; i++) {
+      sampler.sample(v, n);
+      pos.push(v.x + n.x * 0.02, v.y + n.y * 0.02, v.z + n.z * 0.02);
+      col.push(colr.r, colr.g, colr.b);
+      rnd.push(Math.random());
+    }
+  }
+  const pg = new THREE.BufferGeometry();
+  pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  pg.setAttribute('aCol', new THREE.Float32BufferAttribute(col, 3));
+  pg.setAttribute('aRand', new THREE.Float32BufferAttribute(rnd, 1));
+  const pu = { uFront: { value: -1e4 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio } };
+  const particles = new THREE.Points(pg, new THREE.ShaderMaterial({
+    uniforms: pu,
+    vertexShader: /* glsl */ `
+      uniform float uFront, uTime, uPixelRatio;
+      attribute vec3 aCol; attribute float aRand;
+      varying vec3 vCol; varying float vA;
+      void main() {
+        // arriving just above the line, landing as it passes, gone once the solid is up behind it
+        float t = clamp(1.0 - (position.y - uFront) / 1.6, 0.0, 1.0);
+        float e = t * t * (3.0 - 2.0 * t);
+        float a = aRand * 40.0 + uTime * 1.2;
+        vec3 p = position + vec3(cos(a) * 1.8, 1.2 + aRand * 1.5, sin(a) * 1.8) * (1.0 - e);
+        vA = step(0.001, t) * (1.0 - smoothstep(0.25, 0.9, uFront - position.y));
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = max(1.5, (2.2 + 3.0 * (1.0 - e)) * 6.0 * uPixelRatio / -mv.z);
+        vCol = mix(vec3(1.0), aCol, e);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vCol; varying float vA;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if (d > 0.5 || vA < 0.01) discard;
+        gl_FragColor = vec4(vCol * 1.4, smoothstep(0.5, 0.0, d) * vA);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  particles.frustumCulled = false;
+  group.add(particles);
+
+  const TOP = 3.6, DECK = -1.3;
+  /** 0: not there, 1: standing. The piers go up fast, then the station itself. */
+  function build(t: number, time: number) {
+    group.visible = t > 0.001;
+    const local = t < 0.25 ? GROUND + (DECK - GROUND) * (t / 0.25) : DECK + (TOP + 0.4 - DECK) * ((t - 0.25) / 0.75);
+    // the clip and the particles work in world height; the station sits level, so offset by its own y
+    const front = local + group.position.y;
+    clip.constant = t >= 0.999 ? 1e4 : front;
+    pu.uFront.value = local;
+    pu.uTime.value = time;
+    particles.visible = t < 0.999;
+  }
+  return { group, build };
 }
 
 function signTexture(n: number, name: string, colors: [string, string]) {
@@ -97,11 +270,17 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const R = Math.min(36, extent * 0.76);
 
   /* ---- the route: out of the plaza, up the avenue, round the city ---- */
+  /* The start station hangs in the sky over the plaza, on the left of the close view, the track
+     running towards you through it; from there the line swings out and down onto the loop. */
+  // the start station stands in the plaza, where he did, its track running up the avenue
+  const S = new THREE.Vector3(0, plinthTop + 0.35, -1);
+  const SDIR = new THREE.Vector3(0, 0, 1);
   const pts: THREE.Vector3[] = [
-    new THREE.Vector3(0, plinthTop + 0.6, -1.5),
-    new THREE.Vector3(0, plinthTop + 0.8, 4),
-    new THREE.Vector3(0, GROUND + 5, 14),
-    new THREE.Vector3(0, TRACK_Y, 24),
+    S.clone().addScaledVector(SDIR, -11),
+    S.clone(),
+    S.clone().addScaledVector(SDIR, 9),
+    new THREE.Vector3(0, GROUND + 5, 17),
+    new THREE.Vector3(0, TRACK_Y, 26),
   ];
   // the loop, clockwise seen from above, starting where the avenue meets it
   const loopStart = Math.PI / 2;
@@ -127,7 +306,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     }
     return best;
   };
-  const stops = [0, ...stationAngles.map((t) => nearestU(new THREE.Vector3(Math.cos(t) * R, TRACK_Y, Math.sin(t) * R)))];
+  const stops = [nearestU(S), ...stationAngles.map((t) => nearestU(new THREE.Vector3(Math.cos(t) * R, TRACK_Y, Math.sin(t) * R)))];
 
   /* ---- the track: a deck with violet light strips, on pillars, built by particles ---- */
   const trackUniforms = { uReveal: { value: 0 }, uDim: { value: 1 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio } };
@@ -303,6 +482,11 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     holos.push({ points, mat, base });
   });
 
+  const station = buildStation(GROUND - S.y, pixelRatio); // its own frame: the ground, measured from the platform
+  station.group.position.copy(S);
+  station.group.rotation.y = Math.atan2(SDIR.x, SDIR.z);
+  group.add(station.group);
+
   /* ---- where the train is: s runs 0 (the plaza) → 1..6 (the stations) ---- */
   const pos = new THREE.Vector3();
   const dir = new THREE.Vector3();
@@ -319,11 +503,12 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     return { pos: pos.clone().add(new THREE.Vector3(0, 0.1, 0)), dir: dir.clone(), quat: quat.clone(), u };
   }
 
-  function update(time: number, reveal: number, dim: number, s: number) {
+  function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1) {
+    station.build(stationBuild, time);
     trackUniforms.uReveal.value = reveal;
     trackUniforms.uDim.value = dim;
     trackUniforms.uTime.value = time;
-    group.visible = reveal > 0.001;
+    group.visible = reveal > 0.001 || stationBuild > 0.001;
     holos.forEach((h, k) => {
       // lit while the train stands at its station
       const near = 1 - Math.min(1, Math.abs(s - (k + 1)) / 0.6);
@@ -334,5 +519,5 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     });
   }
 
-  return { group, curve, stops, poseAt, update, color: VIOLET };
+  return { group, curve, stops, poseAt, update, color: VIOLET, stationAt: S };
 }

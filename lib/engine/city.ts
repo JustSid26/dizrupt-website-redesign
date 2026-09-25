@@ -1224,6 +1224,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     return { ...p, r: 30 + i * 9 + rnd() * 6, y: GROUND + TALL + 6 + i * 3.5, speed: 0.04 + rnd() * 0.03, phase: rnd() * Math.PI * 2, way: i % 2 ? 1 : -1 };
   });
 
+  let hidePlinth = false;
   function update(time: number, build: number, dim: number, cam: THREE.Vector3, night = 0) {
     setMode(light, night);
     light.uTime.value = time;
@@ -1261,7 +1262,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     sparkUniforms.uBuild.value = build;
     sparkUniforms.uTime.value = time;
     sparkUniforms.uDim.value = dim;
-    plinth.visible = build > 0.3;
+    plinth.visible = build > 0.3 && !hidePlinth;
     // the railway goes up with the city; the trains run once it is there
     carriages.visible = build > 0.8;
     if (carriages.visible) placeTrains(time);
@@ -1279,5 +1280,5 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     }
   }
 
-  return { group, update };
+  return { group, update, setPlinth: (on: boolean) => { hidePlinth = !on; } };
 }

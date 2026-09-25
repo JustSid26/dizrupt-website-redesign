@@ -74,6 +74,7 @@ attribute float aHead;    // >0: weighted neck/head turn; <0: full head turn for
 uniform float uDisperse;
 uniform float uBeam, uBeamOn;
 uniform float uFill;
+uniform float uSolid; // a built object (the train), not a figure of light
 uniform float uSize;
 uniform float uPixelRatio;
 uniform vec3 uMouse;
@@ -228,6 +229,7 @@ void main() {
 
   vRandom = aRandom;
   vAlpha = 0.16 + 0.32 * fract(aRandom * 7.13) + sparkle * 0.2;
+  vAlpha *= 1.0 + uSolid * 0.35;
 }`;
 
 export const fragmentShader = /* glsl */ `

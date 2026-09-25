@@ -54,6 +54,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.setClearColor(0x000000, 1);
+  renderer.localClippingEnabled = true; // the station is revealed below its build line
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 400);
@@ -163,8 +164,23 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const line = createMascotLine(pixelRatio, GROUND, PLINTH_TOP, isMobile ? 34 : 48,
     SOLUTIONS.map((sol) => ({ name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors })));
   scene.add(line.group);
-  field.register('train', new THREE.BufferAttribute(trainShape(), 3));
+  const trainLocal = trainShape();
+  field.register('train', new THREE.BufferAttribute(trainLocal, 3));
+  // the same train, already standing at the start station, in world space: what the windows become
+  {
+    const pose0 = line.poseAt(0);
+    const m = new THREE.Matrix4().compose(pose0.pos, pose0.quat, new THREE.Vector3(1, 1, 1));
+    const arr = new Float32Array(trainLocal.length);
+    const v = new THREE.Vector3();
+    for (let i = 0; i < trainLocal.length; i += 3) {
+      v.set(trainLocal[i], trainLocal[i + 1], trainLocal[i + 2]).applyMatrix4(m);
+      arr[i] = v.x; arr[i + 1] = v.y; arr[i + 2] = v.z;
+    }
+    field.register('train:station', new THREE.BufferAttribute(arr, 3));
+  }
   const aerialPos = new THREE.Vector3(0, GROUND + 22, 54);
+  const stationCamPos = line.stationAt.clone().add(new THREE.Vector3(-10.5, 5.6, 1.5));
+  const stationCamLook = line.stationAt.clone().add(new THREE.Vector3(0, 1.0, 6));
   const aerialLook = new THREE.Vector3(0, GROUND + 12, 0);
   billboard.measure();
 
@@ -252,6 +268,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   let key = 'mascot:neutral'; // the shape the field is heading for
   let scrubbing = false; // uProgress is being driven by the scroll
+  let scrubFrom = ''; // and what it is scrubbing away from
 
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
      (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
@@ -330,6 +347,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let sky = 0;
   let boardMeasure = 0;
   let cityDim = 1;
+  let stationT = 0;
   let night = signals.night;
   const clock = new THREE.Timer();
   let raf = 0;
@@ -357,24 +375,37 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       colors = preview.colors;
     } else if (section === 'intro') {
       // whole in the city → comes apart into the four windows of the count → back into him for the profile
-      want = ip >= 0.76 ? 'mascot:neutral' : ip >= 0.44 ? 'stats' : 'mascot:full';
+      // whole in the city → four windows of the count → the bullet train at its start station
+      want = ip >= 0.785 ? 'train:station' : ip >= 0.44 ? 'stats' : 'mascot:full';
     } else if (section === 'solutions') {
       // he stands whole in the city for a moment, then becomes his train
-      want = s.solutions < 0.035 ? 'mascot:full' : 'train';
+      want = 'train';
     } else if (section === 'projects') {
       want = key; // hidden: its particles are out being the cards
     } else {
       want = 'mascot:neutral'; // he sees you out
     }
     // coming apart into the windows is scrubbed by the scroll, as the camera flies in
-    const gather = section === 'intro' && !view && !preview && key === 'mascot:full' && want === 'stats';
+    const gather = section === 'intro' && !view && !preview
+      && ((key === 'mascot:full' && want === 'stats') || (key === 'stats' && want === 'train:station'));
+    // the train leaving its station and setting off are the same particles: swap the frame, not the shape
+    const handTrain = (key === 'train:station' && want === 'train') || (key === 'train' && want === 'train:station');
+    if (want !== key && handTrain) {
+      field.place(field.shape(want));
+      key = want;
+      scrubbing = false;
+      if (want === 'train:station') { points.position.set(0, 0, 0); points.quaternion.identity(); }
+      else { const p0 = line.poseAt(s.trainS); points.position.copy(p0.pos); points.quaternion.copy(p0.quat); }
+    }
     if (want !== key) {
+      scrubFrom = key;
       const bothMascot = want.startsWith('mascot:') && key.startsWith('mascot:');
-      field.morphTo(field.shape(want), gather ? null : bothMascot ? 900 : 1700, gather ? 2.2 : bothMascot ? 0.1 : 1);
+      field.morphTo(field.shape(want), gather ? null : bothMascot ? 900 : 1700, gather ? (want === 'stats' ? 2.2 : 1.4) : bothMascot ? 0.1 : 1);
       scrubbing = gather;
       key = want;
     }
     if (scrubbing && key === 'stats' && section === 'intro') u.uProgress.value = smooth(0.44, 0.58, ip);
+    else if (scrubbing && key === 'train:station' && section === 'intro') u.uProgress.value = smooth(0.79, 0.94, ip);
     else if (scrubbing) {
       scrubbing = false;
       u.uProgress.value = 1;
@@ -392,7 +423,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     u.uBeam.value = feetY - 0.4 + reveal * (BUST_HEIGHT / 2 - feetY + 1.0);
     u.uBodyReveal.value = onIntro ? reveal : 1;
     u.uEyeReveal.value = onIntro ? reveal : 1;
-    const whole = key === 'mascot:full' || scrubbing ? 1 - (scrubbing ? u.uProgress.value : 0) : 0;
+    const fromWhole = scrubbing && scrubFrom === 'mascot:full';
+    const whole = key === 'mascot:full' || fromWhole ? 1 - (fromWhole ? u.uProgress.value : 0) : 0;
     u.uFill.value = whole * 0.85;
     u.uKindle.value = (0.94 + 0.06 * Math.sin(now * 0.0042) + 0.02 * Math.sin(now * 0.017)) * (1 + whole * 1.6);
 
@@ -410,10 +442,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       rot = null;
     } else if (onIntro) {
       const turned = signals.introBeat === 'profile';
-      tx = turned ? profileShift() : 0;
-      ty = key === 'stats' ? 0 : BUST_DROP;
+      tx = turned && key !== 'train:station' ? profileShift() : 0;
+      ty = key === 'stats' || key === 'train:station' ? 0 : BUST_DROP;
       sc = 1;
-      rot = turned ? -Math.PI / 2 : 0;
+      rot = turned && key !== 'train:station' ? -Math.PI / 2 : 0;
     } else if (key === 'train') {
       rot = null;
     } else if (section === 'solutions' || section === 'projects') {
@@ -466,7 +498,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const headOn = key === 'mascot:full' || scrubbing ? 0 : lit;
     u.uHeadOn.value = damp(u.uHeadOn.value, headOn, 4, dt);
     // coming apart into the windows, his light fades with the scroll rather than switching off
-    if (scrubbing) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);
+    if (fromWhole) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);
     else u.uAurora.value = damp(u.uAurora.value, isMascot ? 1 : 0, 4, dt);
 
     // he looks at the count as it arrives, and at you the rest of the time — on a spring
@@ -498,7 +530,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     ndc.set(p.x, p.y);
     raycaster.setFromCamera(ndc, camera);
     if (raycaster.ray.intersectPlane(plane, mouseWorld)) u.uMouse.value.lerp(mouseWorld, 1 - Math.exp(-8 * dt));
-    u.uMouseStrength.value = damp(u.uMouseStrength.value, p.active && !isMascot && !view && key !== 'train' && key !== 'stats' ? 1 : 0, 3, dt);
+    u.uMouseStrength.value = damp(u.uMouseStrength.value, p.active && !isMascot && !view && !key.startsWith('train') && key !== 'stats' ? 1 : 0, 3, dt);
 
     /* ---- the spiral ---- */
     if (wasCase && !view) {
@@ -523,7 +555,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const upright = onIntro || section === 'contact' || section === 'projects' || section === 'solutions';
     field.group.rotation.x = damp(field.group.rotation.x, upright ? 0 : -p.y * 0.2, 2, dt);
     field.group.rotation.z = damp(field.group.rotation.z, upright ? 0 : -p.x * 0.08, 2, dt);
-    if (onIntro && ip < CAM_KEYS[CAM_KEYS.length - 1]) {
+    if (onIntro && ip > 0.76) {
+      // out of the count: back over the city, then down onto the plaza where the station is going up
+      const k = smooth(0.76, 0.9, ip);
+      const up = Math.sin(k * Math.PI) * 6;
+      camPos.set(0, 0, CAMERA_Z).lerp(stationCamPos, k);
+      camPos.y += up;
+      camPos.z += Math.sin(k * Math.PI) * 10;
+      camLook.set(0, 0, 0).lerp(stationCamLook, k);
+      camera.position.copy(camPos);
+      camera.position.x += p.x * 0.3 * k;
+      camera.position.y += p.y * 0.2 * k;
+      camera.lookAt(camLook);
+    } else if (onIntro && ip < CAM_KEYS[CAM_KEYS.length - 1]) {
       // the landing's move owns the camera; the cursor leans it only once the board has let go
       camPath(ip, camPos, camLook);
       const lean = smooth(0.015, 0.1, ip);
@@ -533,9 +577,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.lookAt(camLook);
     } else if (section === 'solutions' && !view && !preview) {
       const sp = s.solutions;
-      const a = smooth(0, 0.05, sp), b = smooth(0.06, 0.17, sp);
-      camPos.set(0, 0, CAMERA_Z).lerp(aerialPos, a);
-      camLook.set(0, 0, 0).lerp(aerialLook, a);
+      const a = 0, b = smooth(0.0, 0.14, sp);
+      camPos.copy(stationCamPos).lerp(aerialPos, a);
+      camLook.copy(stationCamLook).lerp(aerialLook, a);
       // alongside the train, on the outside of the loop, a little behind and above it
       const flat = tmpDir.set(pose.dir.x, 0, pose.dir.z).normalize();
       const out = tmpOut.set(pose.pos.x, 0, pose.pos.z);
@@ -561,16 +605,21 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // from across the city his light is spread over far fewer pixels; swell the points so he still reads
     const far = camera.position.distanceTo(points.getWorldPosition(tmpV)) / CAMERA_Z;
-    u.uSize.value = 22 * Math.min(3.2, Math.max(1, Math.sqrt(far)));
+    u.uSolid.value = damp(u.uSolid.value, key.startsWith('train') ? 1 : 0, 3, dt);
+    u.uSize.value = 22 * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : 1);
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    cityDim = damp(cityDim, (onIntro && ip < 0.5) || (section === 'solutions' && !preview) ? 1 : view ? 0.15 : 0.35, 2, dt);
+    cityDim = damp(cityDim, (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     billboard.material.opacity = Math.min(1, cityDim * 1.5);
-    const lineReveal = section === 'intro' ? 0 : section === 'solutions' ? Math.min(1.02, smooth(0, 0.14, s.solutions) * 1.02) : 1.02;
-    line.update(time, lineReveal, cityDim, s.trainS);
+    const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
+    stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
+    const at0 = line.stops[0] + 0.012;
+    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, Math.min(1.02, smooth(0, 0.14, s.solutions) * 1.02)) : 1.02;
+    line.update(time, lineReveal, cityDim, s.trainS, stationT);
+    city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
     if (billboard.material.opacity > 0.05) billboard.draw(time);
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();

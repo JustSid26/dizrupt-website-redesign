@@ -15,7 +15,7 @@ import { useSection } from "@/components/home/useSection";
      profile  he turns side on and the line stands in the space he leaves
    Scroll back and every beat runs backwards. */
 const WORD = ["D", "I", "Z", "R", "U", "P", "T"];
-const BEATS = { reveal: 0.015, stats: 0.57, profile: 0.78 };
+const BEATS = { reveal: 0.015, stats: 0.57, profile: 0.76 };
 const HOLE = 280; // px, the radius the cursor opens in the black
 
 const STAT_TONGUES: Record<string, { text: string; latin: boolean }[]> = {

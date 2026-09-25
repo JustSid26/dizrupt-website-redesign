@@ -54,6 +54,7 @@ export class ParticleField {
       uEyeReveal: { value: 1 },
       uKindle: { value: 1 },
       uFill: { value: 0 },
+      uSolid: { value: 0 },
       uSize: { value: 22 },
       uPixelRatio: { value: pixelRatio },
       uMouse: { value: new THREE.Vector3(99, 99, 0) },
