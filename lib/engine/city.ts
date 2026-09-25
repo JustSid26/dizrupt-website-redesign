@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { isMobile } from './config';
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
 /* =========================================================
    The city at night, around the mascot.
@@ -237,7 +238,18 @@ function makePlane() {
   return { points: p, lights };
 }
 
-export function createCity(pixelRatio: number, billboard: Billboard, GROUND: number, plinthTop: number, mascotTop: number) {
+/* The landmarks: modelled in Blender (public/models/nyc.glb), placed round the plaza the way
+   Midtown and Downtown stand round a park. Where each stands, how big, and how its crown is lit. */
+export type Landmark = { name: string; geometry: THREE.BufferGeometry };
+const LANDMARKS: Record<string, { x: number; z: number; rot: number; scale: number; crownFrom: number; crown: [string, string]; tint: string }> = {
+  onewtc: { x: 1, z: -19, rot: 0.2, scale: 1.12, crownFrom: 0.97, crown: ['#ffffff', '#cfe8ff'], tint: '#7fd8ff' },
+  empire: { x: -16, z: -11, rot: 0, scale: 1.05, crownFrom: 0.7, crown: ['#3fe0c0', '#ff5ba8'], tint: '#ffd27a' },
+  chrysler: { x: 16, z: -11, rot: 0.785, scale: 1.05, crownFrom: 0.8, crown: ['#ffffff', '#ffe8b0'], tint: '#dfe8ff' },
+  park432: { x: -21, z: 3, rot: 0, scale: 1.05, crownFrom: 2, crown: ['#ffffff', '#ffffff'], tint: '#dfe8ff' },
+  flatiron: { x: 21, z: 4, rot: -0.6, scale: 1.1, crownFrom: 2, crown: ['#ffffff', '#ffffff'], tint: '#ffb070' },
+};
+
+export function createCity(pixelRatio: number, billboard: Billboard, GROUND: number, plinthTop: number, mascotTop: number, landmarks: Landmark[] = []) {
   const EXTENT = isMobile ? 34 : 48;
   const PITCH = 5.6;
   const PLAZA = 11;
@@ -267,6 +279,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       if (cz > 0 && Math.abs(cx) < PITCH * 0.6) continue; // the avenue up to his plaza stays open
       const nearBoard = Math.hypot(cx - boardXZ.x, cz - boardXZ.y);
       if (nearBoard < 3.6) continue;
+      if (landmarks.some((l) => LANDMARKS[l.name] && Math.hypot(cx - LANDMARKS[l.name].x, cz - LANDMARKS[l.name].z) < 4.6)) continue;
       const lot = PITCH - 2.6; // the buildable part between the pavements
       const zone = (r - PLAZA) / (EXTENT - PLAZA);
       const start = startAt(cx, cz);
@@ -608,6 +621,82 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     cf.push(0.97 + rnd() * 0.03, railStart(x, z), RAIL_H);
     cr.push(rnd(), rnd(), rnd(), rnd());
     cc.push(railTint.r, railTint.g, railTint.b);
+  }
+  /* ---- the landmarks: their models' surfaces sampled into lit windows, crowns lit as they are ---- */
+  const landmarkBodies: THREE.ShaderMaterial[] = [];
+  const sample = new THREE.Vector3(), normal = new THREE.Vector3();
+  for (const l of landmarks) {
+    const spec = LANDMARKS[l.name];
+    const places = l.name === 'brownstones'
+      ? Array.from({ length: isMobile ? 4 : 9 }, (_, i) => {
+          const a = (i / (isMobile ? 4 : 9)) * Math.PI * 2 + 0.4;
+          return { x: Math.cos(a) * (EXTENT - 5), z: Math.sin(a) * (EXTENT - 5), rot: -a + Math.PI / 2, scale: 1 };
+        })
+      : spec ? [spec] : [];
+    for (const pl of places) {
+      const geo = l.geometry.clone();
+      geo.scale(pl.scale, pl.scale, pl.scale);
+      geo.rotateY(pl.rot);
+      geo.translate(pl.x, GROUND, pl.z);
+      geo.computeBoundingBox();
+      const H = geo.boundingBox!.max.y - GROUND;
+      const start = startAt(pl.x, pl.z);
+      const tint = new THREE.Color(spec?.tint ?? '#ffb070');
+      const crownA = new THREE.Color(spec?.crown[0] ?? '#ffffff'), crownB = new THREE.Color(spec?.crown[1] ?? '#ffffff');
+      const crownFrom = spec?.crownFrom ?? 2;
+      const rec = { x: pl.x, z: pl.z, w: 1, d: 1, h: H, style: 3, tint, start, base: 0, total: H, top: true, part: 'landmark' } as B;
+      // its dark body, revealed below the particles as it rises
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uBuild: buildingUniforms.uBuild, uDim: buildingUniforms.uDim, uStart: { value: start }, uGround: { value: GROUND }, uH: { value: H } },
+        vertexShader: `varying float vY; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vY = w.y; gl_Position = projectionMatrix * viewMatrix * w; }`,
+        fragmentShader: `
+          uniform float uBuild, uDim, uStart, uGround, uH; varying float vY;
+          void main() {
+            float g = clamp((uBuild - uStart * 0.6) / 0.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
+            if (vY - uGround > clamp((g - 0.22) / 0.78, 0.0, 1.0) * uH + 0.001) discard;
+            gl_FragColor = vec4(vec3(0.002, 0.0025, 0.004) * uDim, 1.0);
+          }`,
+        side: THREE.DoubleSide,
+      });
+      landmarkBodies.push(mat);
+      group.add(new THREE.Mesh(geo, mat));
+      // particles over its surface: windows by floor, the crown in its own light, the edges picked out
+      const sampler = new MeshSurfaceSampler(new THREE.Mesh(geo)).build();
+      let area = 0;
+      const pos = geo.attributes.position, idx = geo.index;
+      const tri = new THREE.Triangle();
+      const nTri = idx ? idx.count / 3 : pos.count / 3;
+      for (let t = 0; t < nTri; t++) {
+        const [i0, i1, i2] = idx ? [idx.getX(t * 3), idx.getX(t * 3 + 1), idx.getX(t * 3 + 2)] : [t * 3, t * 3 + 1, t * 3 + 2];
+        tri.a.fromBufferAttribute(pos, i0); tri.b.fromBufferAttribute(pos, i1); tri.c.fromBufferAttribute(pos, i2);
+        area += tri.getArea();
+      }
+      const count = Math.round(area * (isMobile ? 55 : 120));
+      const fh = 0.44;
+      for (let i = 0; i < count; i++) {
+        sampler.sample(sample, normal);
+        const hy = (sample.y - GROUND) / H;
+        const p = sample.addScaledVector(normal, 0.02);
+        if (hy > crownFrom) {
+          // the crown, lit as it is at night
+          lampCol.copy(crownA).lerp(crownB, Math.random());
+          push(p.x, p.y, p.z, rec, lampCol, 1, 1.6);
+          continue;
+        }
+        // a window grid on whatever way the face turns: floors in height, bays across the face
+        const across = Math.abs(normal.x) > Math.abs(normal.z) ? p.z : p.x;
+        const floor = Math.floor((p.y - GROUND) / fh), bayI = Math.floor(across / 0.38);
+        const fy = (p.y - GROUND) / fh - floor, fx = across / 0.38 - bayI;
+        const inPane = fy > 0.3 && fy < 0.75 && fx > 0.2 && fx < 0.8;
+        const h = Math.sin(floor * 127.1 + bayI * 311.7 + pl.x * 13.1) * 43758.5453;
+        const lit = h - Math.floor(h) < 0.58 && Math.abs(normal.y) < 0.5;
+        if (inPane && lit) {
+          const hh = Math.sin(floor * 7.1 + bayI * 3.3) * 91.7;
+          lampCol.copy(hh - Math.floor(hh) < 0.35 ? warmLamp : coolLamp).multiplyScalar(0.6 + (hh - Math.floor(hh)) * 0.5);
+          push(p.x, p.y, p.z, rec, lampCol, 1, 2.0);
+        } else if (Math.random() < 0.25) push(p.x, p.y, p.z, rec, tint, 0.25);
+      }
+    }
   }
   const cGeo = new THREE.BufferGeometry();
   cGeo.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));

@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CAMERA_Z, COUNT, isMobile, reducedMotion } from './config';
 import { ParticleField } from './field';
 import { BUST_DROP, BUST_HEIGHT, loadMascot } from './mascot';
@@ -112,7 +113,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   addEventListener('resize', resize);
 
   /* ---------- the mascot ---------- */
-  const mascot = await loadMascot();
+  const [mascot, landmarks] = await Promise.all([
+    loadMascot(),
+    // the NYC landmarks, modelled in Blender
+    new GLTFLoader().loadAsync('/models/nyc.glb').then((g) => {
+      const out: { name: string; geometry: THREE.BufferGeometry }[] = [];
+      g.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push({ name: o.name, geometry: (o as THREE.Mesh).geometry }); });
+      return out;
+    }).catch(() => []),
+  ]);
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
     field.register('mascot:flex', mascot.flex);
@@ -134,7 +143,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const boardAt = new THREE.Vector3(10, GROUND + 9.5, 22);
   const boardFacing = new THREE.Vector3(-0.25, 0, 1).normalize();
   const billboard = createBillboard(boardAt, boardFacing);
-  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP, BUST_DROP + BUST_HEIGHT / 2);
+  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP, BUST_DROP + BUST_HEIGHT / 2, landmarks);
   scene.add(city.group, billboard.group);
   // his own line, with a station for each solution
   const line = createMascotLine(pixelRatio, GROUND, PLINTH_TOP, isMobile ? 34 : 48,
