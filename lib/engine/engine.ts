@@ -211,6 +211,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   /* ---------- glitch bursts (Spider-Verse: rare, abrupt, over in a few held frames) ---------- */
   const burst = { start: 0, end: 0, strength: 0 };
+  let lastReseed = 0;
   function triggerGlitch(ms = 165, strength = 0.72) {
     const now = performance.now();
     u.uGlitchSeed.value = Math.random() * 100;
@@ -221,7 +222,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let glitchTimer = 0;
   const scheduleGlitch = () => {
     glitchTimer = window.setTimeout(() => {
-      if (key.startsWith('mascot:') && !reducedMotion) triggerGlitch(130 + Math.random() * 90, 0.62 + Math.random() * 0.3);
+      if (key.startsWith('mascot:') && !reducedMotion) triggerGlitch(200 + Math.random() * 180, 0.85 + Math.random() * 0.15);
       scheduleGlitch();
     }, 900 + Math.random() * 1900);
   };
@@ -403,6 +404,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     if (now < burst.end) {
       const e = now - burst.start;
+      // it stutters: the tear is re-rolled every few frames for as long as the burst lasts
+      if (now - lastReseed > 55) {
+        u.uGlitchSeed.value = Math.random() * 100;
+        lastReseed = now;
+      }
       const stepped = Math.floor(e / 52) % 3 === 1 ? 0.74 : 1;
       u.uGlitch.value = burst.strength * stepped * Math.min(e / 60, 1, (burst.end - now) / 90);
     } else u.uGlitch.value = damp(u.uGlitch.value, 0, 12, dt);

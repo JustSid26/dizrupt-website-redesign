@@ -62,6 +62,7 @@ uniform float uEyeReveal;   // intro: the curtain of light kindles before the fi
 uniform float uKindle;      // the flicker and breath on that light
 varying float vChip;
 varying float vEcho;
+varying float vDrop;
 varying float vRay;         // where this point sits across the aurora's vertical rays
 varying float vAurora;      // how much of the aurora look applies here at all
 varying float vEdge;        // 1 on the silhouette, 0 deep inside him
@@ -72,6 +73,7 @@ uniform vec3 uHeadPivot;  // the neck, in the mascot's own space
 attribute float aHead;    // >0: weighted neck/head turn; <0: full head turn for legacy eye samples
 uniform float uDisperse;
 uniform float uBeam, uBeamOn;
+uniform float uFill;
 uniform float uSize;
 uniform float uPixelRatio;
 uniform vec3 uMouse;
@@ -122,9 +124,11 @@ void main() {
      carry the magenta/cyan echoes while the main body stays readable. */
   vChip = 0.0;
   vEcho = 1.0;
+  vDrop = 0.0;
   // gated on the aurora, not the head turn: the head turn is tied to one pose, and he is glitched
   // in both — on the landing he stands in the neutral one
-  float glitch = uGlitch * uAurora;
+  // stronger when he stands whole over the city, where the same tear would be too small to see
+  float glitch = uGlitch * uAurora * (1.0 + uFill * 2.5);
   if (glitch > 0.0) {
     vec2 cell = floor(vec2(
       pos.x * 5.0 + uGlitchSeed * 0.31,
@@ -140,15 +144,21 @@ void main() {
     float activePatch = max(fullBody, regionHit);
     float tear = cellNoise - 0.5;
 
-    /* An RGB split. He is drawn three times while it lasts — green here, red and blue in the two
-       extra passes — and the three tear together, band by band, then come apart sideways: red one
-       way, blue the other, further on the bands that tore. Where they still line up they add back
-       to his own colour, so nothing brightens; the fault shows only as coloured fringes. */
-    pos.x += activePatch * tear * 0.09 * glitch;
-    pos.y += activePatch * (fract(cellNoise * 7.3) - 0.5) * 0.02 * glitch;
+    /* A heavy fault, RGB split. He is cut into horizontal slices; about half of them lurch
+       sideways on every held step, now and then the whole of him jumps, and a few slices drop out
+       altogether. He is drawn three times while it lasts — green here, red and blue in the two
+       extra passes — and the channels tear apart further on the slices that moved. Where they
+       still line up they add back to his own colour. */
+    float slice = floor(pos.y * 3.2 + uGlitchSeed * 7.0);
+    float sN = fract(sin(slice * 78.233 + uGlitchSeed * 12.9898) * 43758.5453);
+    float bandHit = step(0.45, sN);
+    float jump = step(0.72, mode);
+    pos.x += (bandHit * (sN - 0.72) * 1.6 + jump * (fract(mode * 17.0) - 0.5) * 1.1 + activePatch * tear * 0.12) * glitch;
+    pos.y += bandHit * (fract(sN * 7.3) - 0.5) * 0.08 * glitch;
     float chan = uGlitchLayer < 0.5 ? 0.0 : uGlitchLayer < 1.5 ? -1.0 : 1.0;
-    pos.x += chan * (0.035 + 0.06 * mode + activePatch * (0.05 + abs(tear) * 0.08)) * glitch;
-    pos.y += chan * activePatch * 0.012 * glitch;
+    pos.x += chan * (0.1 + 0.2 * mode + bandHit * 0.28) * glitch;
+    pos.y += chan * bandHit * 0.03 * glitch;
+    vDrop = step(0.86, fract(sN * 13.7)) * step(0.3, glitch);
   }
 
   /* ---------- Aurora ----------
@@ -230,6 +240,7 @@ varying float vRandom;
 varying float vAlpha;
 varying float vChip;
 varying float vEcho;
+varying float vDrop;
 varying float vRay;
 varying float vAurora;
 varying float vEdge;
@@ -311,5 +322,6 @@ void main() {
   float split = step(0.015, uGlitch) * step(0.02, vAurora);
   vec3 channel = uGlitchLayer < 0.5 ? vec3(0.0, 1.0, 0.0) : uGlitchLayer < 1.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
   col *= mix(vec3(1.0), channel, split);
+  alpha *= 1.0 - vDrop * split; // the slices that dropped out
   gl_FragColor = vec4(col, alpha * uOpacity * reveal);
 }`;
