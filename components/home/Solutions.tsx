@@ -27,6 +27,12 @@ export function Solutions() {
   // a click target riding on the billboard the train stands at
   useEffect(() => {
     const tick = () => {
+      // the copy follows where the train really is: its stop's words while it stands there, none between
+      const r = signals.rideS;
+      const at = Math.min(N - 1, Math.max(0, Math.round(r) - 1));
+      signals.scroll.solutionIndex = at;
+      setActive((c) => (c === at ? c : at));
+      section.current?.classList.toggle("sol-docked", r > 0.6 && Math.abs(r - Math.round(r)) < 0.12);
       const el = hit.current;
       const b = signals.billboardHit;
       if (!el) return;
@@ -54,18 +60,14 @@ export function Solutions() {
         signals.scroll.solutions = p;
         /* His train leaves the plaza and stops at each of the six stations in turn: x counts the stops,
            and within each one it travels, then stands, so each solution is read while it is still. */
-        const x = Math.min(1, Math.max(0, (p - 0.08) / 0.92)) * N;
+        const x = Math.min(1, Math.max(0, (p - 0.01) / 0.99)) * N;
         const i = Math.min(N - 1, Math.floor(x));
         const f = x - Math.floor(x);
-        const k = Math.min(1, Math.max(0, (f - 0.35) / 0.55));
+        // the train moves over nearly all of each stop's scroll, so a glide is the ride, not a wait
+        const k = Math.min(1, Math.max(0, (f - 0.03) / 0.94));
         signals.scroll.trainS = Math.min(N, Math.floor(x) + k * k * (3 - 2 * k));
-        const at = Math.min(N - 1, Math.max(0, Math.round(signals.scroll.trainS) - 1));
-        signals.scroll.solutionIndex = at;
-        setActive(at);
-        // the copy is only there while the train stands at a station; between them it goes
-        const d = Math.abs(signals.scroll.trainS - Math.round(signals.scroll.trainS));
-        const docked = signals.scroll.trainS > 0.6 && d < 0.3;
-        section.current?.classList.toggle("sol-docked", docked);
+
+
         if (bar.current) bar.current.style.transform = `scaleX(${(p >= 1 ? 1 : x - i).toFixed(3)})`;
       },
     });

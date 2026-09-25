@@ -29,7 +29,7 @@ export function SmoothScroll() {
       const y = window.scrollY;
       const tol = 40;
       // only between the station and the last billboard (and not scrolling up off the station, or down off the last)
-      if (y < ys[0] - tol || y > ys[ys.length - 1] + tol) return false;
+      if (y < ys[0] - tol || y > ys[ys.length - 1] + tol) { signals.rideTarget = null; return false; }
       if (dir < 0 && y <= ys[0] + tol) return false;
       if (dir > 0 && y >= ys[ys.length - 1] - tol) return false;
       const now = performance.now();
@@ -37,11 +37,13 @@ export function SmoothScroll() {
       lastGesture = now;
       const target = dir > 0 ? ys.find((v) => v > y + tol) : [...ys].reverse().find((v) => v < y - tol);
       if (target === undefined) return false;
+      signals.rideTarget = ys.indexOf(target); // the train sets off now, not when the page catches up
       gliding = true;
       const dist = Math.abs(target - y);
       lenis.scrollTo(target, {
-        duration: Math.min(7, 4.2 + dist / 2000), // slow: the ride is the point
-        easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+        // slow: the ride is the point. A sine ease has no rush in the middle.
+        duration: Math.min(11, 7.5 + dist / 1500),
+        easing: (t) => 0.5 - 0.5 * Math.cos(Math.PI * t),
         lock: true,
         force: true,
         onComplete: () => { gliding = false; lastGesture = performance.now(); },

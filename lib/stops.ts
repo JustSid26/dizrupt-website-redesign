@@ -5,7 +5,7 @@ import { SOLUTIONS } from "@/content/solutions";
 const N = SOLUTIONS.length;
 
 // where Solutions' own scroll has the train standing at stop k (see Solutions.tsx: x counts stops)
-const solutionsProgress = (k: number) => Math.min(1, 0.08 + (0.92 * Math.min(k + 0.1, N)) / N);
+const solutionsProgress = (k: number) => Math.min(1, 0.01 + (0.99 * Math.min(k + 0.01, N)) / N);
 
 export function stopPositions() {
   const intro = document.getElementById("intro");
@@ -14,7 +14,7 @@ export function stopPositions() {
   const iSpan = intro.offsetHeight - innerHeight;
   const sTop = sol.getBoundingClientRect().top + scrollY;
   const sSpan = sol.offsetHeight - innerHeight;
-  const ys = [intro.getBoundingClientRect().top + scrollY + iSpan * 0.965]; // the train at its station
+  const ys = [intro.getBoundingClientRect().top + scrollY + iSpan * 0.995]; // the train at its station
   for (let k = 1; k <= N; k++) ys.push(sTop + sSpan * solutionsProgress(k));
   return ys;
 }

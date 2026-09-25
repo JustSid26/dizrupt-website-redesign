@@ -308,7 +308,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   let key = 'mascot:neutral'; // the shape the field is heading for
   let scrubbing = false; // uProgress is being driven by the scroll
-  let scrubFrom = ''; // and what it is scrubbing away from
+  let scrubFrom = '';
+  const ride = { s: 0, v: 0 }; // and what it is scrubbing away from
 
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
      (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
@@ -416,7 +417,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     } else if (section === 'intro') {
       // whole in the city → comes apart into the four windows of the count → back into him for the profile
       // whole in the city → four windows of the count → the bullet train at its start station
-      want = ip >= 0.785 ? 'train:station' : ip >= 0.44 ? 'stats' : 'mascot:full';
+      want = ip >= 0.785 ? (ride.s > 0.001 ? 'train' : 'train:station') : ip >= 0.44 ? 'stats' : 'mascot:full';
     } else if (section === 'solutions') {
       // he stands whole in the city for a moment, then becomes his train
       want = 'train';
@@ -435,7 +436,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       key = want;
       scrubbing = false;
       if (want === 'train:station') { points.position.set(0, 0, 0); points.quaternion.identity(); }
-      else { const p0 = line.poseAt(s.trainS); points.position.copy(p0.pos); points.quaternion.copy(p0.quat); }
+      else { const p0 = line.poseAt(ride.s); points.position.copy(p0.pos); points.quaternion.copy(p0.quat); }
     }
     if (want !== key) {
       scrubFrom = key;
@@ -500,12 +501,25 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       rot = isMobile ? 0 : CONTACT_YAW;
     }
     const riding = key === 'train' && !view && !preview;
-    const pose = line.poseAt(s.trainS);
+    /* The train drives itself: the scroll only says which stop it is heading for, and it gets there
+       on a spring with a speed limit — a gentle pull away, a steady run, a slow arrival — so however
+       the scroll jumps, the ride stays slow and smooth. */
+    {
+      if (section !== 'intro' && section !== 'solutions') signals.rideTarget = null;
+      const target = signals.rideTarget ?? (section === 'intro' ? 0 : s.trainS);
+      const K = 0.55, C = 1.5, VMAX = 0.13; // stops per second at most: a slow, stately ride
+      ride.v += ((target - ride.s) * K - ride.v * C) * dt;
+      ride.v = Math.max(-VMAX, Math.min(VMAX, ride.v));
+      ride.s += ride.v * dt;
+      if (Math.abs(target - ride.s) < 0.0005 && Math.abs(ride.v) < 0.002) { ride.s = target; ride.v = 0; }
+      signals.rideS = ride.s;
+    }
+    const pose = line.poseAt(ride.s);
     /* The camera frames each stop the same way: while the train stands at a station it holds on
        that station's own framing, rather than drifting with the train through it. */
-    const nearStop = Math.round(s.trainS);
-    const dock = nearStop >= 1 ? 1 - smooth(0.15, 0.4, Math.abs(s.trainS - nearStop)) : 0;
-    const camPose = line.poseAt(s.trainS + (nearStop - s.trainS) * dock);
+    const nearStop = Math.round(ride.s);
+    const dock = nearStop >= 1 ? 1 - smooth(0.15, 0.4, Math.abs(ride.s - nearStop)) : 0;
+    const camPose = line.poseAt(ride.s + (nearStop - ride.s) * dock);
     if (riding) {
       // on the line: eased onto it while the morph lands, then held to it exactly
       const k = u.uProgress.value >= 1 ? 1 : 1 - Math.exp(-5 * dt);
@@ -613,7 +627,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const upright = onIntro || section === 'contact' || section === 'projects' || section === 'solutions';
     field.group.rotation.x = damp(field.group.rotation.x, upright ? 0 : -p.y * 0.2, 2, dt);
     field.group.rotation.z = damp(field.group.rotation.z, upright ? 0 : -p.x * 0.08, 2, dt);
-    if (onIntro && ip > 0.76) {
+    if (onIntro && ip > 0.76 && ride.s <= 0.001) {
       // out of the count: back over the city, then down onto the plaza where the station is going up
       const k = smooth(0.76, 0.9, ip);
       const up = Math.sin(k * Math.PI) * 6;
@@ -633,9 +647,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.position.x += p.x * 0.35 * lean;
       camera.position.y += p.y * 0.2 * lean;
       camera.lookAt(camLook);
-    } else if (section === 'solutions' && !view && !preview) {
+    } else if ((section === 'solutions' || (onIntro && ride.s > 0.001)) && !view && !preview) {
       const sp = s.solutions;
-      const a = 0, b = smooth(0.0, 0.14, sp);
+      const a = 0, b = smooth(0.0, 0.35, ride.s); // leaves the station view as the train does
+      void sp;
       camPos.copy(stationCamPos).lerp(aerialPos, a);
       camLook.copy(stationCamLook).lerp(aerialLook, a);
       // alongside the train, on the outside of the loop, a little behind and above it
@@ -655,7 +670,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const left = tmpUp.copy(target).sub(chase).normalize().cross(new THREE.Vector3(0, -1, 0)).normalize();
       target.addScaledVector(left, innerWidth > 900 ? -3 : 0); // the copy is on the right: train and board sit left
       camPos.lerp(chase, b);
-      camLook.lerp(target, b);
+      camLook.lerp(target, Math.max(b, smooth(0, 0.12, ride.s))); // turn to the train as soon as it moves
       camera.position.copy(camPos);
       camera.position.x += p.x * 0.3;
       camera.position.y += p.y * 0.2;
@@ -684,7 +699,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
     const at0 = line.stops[0] + 0.012;
     const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + (TRAIN_HALF + 1.5) / line.length) : 1.02; // laid a metre ahead of the train's nose, as it goes
-    line.update(time, lineReveal, cityDim, s.trainS, stationT);
+    line.update(time, lineReveal, cityDim, ride.s, stationT);
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
     if (billboard.material.opacity > 0.05) billboard.draw(time);
@@ -729,8 +744,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // the billboard the train stands at, on screen, so it can be clicked
     {
       const out = signals.billboardHit;
-      const k = Math.round(s.trainS) - 1;
-      const docked = section === 'solutions' && !view && !preview && k >= 0 && Math.abs(s.trainS - (k + 1)) < 0.25 && line.screens[k];
+      const k = Math.round(ride.s) - 1;
+      const docked = section === 'solutions' && !view && !preview && k >= 0 && Math.abs(ride.s - (k + 1)) < 0.15 && line.screens[k];
       out.on = !!docked;
       out.index = k;
       if (docked) {
@@ -750,7 +765,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
