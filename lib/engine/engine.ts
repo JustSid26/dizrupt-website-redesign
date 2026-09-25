@@ -501,6 +501,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     }
     const riding = key === 'train' && !view && !preview;
     const pose = line.poseAt(s.trainS);
+    /* The camera frames each stop the same way: while the train stands at a station it holds on
+       that station's own framing, rather than drifting with the train through it. */
+    const nearStop = Math.round(s.trainS);
+    const dock = nearStop >= 1 ? 1 - smooth(0.15, 0.4, Math.abs(s.trainS - nearStop)) : 0;
+    const camPose = line.poseAt(s.trainS + (nearStop - s.trainS) * dock);
     if (riding) {
       // on the line: eased onto it while the morph lands, then held to it exactly
       const k = u.uProgress.value >= 1 ? 1 : 1 - Math.exp(-5 * dt);
@@ -634,17 +639,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camPos.copy(stationCamPos).lerp(aerialPos, a);
       camLook.copy(stationCamLook).lerp(aerialLook, a);
       // alongside the train, on the outside of the loop, a little behind and above it
-      const flat = tmpDir.set(pose.dir.x, 0, pose.dir.z).normalize();
+      const flat = tmpDir.set(camPose.dir.x, 0, camPose.dir.z).normalize();
       /* Beside the train: on the avenue that is its left (the side the station camera was on); out on
          the loop it is the outside of the curve. Blended between the two by how far out it is. */
-      const r = Math.hypot(pose.pos.x, pose.pos.z);
+      const r = Math.hypot(camPose.pos.x, camPose.pos.z);
       const beside = tmpOut.set(-flat.z, 0, flat.x);
       if (beside.x > 0) beside.negate();
-      const radial = tmpB.set(pose.pos.x, 0, pose.pos.z).normalize();
+      const radial = tmpB.set(camPose.pos.x, 0, camPose.pos.z).normalize();
       const out = beside.lerp(radial, smooth(33, 36, r)).normalize(); // only once it is on the loop itself
-      const chase = tmpA.copy(pose.pos).addScaledVector(out, 9).addScaledVector(flat, -5).add(tmpUp.set(0, 6, 0));
+      // docked, it stands further back and wider, so the whole billboard is in frame beside the train
+      const chase = tmpA.copy(camPose.pos).addScaledVector(out, 9 + 3 * dock).addScaledVector(flat, -5 - 5 * dock).add(tmpUp.set(0, 6 + 0.5 * dock, 0));
       // between the train and its billboard (which stands on the far side of the track), a little ahead
-      const target = tmpB.copy(pose.pos).addScaledVector(flat, 5).addScaledVector(out, -2.5).add(tmpUp.set(0, 2.2, 0));
+      const target = tmpB.copy(camPose.pos).addScaledVector(flat, 5 - 3 * dock).addScaledVector(out, -2.5 - 1.5 * dock).add(tmpUp.set(0, 2.2 + 0.4 * dock, 0));
       // the copy is on the left: lean the view so the train sits right of centre
       const left = tmpUp.copy(target).sub(chase).normalize().cross(new THREE.Vector3(0, -1, 0)).normalize();
       target.addScaledVector(left, innerWidth > 900 ? -3 : 0); // the copy is on the right: train and board sit left
