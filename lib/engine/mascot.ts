@@ -17,6 +17,8 @@ export type MascotAttr = THREE.BufferAttribute & { edge?: THREE.BufferAttribute 
 export type Mascot = {
   neutral: MascotAttr;
   flex: MascotAttr;
+  full: MascotAttr; // head to toe, in the bust's own frame: its upper particles are the bust's own
+  feet: number; // where his soles are, in that frame
   head: Float32Array; // per particle: how much the neck turn moves it
   pivot: THREE.Vector3; // the neck, in the figure's own space
 };
@@ -55,9 +57,13 @@ export async function loadMascot(base = ''): Promise<Mascot | null> {
     // the same points every load: a hash of the index, not a random number
     const noise = (k: number) => fract(Math.sin(k * 12.9898) * 43758.5453);
     const kept: number[] = [];
+    const below: number[] = [];
     for (let k = 0; k < bodyAvailable; k++) {
       const above = (unit(neutralRaw[k * 4 + 2]) - cut) / fade;
-      if (above <= 0 || (above < 1 && noise(k) > above)) continue;
+      if (above <= 0 || (above < 1 && noise(k) > above)) {
+        below.push(k);
+        continue;
+      }
       kept.push(k);
     }
     if (!kept.length) throw new Error('nothing left of the figure above the cut');
@@ -83,12 +89,30 @@ export async function loadMascot(base = ''): Promise<Mascot | null> {
       return new THREE.BufferAttribute(arr, 3);
     };
     const neutral = decode(neutralRaw, true);
+    /* Head to toe. Most particles keep exactly the point they have in the bust, so when he gathers
+       from the whole figure into the bust only the rest — his legs and hips — travel, flowing up into
+       him; the face never moves. */
+    const UPPER = 0.42;
+    const full: MascotAttr = new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3);
+    const farr = full.array as Float32Array;
+    farr.set(neutral.array);
+    if (below.length) {
+      for (let i = 0; i < COUNT; i++) {
+        if (noise(i * 7 + 3) < UPPER) continue;
+        const j = below[Math.floor(noise(i * 13 + 5) * below.length)] * 4;
+        farr[i * 3] = (unit(neutralRaw[j]) - acrossMid) * scale;
+        farr[i * 3 + 1] = (unit(neutralRaw[j + 2]) - middle) * scale;
+        farr[i * 3 + 2] = -unit(neutralRaw[j + 1]) * scale;
+      }
+    }
+    full.edge = edgeField(farr);
+    const feet = (low - middle) * scale;
     const flex = decode(flexRaw);
     neutral.edge = edgeField(neutral.array);
     flex.edge = edgeField(flex.array);
     const [px, py, pz] = meta.pivot;
     const pivot = new THREE.Vector3((px - acrossMid) * scale, (pz - middle) * scale, -py * scale);
-    return { neutral, flex, head, pivot };
+    return { neutral, flex, full, feet, head, pivot };
   } catch (err) {
     console.warn('mascot point cloud unavailable', err);
     return null;

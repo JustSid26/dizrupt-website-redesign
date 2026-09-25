@@ -9,7 +9,7 @@ import { BUST_DROP, BUST_HEIGHT, loadMascot } from './mascot';
 import { createIndex } from './spiral';
 import { createWindowField } from './windowField';
 import { createAtmosphere } from './atmosphere';
-import { createCity, PLINTH_TOP } from './city';
+import { createCity } from './city';
 import { BOARD_HEIGHT, createBillboard } from './billboard';
 import { signals } from '@/lib/signals';
 import { clients, slugOf, type Project } from '@/content/projects';
@@ -32,7 +32,6 @@ export type EngineOptions = {
 };
 
 const MASCOT_COLORS: [string, string] = ['#c9b8ff', '#6f4dff'];
-const GIANT = 2.6; // his size over the city, against his framed size
 const CONTACT_SHIFT = 2.15;
 const CONTACT_YAW = 0.42;
 const CASE_SHIFT = 2.35;
@@ -63,47 +62,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   u.uBustHalf.value = BUST_HEIGHT / 2;
   scene.add(field.group);
   const points = field.points;
-
-  /* ---------- the city, and the billboard the landing turns out to be ---------- */
-  const boardAt = new THREE.Vector3(10, 0.8, 22);
-  const boardFacing = new THREE.Vector3(-0.25, 0, 1).normalize();
-  const billboard = createBillboard(boardAt, boardFacing);
-  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT });
-  scene.add(city.points, billboard.group);
-  billboard.measure();
-
-  /* The landing's camera move. It starts square on to the board at the distance where the board
-     exactly fills the screen, so the page can hand over to it without a seam; pulls back and swings
-     round to show the board on its tower; rises over the city; then flies in to him and ends on the
-     same framing every later section uses, so the hand-over at the far end is seamless too. */
-  const side = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), boardFacing).normalize().negate();
-  const at = (v: THREE.Vector3, n: number, sd: number, up: number) =>
-    v.clone().addScaledVector(boardFacing, n).addScaledVector(side, sd).add(new THREE.Vector3(0, up, 0));
-  const CAM_KEYS = [0.015, 0.13, 0.26, 0.4, 0.55];
-  const camKeys = () => {
-    const fill = billboard.fillDistance(camera.fov);
-    return {
-      pos: [at(boardAt, fill, 0, 0), at(boardAt, 11, 5, -1.2), new THREE.Vector3(24, 10, 46), new THREE.Vector3(0, 20, 58), new THREE.Vector3(0, 0, CAMERA_Z)],
-      look: [boardAt.clone(), at(boardAt, 0, 0, -1.2), new THREE.Vector3(6, -1, 10), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0)],
-    };
-  };
-  let paths = (() => {
-    const k = camKeys();
-    return { pos: new THREE.CatmullRomCurve3(k.pos, false, 'centripetal'), look: new THREE.CatmullRomCurve3(k.look, false, 'centripetal') };
-  })();
-  const camPath = (ip: number, pos: THREE.Vector3, look: THREE.Vector3) => {
-    // map the scroll onto the curve so each key is reached at its own point in the scroll
-    let seg = 0;
-    while (seg < CAM_KEYS.length - 2 && ip > CAM_KEYS[seg + 1]) seg++;
-    const t = clamp01((ip - CAM_KEYS[seg]) / (CAM_KEYS[seg + 1] - CAM_KEYS[seg]));
-    const e = t * t * (3 - 2 * t);
-    const u = (seg + e) / (CAM_KEYS.length - 1);
-    paths.pos.getPoint(u, pos);
-    paths.look.getPoint(u, look);
-  };
-  const camPos = new THREE.Vector3();
-  const camLook = new THREE.Vector3();
-  const tmpV = new THREE.Vector3();
 
   const atmosphere = createAtmosphere({ scene, camera, colorA: u.uColorA.value, colorB: u.uColorB.value });
 
@@ -142,10 +100,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     composer.setSize(innerWidth, innerHeight);
     bloom.setSize(innerWidth, innerHeight);
     atmosphere.resize();
+    if (!built) return;
     billboard.measure();
+  built = true;
     const k = camKeys();
     paths = { pos: new THREE.CatmullRomCurve3(k.pos, false, 'centripetal'), look: new THREE.CatmullRomCurve3(k.look, false, 'centripetal') };
   };
+  let built = false;
   addEventListener('resize', resize);
 
   /* ---------- the mascot ---------- */
@@ -153,6 +114,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
     field.register('mascot:flex', mascot.flex);
+    field.register('mascot:full', mascot.full);
     (field.geometry.attributes.aHead as THREE.BufferAttribute).array.set(mascot.head);
     field.geometry.attributes.aHead.needsUpdate = true;
     u.uHeadPivot.value.copy(mascot.pivot);
@@ -160,7 +122,53 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // without the files he is the wordmark, so the site still reads
     field.register('mascot:neutral', field.shape('wordmark'));
     field.register('mascot:flex', field.shape('wordmark'));
+    field.register('mascot:full', field.shape('wordmark'));
   }
+  /* ---------- the city, and the billboard the landing turns out to be ---------- */
+  // he stands head to toe on a low plinth, so the ground is set by where his feet are
+  const feetY = BUST_DROP + (mascot ? mascot.feet : -6);
+  const PLINTH_TOP = feetY;
+  const GROUND = feetY - 1.2;
+  const boardAt = new THREE.Vector3(10, GROUND + 9.5, 22);
+  const boardFacing = new THREE.Vector3(-0.25, 0, 1).normalize();
+  const billboard = createBillboard(boardAt, boardFacing);
+  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP);
+  scene.add(city.points, billboard.group);
+  billboard.measure();
+
+  /* The landing's camera move. It starts square on to the board at the distance where the board
+     exactly fills the screen, so the page can hand over to it without a seam; pulls back and swings
+     round to show the board on its tower; rises over the city; then flies in to him and ends on the
+     same framing every later section uses, so the hand-over at the far end is seamless too. */
+  const side = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), boardFacing).normalize().negate();
+  const at = (v: THREE.Vector3, n: number, sd: number, up: number) =>
+    v.clone().addScaledVector(boardFacing, n).addScaledVector(side, sd).add(new THREE.Vector3(0, up, 0));
+  const CAM_KEYS = [0.015, 0.13, 0.26, 0.4, 0.55];
+  const camKeys = () => {
+    const fill = billboard.fillDistance(camera.fov);
+    return {
+      pos: [at(boardAt, fill, 0, 0), at(boardAt, 11, 5, -1.2), new THREE.Vector3(26, GROUND + 16, 46), new THREE.Vector3(0, GROUND + 22, 54), new THREE.Vector3(0, 0, CAMERA_Z)],
+      look: [boardAt.clone(), at(boardAt, 0, 0, -1.2), new THREE.Vector3(6, GROUND + 6, 10), new THREE.Vector3(0, GROUND + 12, 0), new THREE.Vector3(0, 0, 0)],
+    };
+  };
+  let paths = (() => {
+    const k = camKeys();
+    return { pos: new THREE.CatmullRomCurve3(k.pos, false, 'centripetal'), look: new THREE.CatmullRomCurve3(k.look, false, 'centripetal') };
+  })();
+  const camPath = (ip: number, pos: THREE.Vector3, look: THREE.Vector3) => {
+    // map the scroll onto the curve so each key is reached at its own point in the scroll
+    let seg = 0;
+    while (seg < CAM_KEYS.length - 2 && ip > CAM_KEYS[seg + 1]) seg++;
+    const t = clamp01((ip - CAM_KEYS[seg]) / (CAM_KEYS[seg + 1] - CAM_KEYS[seg]));
+    const e = t * t * (3 - 2 * t);
+    const u = (seg + e) / (CAM_KEYS.length - 1);
+    paths.pos.getPoint(u, pos);
+    paths.look.getPoint(u, look);
+  };
+  const camPos = new THREE.Vector3();
+  const camLook = new THREE.Vector3();
+  const tmpV = new THREE.Vector3();
+
   field.place(field.shape('mascot:neutral'));
   field.colorA.set(MASCOT_COLORS[0]);
   field.colorB.set(MASCOT_COLORS[1]);
@@ -209,6 +217,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   };
 
   let key = 'mascot:neutral'; // the shape the field is heading for
+  let scrubbing = false; // uProgress is being driven by the scroll
   let wasCase = false;
   let sky = 0;
   let boardMeasure = 0;
@@ -237,7 +246,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       want = preview.shape;
       colors = preview.colors;
     } else if (section === 'intro') {
-      want = ip >= 0.58 ? 'mascot:flex' : 'mascot:neutral';
+      want = ip >= 0.58 ? 'mascot:flex' : ip >= 0.42 ? 'mascot:neutral' : 'mascot:full';
     } else if (section === 'solutions') {
       const sol = SOLUTIONS[s.solutionIndex];
       want = sol.shape;
@@ -249,10 +258,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     } else {
       want = 'mascot:neutral'; // he sees you out
     }
+    // gathering from head-to-toe into the bust is scrubbed by the scroll, as the camera flies in
+    const gather = section === 'intro' && !view && !preview && key === 'mascot:full' && want === 'mascot:neutral';
     if (want !== key) {
       const bothMascot = want.startsWith('mascot:') && key.startsWith('mascot:');
-      field.morphTo(field.shape(want), bothMascot ? 900 : 1700, bothMascot ? 0.1 : 1);
+      field.morphTo(field.shape(want), gather ? null : bothMascot ? 900 : 1700, gather ? 0.15 : bothMascot ? 0.1 : 1);
+      scrubbing = gather;
       key = want;
+    }
+    if (scrubbing && key === 'mascot:neutral' && section === 'intro') u.uProgress.value = smooth(0.42, 0.55, ip);
+    else if (scrubbing) {
+      scrubbing = false;
+      u.uProgress.value = 1;
     }
     field.colorA.set(colors[0]);
     field.colorB.set(colors[1]);
@@ -260,12 +277,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     /* ---- the landing: a beam runs down him and leaves him lit ---- */
     const onIntro = section === 'intro' && !view && !preview;
-    const reveal = onIntro ? smooth(0.24, 0.44, ip) : 1;
+    const reveal = onIntro ? smooth(0.22, 0.4, ip) : 1;
     u.uBeamOn.value = onIntro ? 1 : 0;
-    u.uBeam.value = BUST_HEIGHT / 2 + 0.25 - reveal * (BUST_HEIGHT + 0.6);
+    u.uBeam.value = BUST_HEIGHT / 2 + 0.25 - reveal * (BUST_HEIGHT / 2 - (mascot ? mascot.feet : -6) + 0.8);
     u.uBodyReveal.value = onIntro ? reveal : 1;
     u.uEyeReveal.value = onIntro ? reveal : 1;
-    u.uKindle.value = 0.94 + 0.06 * Math.sin(now * 0.0042) + 0.02 * Math.sin(now * 0.017);
+    const whole = key === 'mascot:full' || scrubbing ? 1 - (scrubbing ? u.uProgress.value : 0) : 0;
+    u.uKindle.value = (0.94 + 0.06 * Math.sin(now * 0.0042) + 0.02 * Math.sin(now * 0.017)) * (1 + whole * 1.6);
 
     /* ---- where it stands ---- */
     const menuOpen = signals.menuOpen;
@@ -281,12 +299,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       rot = null;
     } else if (onIntro) {
       const turned = signals.introBeat === 'profile';
-      /* Over the city he is its monument: several times his framed size, standing on the plinth.
-         As the camera flies in to him he settles to the size every later section frames him at. */
-      const giant = 1 + (GIANT - 1) * (1 - smooth(0.4, 0.55, ip));
       tx = turned ? profileShift() : 0;
-      ty = PLINTH_TOP + (BUST_HEIGHT / 2) * giant; // his base stays on the plinth (at 1 this is BUST_DROP)
-      sc = giant;
+      ty = BUST_DROP;
+      sc = 1;
       rot = turned ? -Math.PI / 2 : 0;
     } else if (section === 'solutions' || section === 'projects') {
       tx = isMobile ? 0 : 2.3;
@@ -317,9 +332,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     }
 
     /* ---- light: the aurora belongs to him, not to the models ---- */
-    const headOn = isMascot ? Math.min(u.uProgress.value, 1) : 0;
+    const lit = isMascot ? Math.min(u.uProgress.value, 1) : 0;
+    const headOn = key === 'mascot:full' || scrubbing ? 0 : lit;
     u.uHeadOn.value = damp(u.uHeadOn.value, headOn, 4, dt);
-    u.uAurora.value = damp(u.uAurora.value, headOn, 4, dt);
+    u.uAurora.value = damp(u.uAurora.value, isMascot ? 1 : 0, 4, dt);
 
     // he looks at the count as it arrives, and at you the rest of the time — on a spring
     const p = signals.pointer;
@@ -391,6 +407,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     city.uniforms.uTime.value = time;
+    city.uniforms.uBuild.value = onIntro ? smooth(0.1, 0.4, ip) : 1;
     const cityTarget = landing ? 1 : onIntro ? 1 : view ? 0.12 : 0.3;
     city.uniforms.uOpacity.value = damp(city.uniforms.uOpacity.value, cityTarget, 2, dt);
     billboard.material.opacity = city.uniforms.uOpacity.value;
