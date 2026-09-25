@@ -59,7 +59,9 @@ export function SmoothScroll() {
       },
     });
     const onKey = (e: KeyboardEvent) => {
-      const dir = ["ArrowDown", "PageDown", " "].includes(e.key) ? 1 : ["ArrowUp", "PageUp"].includes(e.key) ? -1 : 0;
+      // → and ↓ ride forward to the next stop, ← and ↑ back to the last
+      if (e.metaKey || e.ctrlKey || e.altKey || useStore.getState().menuOpen || useStore.getState().macOpen) return;
+      const dir = ["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key) ? -1 : 0;
       if (dir && glide(dir)) e.preventDefault();
     };
     addEventListener("keydown", onKey);
