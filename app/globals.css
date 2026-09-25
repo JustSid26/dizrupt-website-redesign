@@ -281,7 +281,7 @@ body.panel-open #work { opacity: 0; pointer-events: none; }
 #contact .back { margin-top: 48px; }
 
 /* ---------- Intro ---------- */
-#intro { position: relative; height: 420svh; }
+#intro { position: relative; height: 640svh; }
 .intro-pin {
   position: sticky; top: 0; height: 100svh; overflow: hidden;
   color: #fff;
@@ -1067,3 +1067,9 @@ body.menu-open #index .index-hit { pointer-events: none; }
 /* a hovered solution's model shows through, even over the landing's black */
 body.menu-open .intro-veil, body.menu-open .intro-static { opacity: 0; transition: opacity 0.5s var(--ease); }
 body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intro-stats { opacity: 0; transition: opacity 0.4s var(--ease); }
+
+/* the landing hands over to the billboard that looks exactly like it: no fade, it is simply the board now */
+.intro-pin.sweeping .intro-veil, .intro-pin.sweeping .intro-static, .intro-pin.sweeping .intro-scan,
+.intro-pin.sweeping .intro-inner, .intro-pin.sweeping .intro-enter, .intro-pin.sweeping .intro-tag {
+  opacity: 0 !important; transition: none !important; animation: none !important;
+}

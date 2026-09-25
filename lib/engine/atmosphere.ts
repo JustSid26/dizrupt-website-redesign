@@ -125,16 +125,20 @@ export function createAtmosphere({ scene, camera, colorA, colorB }) {
   dust.renderOrder = -900;
   scene.add(dust);
 
+  // the backdrop rides with the camera at a fixed distance, so it fills the view wherever it looks
+  const BACK = camera.position.z - DEPTH;
+  const fwd = new THREE.Vector3();
   function resize() {
-    const h = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * (camera.position.z - DEPTH);
+    const h = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * BACK;
     gradient.scale.set(h * camera.aspect * 1.1, h * 1.1, 1);
   }
   resize();
 
   function update(time) {
     shared.uTime.value = time;
-    gradient.position.x = camera.position.x; // stay put behind the camera's small drift
-    gradient.position.y = camera.position.y;
+    camera.getWorldDirection(fwd);
+    gradient.quaternion.copy(camera.quaternion);
+    gradient.position.copy(camera.position).addScaledVector(fwd, BACK);
   }
 
   return {

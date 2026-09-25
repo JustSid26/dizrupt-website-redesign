@@ -9,15 +9,14 @@ import { useSection } from "@/components/home/useSection";
 
 /* The landing. One pinned stretch of scroll, read in beats:
      landing  DIZRUPT on black; the Z keeps losing the signal; the cursor opens a hole in the black
-     reveal   the word tears out and a beam runs down the mascot, scrubbed by the scroll
+     reveal   the camera pulls back: the landing was a billboard, on a tower, in a city of light,
+              and he stands on a plinth in the middle of it, lit by a beam as you arrive
      stats    he flexes; the count arrives at his corners, each label decoding out of another tongue
      profile  he turns side on and the line stands in the space he leaves
    Scroll back and every beat runs backwards. */
 const WORD = ["D", "I", "Z", "R", "U", "P", "T"];
-const BEATS = { reveal: 0.015, stats: 0.3, profile: 0.62 };
+const BEATS = { reveal: 0.015, stats: 0.58, profile: 0.78 };
 const HOLE = 280; // px, the radius the cursor opens in the black
-const WORD_BANDS = 8;
-const WORD_GLITCH_MS = 700;
 
 const STAT_TONGUES: Record<string, { text: string; latin: boolean }[]> = {
   "founded in": [
@@ -85,7 +84,6 @@ export function Intro() {
     const clearTimers = () => timers.splice(0).forEach(clearTimeout);
     let beat: typeof signals.introBeat = "landing";
     let zTimer = 0;
-    let tearRaf = 0;
     let firstZ = true;
 
     // the snow over the black
@@ -143,44 +141,7 @@ export function Intro() {
     };
     scheduleZ();
 
-    /* The word does not fold away: it loses the signal, torn into bands in three channels. */
-    const tearWord = () => {
-      const w = word.current!;
-      const inner = w.parentElement!;
-      if (reduce) return void (w.style.opacity = "0");
-      const layers: { el: HTMLElement; ch: string }[] = [];
-      for (let band = 0; band < WORD_BANDS; band++) {
-        const top = (band / WORD_BANDS) * 100;
-        const bottom = 100 - ((band + 1) / WORD_BANDS) * 100;
-        for (const ch of ["w", "r", "b"]) {
-          const copy = w.cloneNode(true) as HTMLElement;
-          copy.removeAttribute("id");
-          copy.className = `intro-word-shard ${ch}`;
-          copy.setAttribute("aria-hidden", "true");
-          copy.style.clipPath = `inset(${top.toFixed(2)}% 0 ${bottom.toFixed(2)}% 0)`;
-          copy.dataset.band = String(band);
-          inner.appendChild(copy);
-          layers.push({ el: copy, ch });
-        }
-      }
-      w.style.opacity = "0";
-      const start = performance.now();
-      const step = () => {
-        const t = Math.min((performance.now() - start) / WORD_GLITCH_MS, 1);
-        if (t >= 1) return layers.forEach(({ el }) => el.remove());
-        const violence = 0.25 + t * t * 1.6;
-        const slips = Array.from({ length: WORD_BANDS }, () => (Math.random() < 0.45 + t * 0.4 ? (Math.random() - 0.5) * 150 * violence : 0));
-        for (const { el, ch } of layers) {
-          const apart = (ch === "r" ? 1 : ch === "b" ? -1 : 0) * (2 + 26 * violence * Math.random());
-          el.style.setProperty("--slip", `${(slips[Number(el.dataset.band)] + apart).toFixed(1)}px`);
-          el.style.opacity = ((Math.random() < t * 0.55 ? 0 : 1) * (1 - t * t)).toFixed(3);
-        }
-        tearRaf = requestAnimationFrame(step);
-      };
-      tearRaf = requestAnimationFrame(step);
-    };
     const restoreWord = () => {
-      cancelAnimationFrame(tearRaf);
       word.current?.parentElement?.querySelectorAll(".intro-word-shard").forEach((n) => n.remove());
       if (word.current) word.current.style.opacity = "";
     };
@@ -296,10 +257,8 @@ export function Intro() {
       el.classList.toggle("sweeping", next !== "landing");
       el.classList.toggle("stats-in", next === "stats");
       el.classList.toggle("profile-in", next === "profile");
-      if (prev === "landing") {
-        tearWord();
-        snow?.stop();
-      }
+      // the page hands over to the billboard, which looks exactly like it, so it simply goes
+      if (prev === "landing") snow?.stop();
       if (next === "landing") {
         restoreWord();
         snow?.start();
@@ -346,7 +305,6 @@ export function Intro() {
       gsap.ticker.remove(tick);
       clearTimers();
       clearTimeout(zTimer);
-      cancelAnimationFrame(tearRaf);
       snow?.stop();
     };
   }, [reduce]);
