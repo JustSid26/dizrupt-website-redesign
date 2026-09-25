@@ -314,6 +314,81 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
   return { group, build };
 }
 
+/* Build a finished object up out of particles, bottom to top, the way the city is built: points
+   sampled over every surface, in each surface's own colour, spiral in from below and land; the solid
+   object shows only under the line they have reached. t: 0 nothing → 1 standing. */
+function particleBuilder(obj: THREE.Object3D, parent: THREE.Object3D, pixelRatio: number, density = 30) {
+  const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
+  obj.updateMatrixWorld(true);
+  const pos: number[] = [], col: number[] = [], rnd: number[] = [];
+  const v = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color();
+  obj.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mats = (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshBasicMaterial[];
+    mats.forEach((mat) => { mat.clippingPlanes = [clip]; mat.needsUpdate = true; });
+    const g = m.geometry.clone().applyMatrix4(m.matrixWorld);
+    g.computeBoundingBox();
+    const sz = g.boundingBox!.getSize(v);
+    const area = 2 * (sz.x * sz.y + sz.y * sz.z + sz.x * sz.z);
+    const cnt = Math.min(6000, Math.round(area * (isMobile ? density * 0.5 : density)));
+    c.copy(mats[0].color ?? new THREE.Color(1, 1, 1));
+    if ((mats[0] as unknown as THREE.MeshStandardMaterial).emissive?.getHex()) c.add((mats[0] as unknown as THREE.MeshStandardMaterial).emissive);
+    if (mats[0].map) c.setRGB(0.85, 0.8, 1.0); // a picture: pale light
+    const sampler = new MeshSurfaceSampler(new THREE.Mesh(g)).build();
+    for (let i = 0; i < cnt; i++) {
+      sampler.sample(v, n);
+      pos.push(v.x + n.x * 0.02, v.y + n.y * 0.02, v.z + n.z * 0.02);
+      col.push(Math.max(0.25, c.r), Math.max(0.25, c.g), Math.max(0.25, c.b));
+      rnd.push(Math.random());
+    }
+  });
+  const box = new THREE.Box3().setFromObject(obj);
+  const LOW = box.min.y, TOP = box.max.y + 0.4;
+  const pg = new THREE.BufferGeometry();
+  pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  pg.setAttribute('aCol', new THREE.Float32BufferAttribute(col, 3));
+  pg.setAttribute('aRand', new THREE.Float32BufferAttribute(rnd, 1));
+  const pu = { uFront: { value: -1e4 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio } };
+  const particles = new THREE.Points(pg, new THREE.ShaderMaterial({
+    uniforms: pu,
+    vertexShader: /* glsl */ `
+      uniform float uFront, uTime, uPixelRatio;
+      attribute vec3 aCol; attribute float aRand;
+      varying vec3 vCol; varying float vA;
+      void main() {
+        float t = clamp(1.0 - (position.y - uFront) / 2.2, 0.0, 1.0);
+        float e = t * t * (3.0 - 2.0 * t);
+        float a = aRand * 40.0 + uTime * 1.3;
+        vec3 p = position + vec3(cos(a) * 2.4, -1.5 - aRand * 3.0, sin(a) * 2.4) * (1.0 - e);
+        vA = step(0.001, t) * (1.0 - smoothstep(0.3, 1.2, uFront - position.y));
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = max(2.0, (2.6 + 3.5 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
+        vCol = mix(vec3(1.0), aCol, e);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vCol; varying float vA;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if (d > 0.5 || vA < 0.01) discard;
+        float core = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vCol * 1.5, (core * core * 0.7 + exp(-d * d * 40.0) * 0.8) * vA);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  particles.frustumCulled = false;
+  parent.add(particles);
+  return (t: number, time: number) => {
+    obj.visible = t > 0.001;
+    const front = LOW + (TOP - LOW) * t;
+    clip.constant = t >= 0.999 ? 1e4 : front;
+    pu.uFront.value = front;
+    pu.uTime.value = time;
+    particles.visible = t > 0.001 && t < 0.999;
+  };
+}
+
 /** A box with rounded edges round its long sides (a laptop's slab). */
 class RoundedSlab extends THREE.ExtrudeGeometry {
   constructor(w: number, h: number, d: number, r: number) {
@@ -509,6 +584,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   /* ---- the stations: platform, sign, and the solution turning over it ---- */
   const holos: { points: THREE.Points; mat: THREE.ShaderMaterial; base: THREE.Vector3 }[] = [];
   const stationBuildings: THREE.Group[] = [];
+  const stopBuilds: ((t: number, time: number) => void)[] = [];
   const signs: THREE.Mesh[] = [];
   const banners: { mat: THREE.MeshBasicMaterial; texs: THREE.Texture[]; i: number; next: number }[] = [];
   const liveBoards: ReturnType<typeof glitchBoard>[] = [];
@@ -667,9 +743,11 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       addM(new THREE.BoxGeometry(0.02, 0.16, 0.7), black, -0.03, LH - 0.13, 0, hinge);
       screens.push(screen);
     }
-    sg.scale.set(1, 0.001, 1);
+    // (built by particles once it is in place, below)
     group.add(sg);
     stationBuildings.push(sg);
+    group.updateMatrixWorld(true);
+    stopBuilds.push(particleBuilder(sg, group, pixelRatio));
     // the sign, facing out towards the camera's side of the track
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(4, 1),
@@ -772,9 +850,9 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       h.points.visible = false; // no floating models: the billboard carries the solution
       // the station rises out of the ground as the line reaches it
       // it rises as the track reaches the near end of its platform, done by the time the track reaches its middle
-      const up = Math.min(1, Math.max(0.001, (reveal - (stops[k + 1] - 5 / LEN)) / (5 / LEN)));
-      stationBuildings[k].scale.y = up * up * (3 - 2 * up);
-      stationBuildings[k].visible = up > 0.002;
+      // it builds as the track closes in on it: begun forty metres out, standing a little before the train arrives
+      const up = Math.min(1, Math.max(0, (reveal - (stops[k + 1] - 40 / LEN)) / (34 / LEN)));
+      stopBuilds[k](up * up * (3 - 2 * up), time);
       signs[k].visible = false;
     });
   }
