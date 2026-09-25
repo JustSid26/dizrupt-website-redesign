@@ -116,7 +116,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   /* ---------- the mascot ---------- */
   const loadModel = (url: string) => new GLTFLoader().loadAsync(url).then((g) => g.scene).catch(() => null);
-  const [mascot, landmarks, cityModel, trainModel, stationModel, stopsModel] = await Promise.all([
+  const [mascot, landmarks, cityModel, trainModel, stationModel] = await Promise.all([
     loadMascot(),
     // the NYC landmarks, modelled in Blender
     new GLTFLoader().loadAsync('/models/nyc.glb').then((g) => {
@@ -141,7 +141,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // the bullet train and its start station, modelled in Blender
     loadModel('/models/train.glb'),
     loadModel('/models/station.glb'),
-    loadModel('/models/stops.glb'),
   ]);
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
@@ -175,7 +174,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         .map((w) => Object.entries(BANNERS).find(([title]) => title.toLowerCase().startsWith(w.split(' ')[0]))?.[1])
         .filter((u): u is string => !!u)],
     })),
-    stationModel ?? new THREE.Group(), stopsModel);
+    stationModel ?? new THREE.Group());
   scene.add(line.group);
   const trainLocal = trainShape(trainModel);
   const TRAIN_HALF = (() => { let m = 0; for (let i = 2; i < trainLocal.length; i += 3) m = Math.max(m, trainLocal[i]); return m; })(); // origin to the nose tip
@@ -647,7 +646,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const target = tmpB.copy(pose.pos).addScaledVector(flat, 7).add(tmpUp.set(0, 1.2, 0)); // ahead, where the track is being laid
       // the copy is on the left: lean the view so the train sits right of centre
       const left = tmpUp.copy(target).sub(chase).normalize().cross(new THREE.Vector3(0, -1, 0)).normalize();
-      target.addScaledVector(left, innerWidth > 900 ? 3.2 : 0);
+      target.addScaledVector(left, innerWidth > 900 ? 6.5 : 0);
       camPos.lerp(chase, b);
       camLook.lerp(target, b);
       camera.position.copy(camPos);

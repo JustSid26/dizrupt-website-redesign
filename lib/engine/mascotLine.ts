@@ -393,7 +393,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       uniform float uReveal, uDim, uFrom; varying vec2 vUv;
       void main() {
         if (vUv.x > uReveal - 0.015 || vUv.x < uFrom) discard; // laid just behind its particles, and not through the station
-        vec3 col = vec3(0.006, 0.005, 0.01); // a dark deck (linear light); its edges are the lights
+        float edge = 1.0 - smoothstep(0.0, 0.05, abs(fract(vUv.y * 4.0) - 0.5) - 0.42);
+        vec3 col = vec3(0.012, 0.01, 0.02) + vec3(0.5, 0.25, 0.85) * edge * 0.55; // a dark deck, lit along its edges
         gl_FragColor = vec4(col * uDim, 1.0);
       }`,
   }));
@@ -509,47 +510,78 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     // lookAt aims +z along the track; make +x the platform side
     // the platform on the inside of the loop: the camera rides outside, so it sees the train, then the station and its banner behind
     if (new THREE.Vector3(1, 0, 0).applyQuaternion(sg.quaternion).dot(out) > 0) sg.rotateY(Math.PI);
-    // the station building, modelled in Blender (public/models/stops.glb), one per solution
-    if (stopsModel) {
-      // the banner rides up on its frame to stand on the roof, above the train and clear of the canopy
-      const lift = k === 4 ? 3.9 : 2.5;
-      stopsModel.traverse((o) => {
-        if (o.name === `stop_${k}`) sg.add(o.clone());
-        if (o.name === `stop_${k}_frame`) { const f = o.clone(); f.position.y += lift; sg.add(f); }
-      });
-      const face = stopsModel.getObjectByName(`banner_${k}`) as THREE.Mesh | undefined;
-      if (face && !st.images.length) {
-        // no work to show yet: the board runs DIZRUPT with its glitching Z
-        const gb = glitchBoard();
-        gb.tex.repeat.x = 1;
-        sg.add(new THREE.Mesh(face.geometry, new THREE.MeshBasicMaterial({ map: gb.tex, toneMapped: false, side: THREE.DoubleSide })));
-        liveBoards.push(gb);
+    /* A billboard beside the line, the way they stand over Times Square: a steel frame on lattice
+       columns down to the street, a catwalk, spotlights leaning out over the screen. The screen
+       shows the solution's photograph with its channel and name, then the work that proves it. */
+    const BW = 8, BH = 3.3, BX = 3.4, BY = BH / 2 + 0.6; // local: +x away from the track, +z along it
+    const steel = new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
+    const accent = new THREE.MeshStandardMaterial({ color: st.colors[0], roughness: 0.4, metalness: 0.3, emissive: st.colors[0], emissiveIntensity: 0.6 });
+    const add = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, z);
+      sg.add(mesh);
+      return mesh;
+    };
+    add(new THREE.BoxGeometry(0.25, BH + 0.35, BW + 0.35), steel, BX + 0.12, BY, 0);      // the back and frame
+    add(new THREE.BoxGeometry(0.06, 0.08, BW + 0.3), accent, BX - 0.02, BY + BH / 2 + 0.16, 0); // lit edges
+    add(new THREE.BoxGeometry(0.06, 0.08, BW + 0.3), accent, BX - 0.02, BY - BH / 2 - 0.16, 0);
+    const drop = P.y - GROUND; // down to the street
+    for (const z of [-BW * 0.32, BW * 0.32]) {
+      // a lattice column: four legs and cross bracing
+      for (const [dx, dz] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) {
+        add(new THREE.BoxGeometry(0.07, drop + BY, 0.07), steel, BX + 0.6 + dx, (BY - drop) / 2, z + dz);
       }
-      if (face && st.images.length) {
-        // the banner: this solution's work, one picture after another
-        const loader = new THREE.TextureLoader();
-        const texs = st.images.map((url) => {
-          // cropped to fill the board, not stretched to it
-          const t = loader.load(url, (tx) => {
-            const img = tx.image as { width: number; height: number };
-            const board = 4.2 / 1.46, a = img.width / img.height;
-            if (a < board) { tx.repeat.y = a / board; tx.offset.y = (1 - tx.repeat.y) / 2; }
-            else { tx.repeat.x = -board / a; tx.offset.x = (1 + board / a) / 2; }
-          });
-          t.colorSpace = THREE.SRGBColorSpace;
-          t.flipY = false;
-          t.wrapS = THREE.RepeatWrapping;
-          t.repeat.x = -1;
-          return t;
-        });
-        // held under the bloom, or a lit photograph blows out to white
-        const mat = new THREE.MeshBasicMaterial({ map: texs[0], toneMapped: false, side: THREE.DoubleSide, color: new THREE.Color(0.42, 0.42, 0.42) });
-        const m = new THREE.Mesh(face.geometry, mat);
-        m.position.y = lift;
-        sg.add(m);
-        banners.push({ mat, texs, i: 0, next: 3 + k });
+      for (let y = -drop; y < BY - 0.5; y += 0.9) {
+        const brace = add(new THREE.BoxGeometry(0.03, 0.03, 0.72), steel, BX + 0.6, y + 0.45, z);
+        brace.rotation.x = 0.9;
       }
     }
+    add(new THREE.BoxGeometry(0.7, 0.05, BW + 0.2), steel, BX - 0.35, 0.55, 0); // the catwalk
+    add(new THREE.BoxGeometry(0.03, 0.4, BW + 0.2), steel, BX - 0.7, 0.77, 0);  // its rail
+    for (let i = 0; i < 4; i++) {
+      // spotlight arms from the top, leaning out over the screen
+      const z = -BW * 0.375 + i * BW * 0.25;
+      add(new THREE.BoxGeometry(0.9, 0.04, 0.04), steel, BX - 0.45, BY + BH / 2 + 0.25, z);
+      const lamp = add(new THREE.CylinderGeometry(0.09, 0.14, 0.22, 10), new THREE.MeshBasicMaterial({ color: '#fff4dc' }), BX - 0.9, BY + BH / 2 + 0.18, z);
+      lamp.rotation.z = -0.6;
+    }
+    // the screen: the photograph, its channel and its name, composed on a canvas
+    const compose = (img: HTMLImageElement | null) => {
+      const c = document.createElement('canvas');
+      c.width = 1600; c.height = Math.round(1600 * BH / BW);
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#07060e'; g.fillRect(0, 0, c.width, c.height);
+      if (img) {
+        const sc = Math.max(c.width / img.width, c.height / img.height);
+        g.drawImage(img, (c.width - img.width * sc) / 2, (c.height - img.height * sc) / 2, img.width * sc, img.height * sc);
+      }
+      // the name is in the copy beside it; the board carries only the picture and its channel
+      g.fillStyle = 'rgba(5,5,10,0.78)'; g.fillRect(50, 50, 230, 74);
+      g.fillStyle = st.colors[1]; g.font = '500 44px ui-monospace, Menlo, monospace';
+      g.fillText(`CH ${String(k + 1).padStart(2, '0')}`, 72, 104);
+      g.fillStyle = st.colors[0]; g.fillRect(50, c.height - 30, c.width - 100, 8);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    const first = compose(null);
+    const screenMat = new THREE.MeshBasicMaterial({ map: first, toneMapped: false, color: new THREE.Color(0.42, 0.42, 0.42) });
+    const screen = add(new THREE.PlaneGeometry(BW, BH), screenMat, BX - 0.01, BY, 0);
+    screen.rotation.y = -Math.PI / 2; // facing the track
+    const texs: THREE.Texture[] = [first];
+    const [photo, ...work] = st.images;
+    if (photo) {
+      const im = new Image();
+      im.onload = () => { texs[0] = compose(im); if (screenMat.map === first) screenMat.map = texs[0]; };
+      im.src = photo;
+    }
+    const loader = new THREE.TextureLoader();
+    for (const url of work) {
+      const t = loader.load(url);
+      t.colorSpace = THREE.SRGBColorSpace;
+      texs.push(t);
+    }
+    banners.push({ mat: screenMat, texs, i: 0, next: 5 + k });
     sg.scale.set(1, 0.001, 1);
     group.add(sg);
     stationBuildings.push(sg);
@@ -637,7 +669,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       if (time > b.next && b.texs.length > 1) {
         b.i = (b.i + 1) % b.texs.length;
         b.mat.map = b.texs[b.i];
-        b.next = time + 4;
+        b.next = time + (b.i === 0 ? 6 : 3.5); // the photograph holds longer than the work
       }
     }
     station.build(stationBuild, time);
