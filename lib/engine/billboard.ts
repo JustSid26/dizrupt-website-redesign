@@ -52,6 +52,12 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
     snow.width = 200;
     snow.height = Math.max(1, Math.round(200 / aspect));
     const k = W / innerWidth;
+    /* Measured against the landing's own frame, not the window: once you have scrolled on, the
+       landing sits above the screen, and reading it against the window put every letter off the
+       board — which is why it went blank. */
+    const pin = document.querySelector('.intro-pin')?.getBoundingClientRect();
+    const ox = pin?.left ?? 0, oy = pin?.top ?? 0;
+    if (pin && pin.height < 10) return; // not laid out: keep what we have
     glyphs = [];
     document.querySelectorAll<HTMLElement>('#intro-word .char').forEach((el) => {
       const r = el.getBoundingClientRect();
@@ -59,8 +65,8 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
       const flip = !!el.closest('.flip');
       glyphs.push({
         text: el.dataset.char ?? el.textContent ?? '',
-        x: (r.left + r.width / 2) * k,
-        y: r.top * k,
+        x: (r.left - ox + r.width / 2) * k,
+        y: (r.top - oy) * k,
         font: `${cs.fontWeight} ${parseFloat(cs.fontSize) * k}px ${cs.fontFamily}`,
         color: flip ? '#a310e7' : '#ffffff',
         flip,
@@ -77,7 +83,7 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
         range.setStart(node, i);
         range.setEnd(node, i + word.length);
         const r = range.getBoundingClientRect();
-        glyphs.push({ text: word, x: (r.left + r.width / 2) * k, y: r.top * k, font: `${cs.fontWeight} ${parseFloat(cs.fontSize) * k}px ${cs.fontFamily}`, color: 'rgba(255,255,255,0.55)' });
+        glyphs.push({ text: word, x: (r.left - ox + r.width / 2) * k, y: (r.top - oy) * k, font: `${cs.fontWeight} ${parseFloat(cs.fontSize) * k}px ${cs.fontFamily}`, color: 'rgba(255,255,255,0.55)' });
         i += word.length + 1;
       }
     }

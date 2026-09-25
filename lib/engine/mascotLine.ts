@@ -706,6 +706,50 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       sg.add(base);
       addM(new RoundedSlab(D, T, W, 0.25), alu, 0, 0, 0, base);
       addM(new THREE.BoxGeometry(D * 0.36, 0.02, W * 0.78), black, 0.35, T / 2 + 0.005, 0, base);
+      // the keyboard, backlit: black keys in rows, each legend glowing white and a soft spill round the caps
+      {
+        const kc = document.createElement('canvas');
+        kc.width = 1560; kc.height = 520;
+        const kx = kc.getContext('2d')!;
+        kx.fillStyle = '#050507'; kx.fillRect(0, 0, kc.width, kc.height);
+        const rows = [
+          ['esc', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', '⏻'],
+          ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '⌫'],
+          ['⇥', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
+          ['⇪', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', "'", '↩'],
+          ['⇧', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '⇧'],
+          ['fn', '⌃', '⌥', '⌘', ' ', '⌘', '⌥', '◀', '▲▼', '▶'],
+        ];
+        const gap = 10, rowH = (kc.height - gap * 7) / 6;
+        rows.forEach((row, r) => {
+          // widths: the space bar and the edge keys run wider, like the real board
+          const wts = row.map((k) => (k === ' ' ? 5.2 : ['⌫', '⇥', '⇪', '↩', '⇧'].includes(k) ? 1.7 : 1));
+          const total = wts.reduce((a, b) => a + b, 0);
+          const unit = (kc.width - gap * (row.length + 1)) / total;
+          let x = gap;
+          const y = gap + r * (rowH + gap);
+          const h = r === 0 ? rowH * 0.7 : rowH;
+          row.forEach((k, i) => {
+            const w = wts[i] * unit;
+            kx.shadowColor = 'rgba(235,240,255,0.55)'; kx.shadowBlur = 14; // the backlight spilling round each cap
+            kx.fillStyle = '#101014';
+            kx.beginPath(); kx.roundRect(x, y, w, h, 8); kx.fill();
+            kx.shadowBlur = 10; kx.shadowColor = 'rgba(255,255,255,0.9)';
+            kx.fillStyle = '#f4f6ff';
+            kx.font = `500 ${k.length > 2 ? 22 : 34}px system-ui, sans-serif`;
+            kx.textAlign = 'center'; kx.textBaseline = 'middle';
+            kx.fillText(k, x + w / 2, y + h / 2);
+            x += w + gap;
+          });
+        });
+        const ktex = new THREE.CanvasTexture(kc);
+        ktex.colorSpace = THREE.SRGBColorSpace;
+        const keys = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.76, D * 0.34), new THREE.MeshBasicMaterial({ map: ktex, toneMapped: false, color: new THREE.Color(0.75, 0.75, 0.75) }));
+        // lie flat in the well, rows running along the hinge, the top row nearest it
+        keys.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
+        keys.position.set(0.35, T / 2 + 0.017, 0);
+        base.add(keys);
+      }
       addM(new THREE.BoxGeometry(D * 0.3, 0.015, W * 0.38), aluDark, -D * 0.3, T / 2 + 0.004, 0, base);
       for (const z of [-W * 0.44, W * 0.44]) addM(new THREE.BoxGeometry(D * 0.36, 0.015, 0.22), aluDark, 0.35, T / 2 + 0.004, z, base);
       // the lid, hinged at the back edge, opened a little past upright, leaning away from the track
