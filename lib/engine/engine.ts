@@ -318,7 +318,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       v.set(x, y, z).applyMatrix4(pnl.m);
       arr[i * 3] = v.x; arr[i * 3 + 1] = v.y; arr[i * 3 + 2] = v.z;
     }
-    field.register('stats', new THREE.BufferAttribute(arr, 3));
+    const attr = new THREE.BufferAttribute(arr, 3) as THREE.BufferAttribute & { edge?: THREE.BufferAttribute };
+    // the same particles carry his rim light while they are still leaving him
+    attr.edge = field.shape('mascot:full').edge;
+    field.register('stats', attr);
   }
   buildStatWindows();
   addEventListener('resize', () => { if (key !== 'stats') buildStatWindows(); });
@@ -462,7 +465,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const lit = isMascot ? Math.min(u.uProgress.value, 1) : 0;
     const headOn = key === 'mascot:full' || scrubbing ? 0 : lit;
     u.uHeadOn.value = damp(u.uHeadOn.value, headOn, 4, dt);
-    u.uAurora.value = damp(u.uAurora.value, isMascot ? 1 : 0, 4, dt);
+    // coming apart into the windows, his light fades with the scroll rather than switching off
+    if (scrubbing) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);
+    else u.uAurora.value = damp(u.uAurora.value, isMascot ? 1 : 0, 4, dt);
 
     // he looks at the count as it arrives, and at you the rest of the time — on a spring
     const p = signals.pointer;
