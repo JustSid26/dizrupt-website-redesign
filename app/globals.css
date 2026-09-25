@@ -1159,3 +1159,117 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .sol-card-meta { display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; }
 .sol-card-meta strong { font-family: var(--display); font-weight: 700; font-stretch: 80%; text-transform: uppercase; font-size: 20px; }
 .sol-card-meta span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; color: var(--ink-dim); text-align: right; }
+
+/* =========== the Mac at the Tech & Automation stop (ported from the portfolio's skills Mac) =========== */
+/* ───────────────────────── macOS skills window ───────────────────────── */
+.mac-layer {
+  position: fixed; inset: 0; z-index: 105; display: none;
+  place-items: center; background: rgb(3 6 12 / 0.45); backdrop-filter: blur(4px);
+}
+.mac-layer[data-open] { display: grid; }
+.mac-desktop {
+  position: relative; width: min(1040px, 92vw); aspect-ratio: 16 / 10; max-height: 86svh;
+  border-radius: 14px; overflow: hidden; transform-origin: 50% 50%;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter Tight", system-ui, sans-serif;
+  letter-spacing: 0; text-transform: none; color: #1d1d1f;
+  background:
+    radial-gradient(120% 80% at 20% 110%, #f39c7a 0%, transparent 55%),
+    radial-gradient(90% 70% at 90% 0%, #7a5cff 0%, transparent 60%),
+    linear-gradient(160deg, #2a1f5c, #b0527a 60%, #f6a86b);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 40px 120px rgb(0 0 0 / 0.6);
+}
+.mac-menubar {
+  height: 26px; display: flex; align-items: center; gap: 18px; padding: 0 14px;
+  font-size: 13px; color: #fff; background: rgb(20 16 40 / 0.35); backdrop-filter: blur(20px);
+}
+.mac-apple { width: 12px; height: 14px; background: #fff; border-radius: 50% 50% 45% 45%; }
+.mac-menubar-right { margin-left: auto; }
+.mac-window {
+  position: absolute; left: 7%; right: 7%; top: 11%; bottom: 20%;
+  border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+  background: rgb(246 246 248 / 0.92); backdrop-filter: blur(30px);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12), 0 24px 60px rgb(0 0 0 / 0.35);
+}
+.mac-titlebar { height: 38px; flex: none; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid rgb(0 0 0 / 0.08); position: relative; }
+.mac-lights { display: flex; gap: 8px; }
+.mac-lights > * { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.mac-lights .mac-close { background: #ff5f57; }
+.mac-lights i:nth-child(2) { background: #febc2e; }
+.mac-lights i:nth-child(3) { background: #28c840; }
+.mac-close:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
+.mac-title { position: absolute; left: 50%; translate: -50% 0; font-size: 13px; font-weight: 600; color: #4a4a50; }
+.mac-body { flex: 1; display: grid; grid-template-columns: 170px 1fr; min-height: 0; }
+.mac-sidebar { padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; background: rgb(232 232 237 / 0.7); border-right: 1px solid rgb(0 0 0 / 0.06); }
+.mac-sidebar p { font-size: 11px; font-weight: 600; color: #8a8a90; padding: 0 8px 6px; }
+.mac-sidebar button { text-align: left; font-size: 13px; padding: 5px 8px; border-radius: 6px; color: #1d1d1f; }
+.mac-sidebar button[aria-pressed="true"] { background: rgb(0 0 0 / 0.08); font-weight: 600; }
+.mac-grid {
+  list-style: none; padding: 22px; overflow: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 18px 10px; align-content: start;
+}
+.mac-app { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mac-icon {
+  width: 64px; height: 64px; border-radius: 15px; display: grid; place-items: center;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06), 0 4px 10px rgb(0 0 0 / 0.18);
+}
+.mac-icon svg { width: 60%; height: 60%; }
+.mac-label { font-size: 12px; color: #1d1d1f; }
+.mac-dock {
+  position: absolute; left: 50%; bottom: 3.5%; translate: -50% 0;
+  display: flex; gap: 8px; padding: 8px; border-radius: 18px;
+  background: rgb(255 255 255 / 0.22); backdrop-filter: blur(20px); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3);
+}
+.mac-dock .mac-icon { width: 46px; height: 46px; border-radius: 11px; }
+@media (max-width: 767px) {
+  .mac-desktop { aspect-ratio: auto; height: 78svh; }
+  .mac-window { left: 4%; right: 4%; top: 7%; bottom: 16%; }
+  .mac-body { grid-template-columns: 1fr; }
+  .mac-sidebar { flex-direction: row; overflow-x: auto; padding: 8px; }
+  .mac-sidebar p { display: none; }
+  .mac-grid { grid-template-columns: repeat(3, 1fr); }
+  .mac-dock .mac-icon { width: 34px; height: 34px; }
+}
+/* wallpaper + Spotlight */
+.mac-desktop {
+  background: radial-gradient(120% 90% at 20% 10%, #4b1b8f 0%, #1a0b36 45%, #07060e 100%);
+}
+.mac-window[hidden] { display: none; }
+.mac-spotlight {
+  position: absolute; left: 50%; top: 24%; translate: -50% 0; width: min(560px, 80%);
+  border-radius: 14px; overflow: hidden;
+  background: rgb(236 236 240 / 0.78); backdrop-filter: blur(30px) saturate(1.4);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.4), 0 24px 60px rgb(0 0 0 / 0.45);
+  animation: spot-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes spot-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+.mac-spot-bar { display: flex; align-items: center; gap: 12px; padding: 14px 18px; color: #3c3c43; }
+.mac-spot-bar svg { width: 24px; height: 24px; flex: none; }
+.mac-spot-text { font-size: 24px; font-weight: 400; color: #1d1d1f; display: flex; align-items: center; }
+.mac-spot-ph { color: #8e8e93; }
+.mac-caret { display: inline-block; width: 2px; height: 26px; margin-left: 2px; background: #0a84ff; animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.mac-spot-results { border-top: 1px solid rgb(0 0 0 / 0.08); padding: 8px; }
+.mac-spot-results p { font-size: 11px; font-weight: 600; color: #8e8e93; padding: 2px 10px 6px; }
+.mac-spot-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; transition: background 0.2s; }
+.mac-spot-row[data-active] { background: #0a84ff; color: #fff; }
+.mac-spot-row strong { display: block; font-size: 15px; }
+.mac-spot-row small { font-size: 12px; opacity: 0.7; }
+.mac-folder { width: 34px; height: 26px; border-radius: 4px; background: linear-gradient(#74c0fc, #339af0); position: relative; }
+.mac-folder::before { content: ""; position: absolute; left: 2px; top: -5px; width: 14px; height: 7px; border-radius: 3px 3px 0 0; background: #74c0fc; }
+.mac-layer { z-index: 150; }
+.mac-desktop::after { content: "DIZRUPT"; position: absolute; left: 50%; top: 50%; translate: -50% -50%; font-family: var(--sans); font-weight: 600; font-size: clamp(60px, 10vw, 150px); letter-spacing: -0.02em; color: rgba(255, 255, 255, 0.06); pointer-events: none; z-index: 0; }
+.mac-desktop > * { position: relative; z-index: 1; }
+/* files */
+.mac-files { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 18px; padding: 18px; align-content: start; overflow-y: auto; }
+.mac-file { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 6px; border-radius: 8px; text-align: center; cursor: pointer; background: none; border: 0; color: inherit; font: inherit; }
+.mac-file:hover, .mac-file:focus-visible { background: rgba(10, 132, 255, 0.22); outline: none; }
+.mac-file-icon { position: relative; width: 64px; height: 50px; border-radius: 6px; overflow: hidden; background: #111; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+.mac-file-icon img, .mac-file-icon video { width: 100%; height: 100%; object-fit: cover; }
+.mac-file-icon::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 16px; text-shadow: 0 1px 4px #000; }
+.mac-file-name { font-size: 12px; line-height: 1.25; word-break: break-word; }
+.mac-file-kind { font-size: 10px; opacity: 0.55; }
+/* the player */
+.mac-player { position: absolute; inset: 8% 10%; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,0.6); z-index: 5; }
+.mac-player .mac-titlebar { background: #232327; }
+.mac-player video { flex: 1; width: 100%; min-height: 0; background: #000; }
+.mac-player-empty { flex: 1; display: grid; place-items: center; font-size: 14px; color: rgba(255,255,255,0.6); text-align: center; padding: 24px; }

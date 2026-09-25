@@ -314,6 +314,21 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
   return { group, build };
 }
 
+/** A box with rounded edges round its long sides (a laptop's slab). */
+class RoundedSlab extends THREE.ExtrudeGeometry {
+  constructor(w: number, h: number, d: number, r: number) {
+    const shape = new THREE.Shape();
+    const x = -w / 2, y = -h / 2, rr = Math.min(r, w / 2, h / 2);
+    shape.moveTo(x + rr, y);
+    shape.lineTo(x + w - rr, y); shape.quadraticCurveTo(x + w, y, x + w, y + rr);
+    shape.lineTo(x + w, y + h - rr); shape.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    shape.lineTo(x + rr, y + h); shape.quadraticCurveTo(x, y + h, x, y + h - rr);
+    shape.lineTo(x, y + rr); shape.quadraticCurveTo(x, y, x + rr, y);
+    super(shape, { depth: d, bevelEnabled: false, curveSegments: 6 });
+    this.translate(0, 0, -d / 2);
+  }
+}
+
 function signTexture(n: number, name: string, colors: [string, string]) {
   const c = document.createElement('canvas');
   c.width = 1024;
@@ -517,6 +532,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     /* A billboard beside the line, the way they stand over Times Square: a steel frame on lattice
        columns down to the street, a catwalk, spotlights leaning out over the screen. The screen
        shows the solution's photograph with its channel and name, then the work that proves it. */
+    if (k !== 6) {
     const BW = 8, BH = 3.3, BX = 3.4, BY = BH / 2 + 0.6; // local: +x away from the track, +z along it
     const steel = new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
     const accent = new THREE.MeshStandardMaterial({ color: st.colors[0], roughness: 0.4, metalness: 0.3, emissive: st.colors[0], emissiveIntensity: 0.6 });
@@ -587,6 +603,70 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       texs.push(t);
     }
     banners.push({ mat: screenMat, texs, i: 0, next: 5 + k });
+    } else {
+      /* Tech & Automation: a silver MacBook Pro, giant, standing open beside the line on a steel
+         deck, its screen a macOS desktop with the projects folder on it. Clicking it opens the Mac. */
+      const steel = new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
+      const alu = new THREE.MeshStandardMaterial({ color: '#c9ccd2', roughness: 0.28, metalness: 0.9 });
+      const aluDark = new THREE.MeshStandardMaterial({ color: '#8e929a', roughness: 0.35, metalness: 0.85 });
+      const black = new THREE.MeshStandardMaterial({ color: '#0b0b0e', roughness: 0.5, metalness: 0.2 });
+      const W = 7.2, D = 5.0, T = 0.26, CX = 4.2, Y0 = 0.35; // base: across the track (x), along it (z)
+      const addM = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = sg) => {
+        const mesh = new THREE.Mesh(geo, m);
+        mesh.position.set(x, y, z);
+        parent.add(mesh);
+        return mesh;
+      };
+      // the deck it stands on, down to the street on lattice legs
+      addM(new THREE.BoxGeometry(D + 1.2, 0.18, W + 1.2), steel, CX, Y0 - 0.1, 0);
+      const drop = P.y - GROUND;
+      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) addM(new THREE.BoxGeometry(0.12, drop + Y0, 0.12), steel, CX + dx * D * 0.42, (Y0 - drop) / 2, dz * W * 0.42);
+      // the base: aluminium slab, black keyboard well, trackpad, speaker grilles
+      const base = new THREE.Group();
+      base.position.set(CX, Y0 + T / 2, 0);
+      sg.add(base);
+      addM(new RoundedSlab(D, T, W, 0.25), alu, 0, 0, 0, base);
+      addM(new THREE.BoxGeometry(D * 0.36, 0.02, W * 0.78), black, 0.35, T / 2 + 0.005, 0, base);
+      addM(new THREE.BoxGeometry(D * 0.3, 0.015, W * 0.38), aluDark, -D * 0.3, T / 2 + 0.004, 0, base);
+      for (const z of [-W * 0.44, W * 0.44]) addM(new THREE.BoxGeometry(D * 0.36, 0.015, 0.22), aluDark, 0.35, T / 2 + 0.004, z, base);
+      // the lid, hinged at the back edge, opened a little past upright, leaning away from the track
+      const hinge = new THREE.Group();
+      hinge.position.set(CX + D / 2, Y0 + T, 0);
+      hinge.rotation.z = -0.28;
+      sg.add(hinge);
+      const LH = D * 0.94;
+      addM(new RoundedSlab(0.16, LH, W, 0.25), alu, 0.08, LH / 2, 0, hinge);
+      addM(new THREE.BoxGeometry(0.02, LH - 0.1, W - 0.1), black, -0.005, LH / 2, 0, hinge); // the bezel
+      // the screen: a macOS desktop, the projects folder on it
+      const c = document.createElement('canvas');
+      c.width = 1600; c.height = Math.round(1600 * (LH - 0.34) / (W - 0.3));
+      const g = c.getContext('2d')!;
+      const bg = g.createRadialGradient(c.width * 0.2, c.height * 0.1, 0, c.width * 0.2, c.height * 0.1, c.width);
+      bg.addColorStop(0, '#4b1b8f'); bg.addColorStop(0.45, '#1a0b36'); bg.addColorStop(1, '#07060e');
+      g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height);
+      g.fillStyle = 'rgba(255,255,255,0.07)'; g.font = '600 260px "Inter Tight", system-ui, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('DIZRUPT', c.width / 2, c.height / 2);
+      g.fillStyle = 'rgba(20,20,26,0.8)'; g.fillRect(0, 0, c.width, 44);
+      g.fillStyle = '#fff'; g.font = '600 26px system-ui, sans-serif'; g.textAlign = 'left';
+      g.fillText('  Finder   File   Edit   View', 20, 24);
+      // the folder, and a label under it
+      const fx = c.width / 2 - 120, fy = c.height / 2 - 110;
+      g.fillStyle = '#74c0fc'; g.fillRect(fx, fy - 26, 100, 40);
+      const fg = g.createLinearGradient(0, fy, 0, fy + 180); fg.addColorStop(0, '#74c0fc'); fg.addColorStop(1, '#339af0');
+      g.fillStyle = fg; g.fillRect(fx, fy, 240, 180);
+      g.fillStyle = '#fff'; g.font = '600 40px system-ui, sans-serif'; g.textAlign = 'center';
+      g.fillText('projects', c.width / 2, fy + 240);
+      g.fillStyle = 'rgba(255,255,255,0.55)'; g.font = '500 28px system-ui, sans-serif';
+      g.fillText('click to open', c.width / 2, fy + 290);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const screenMat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.55, 0.55, 0.55) });
+      const screen = addM(new THREE.PlaneGeometry(W - 0.3, LH - 0.34), screenMat, -0.02, LH / 2 + 0.05, 0, hinge);
+      screen.rotation.y = -Math.PI / 2; // facing the track
+      // the notch
+      addM(new THREE.BoxGeometry(0.02, 0.16, 0.7), black, -0.03, LH - 0.13, 0, hinge);
+      screens.push(screen);
+    }
     sg.scale.set(1, 0.001, 1);
     group.add(sg);
     stationBuildings.push(sg);

@@ -5,6 +5,7 @@ type State = {
   reducedMotion: boolean;
   menuOpen: boolean;
   mode: 'dusk' | 'night';
+  macOpen: boolean; // the Mac at the Tech & Automation stop
   set: (partial: Partial<Omit<State, 'set'>>) => void;
 };
 
@@ -13,5 +14,6 @@ export const useStore = create<State>((set) => ({
   reducedMotion: false,
   menuOpen: false,
   mode: 'dusk',
+  macOpen: false,
   set: (partial) => set(partial),
 }));
