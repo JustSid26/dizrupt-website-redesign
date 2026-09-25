@@ -7,6 +7,7 @@ import { site } from "@/content/site";
 import { MumbaiClock } from "@/components/ui/MumbaiClock";
 import { useSection } from "@/components/home/useSection";
 import { goToSection } from "@/lib/sections";
+import { SocialTowers } from "@/components/home/SocialTowers";
 
 /* Contact. Scrolling on past the last card hands over: the cards drift off, the particles gather
    back into him on the left — he sees you out — and the page comes up on the right. Every frame of
@@ -73,6 +74,7 @@ export function Contact() {
   const c = site.contact;
   return (
     <section ref={section} id="contact" aria-label="Contact" style={{ height: "200svh" }}>
+      <SocialTowers />
       <div ref={pane} className="contact-pin">
         <div className="contact-inner">
           <p className="eyebrow">

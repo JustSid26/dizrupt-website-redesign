@@ -1272,3 +1272,17 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .mac-player .mac-titlebar { background: #232327; }
 .mac-player video { flex: 1; width: 100%; min-height: 0; background: #000; }
 .mac-player-empty { flex: 1; display: grid; place-items: center; font-size: 14px; color: rgba(255,255,255,0.6); text-align: center; padding: 24px; }
+
+/* the social skyscrapers' signs are links */
+.tower-link { position: fixed; left: 0; top: 0; z-index: 9; visibility: hidden; border-radius: 4px; transform-origin: 0 0; transition: box-shadow 0.3s; }
+.tower-link:hover, .tower-link:focus-visible { box-shadow: 0 0 0 2px var(--c), 0 0 30px var(--c); outline: none; }
+.tower-link span {
+  position: absolute; left: 50%; top: 100%; translate: -50% 10px; white-space: nowrap;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 6px 10px; border-radius: 999px; background: rgba(5, 5, 9, 0.75); border: 1px solid var(--c);
+  opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.tower-link:hover span, .tower-link:focus-visible span { opacity: 1; }
+
+/* at contact the city is the picture: the pane is a light veil, not a wall */
+.contact-pin { background: linear-gradient(90deg, transparent 0%, transparent 50%, rgba(5, 5, 7, 0.35) 68%, rgba(5, 5, 7, 0.55) 100%) !important; }

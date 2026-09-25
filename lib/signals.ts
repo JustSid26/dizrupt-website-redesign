@@ -33,6 +33,8 @@ export const signals = {
   billboardHit: { x: 0, y: 0, w: 0, h: 0, on: false, index: -1 },
   rideTarget: null as number | null, // the stop a swipe sent the train to (null: follow the scroll)
   rideS: 0, // where the train actually is (it drives itself towards trainS)
+  // the social skyscrapers' logos on screen at contact (the engine writes them, SocialTowers links them)
+  socials: Array.from({ length: 5 }, () => ({ x: 0, y: 0, w: 0, h: 0, on: false })),
   night: 0, // 0 blue hour, 1 full night (the nav's switch)
   ready: false, // the engine has built everything it needs
 };

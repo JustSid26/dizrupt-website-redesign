@@ -17,6 +17,7 @@ import { signals } from '@/lib/signals';
 import { clients, slugOf, type Project } from '@/content/projects';
 import { SOLUTIONS } from '@/content/solutions';
 import { BANNERS } from '@/content/banners';
+import { SOCIALS } from '@/content/socials';
 
 /* =========================================================
    The engine: one canvas behind the whole site.
@@ -35,8 +36,6 @@ export type EngineOptions = {
 };
 
 const MASCOT_COLORS: [string, string] = ['#c9b8ff', '#6f4dff'];
-const CONTACT_SHIFT = 2.15;
-const CONTACT_YAW = 0.42;
 const CASE_SHIFT = 2.35;
 const MENU_SHIFT = 2.95;
 const HEAD_TURN = 1.9; // reading the count: slow, and it takes a moment to get going
@@ -222,6 +221,67 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const stationCamPos = line.stationAt.clone().add(new THREE.Vector3(-10.5, 5.6, 1.5));
   const stationCamLook = line.stationAt.clone().add(new THREE.Vector3(0, 2.2, 6));
   const aerialLook = new THREE.Vector3(0, GROUND + 12, 0);
+
+  /* ---------- the social skyscrapers: the tallest towers facing the city view carry the studio's
+     links as lit signs near their tops (clickable at contact, see SocialTowers.tsx) ---------- */
+  const socialSigns: THREE.Mesh[] = [];
+  if (cityModel) {
+    // each building's footprint and height, from the model's per-vertex building data
+    const g = (cityModel as unknown as { city: THREE.BufferGeometry }).city;
+    const pos = g.attributes.position, uvA = g.attributes.uv, u1 = g.attributes.uv1;
+    const blds = new Map<string, { cx: number; cz: number; h: number; maxZ: number; minX: number; maxX: number }>();
+    for (let i = 0; i < pos.count; i++) {
+      const cx = uvA.getX(i), cz = 1 - uvA.getY(i);
+      const key = `${cx.toFixed(2)},${cz.toFixed(2)}`;
+      const b = blds.get(key) ?? { cx, cz, h: u1.getX(i), maxZ: -1e9, minX: 1e9, maxX: -1e9 };
+      // only the tower's own upper part decides its face (not a podium)
+      if (pos.getY(i) > b.h * 0.6) { b.maxZ = Math.max(b.maxZ, pos.getZ(i)); b.minX = Math.min(b.minX, pos.getX(i)); b.maxX = Math.max(b.maxX, pos.getX(i)); }
+      blds.set(key, b);
+    }
+    // tall, in front of the plaza from the camera's side, spread across the view
+    const candidates = [...blds.values()].filter((b) => b.h > 11 && b.cz > -26 && b.cz < 8 && Math.abs(b.cx) < 34 && b.maxZ > -1e8 && Math.hypot(b.cx, b.cz) > 13);
+    candidates.sort((a, b) => a.cx - b.cx);
+    const picks: typeof candidates = [];
+    const n = SOCIALS.length;
+    for (let k = 0; k < n; k++) {
+      const want = -30 + (60 * (k + 0.5)) / n;
+      const best = candidates.filter((c) => !picks.includes(c)).sort((a, b) => Math.abs(a.cx - want) - Math.abs(b.cx - want) + (b.h - a.h) * 0.08)[0];
+      if (best) picks.push(best);
+    }
+    picks.sort((a, b) => a.cx - b.cx);
+    picks.forEach((b, k) => {
+      const soc = SOCIALS[k];
+      const c = document.createElement('canvas');
+      c.width = c.height = 512;
+      const x = c.getContext('2d')!;
+      x.fillStyle = '#07070c'; x.fillRect(0, 0, 512, 512);
+      x.strokeStyle = soc.color; x.lineWidth = 14; x.strokeRect(20, 20, 472, 472);
+      x.fillStyle = soc.color === '#ffffff' ? '#ffffff' : soc.color;
+      if (soc.path) {
+        x.save(); x.translate(106, 106); x.scale(300 / 24, 300 / 24);
+        x.fill(new Path2D(soc.path)); x.restore();
+      } else if (soc.mark === 'in') {
+        x.beginPath();
+        x.moveTo(146, 106); x.arcTo(406, 106, 406, 406, 40); x.arcTo(406, 406, 106, 406, 40); x.arcTo(106, 406, 106, 106, 40); x.arcTo(106, 106, 406, 106, 40);
+        x.closePath(); x.fill();
+        x.fillStyle = '#fff'; x.font = '800 200px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.fillText('in', 262, 270);
+      } else {
+        x.lineWidth = 22; x.strokeStyle = soc.color; x.lineJoin = 'round';
+        x.strokeRect(96, 146, 320, 220);
+        x.beginPath(); x.moveTo(96, 146); x.lineTo(256, 276); x.lineTo(416, 146); x.stroke();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const w = Math.min(4.8, Math.max(2.8, (b.maxX - b.minX) * 1.1)); // big enough to read and click from the city view
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.8, 0.8, 0.8), depthTest: false }));
+      sign.renderOrder = 60; // never hidden behind a nearer tower: every link stays in view
+      sign.position.set(b.cx, GROUND + b.h * 0.78, b.maxZ + 0.08);
+      sign.visible = false;
+      scene.add(sign);
+      socialSigns.push(sign);
+    });
+  }
   billboard.measure();
 
   /* The landing's camera move. It starts square on to the board at the distance where the board
@@ -424,7 +484,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     } else if (section === 'projects') {
       want = key; // hidden: its particles are out being the cards
     } else {
-      want = 'mascot:neutral'; // he sees you out
+      want = 'mascot:full'; // back where he began, head to toe on his plinth
     }
     // coming apart into the windows is scrubbed by the scroll, as the camera flies in
     const gather = section === 'intro' && !view && !preview
@@ -495,10 +555,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       sc = 1;
       rot = 0;
     } else {
-      tx = isMobile ? 0 : -CONTACT_SHIFT;
-      ty = isMobile ? 1.35 : BUST_DROP;
-      sc = isMobile ? 0.5 : 0.92;
-      rot = isMobile ? 0 : CONTACT_YAW;
+      tx = 0;
+      ty = BUST_DROP;
+      sc = 1;
+      rot = 0;
     }
     const riding = key === 'train' && !view && !preview;
     /* The train drives itself: the scroll only says which stop it is heading for, and it gets there
@@ -647,6 +707,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.position.x += p.x * 0.35 * lean;
       camera.position.y += p.y * 0.2 * lean;
       camera.lookAt(camLook);
+    } else if (section === 'contact' && !view && !preview) {
+      // back to the view the city was first seen from
+      const k = smooth(0, 0.8, s.contact);
+      camPos.set(0, 0, CAMERA_Z).lerp(aerialPos, k);
+      camLook.set(0, 0, 0).lerp(aerialLook, k);
+      camera.position.copy(camPos);
+      camera.position.x += p.x * 0.6;
+      camera.position.y += p.y * 0.4;
+      camera.lookAt(camLook);
     } else if ((section === 'solutions' || (onIntro && ride.s > 0.001)) && !view && !preview) {
       const sp = s.solutions;
       const a = 0, b = smooth(0.0, 0.35, ride.s); // leaves the station view as the train does
@@ -689,7 +758,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    cityDim = damp(cityDim, (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) ? 1 : view ? 0.15 : 0.35, 2, dt);
+    cityDim = damp(cityDim, (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     skyLight.intensity = 0.55 - 0.3 * night;
@@ -763,6 +832,23 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         }
         Object.assign(out, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
       }
+    }
+    {
+      const on = section === 'contact' && !view && s.contact > 0.6;
+      socialSigns.forEach((sign, i) => {
+        sign.visible = on || s.contact > 0.3;
+        const out = signals.socials[i];
+        out.on = on;
+        if (!on) return;
+        const g2 = (sign.geometry as THREE.PlaneGeometry).parameters;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          corner.set((cx * g2.width) / 2, (cy * g2.height) / 2, 0).applyMatrix4(sign.matrixWorld).project(camera);
+          const sx = (corner.x * 0.5 + 0.5) * innerWidth, sy = (-corner.y * 0.5 + 0.5) * innerHeight;
+          x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+        }
+        Object.assign(out, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+      });
     }
     composer.render();
   }
