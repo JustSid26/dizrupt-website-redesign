@@ -7,3 +7,7 @@ __pycache__/
 # Render output from the mascot pipeline (regenerable, ~57 MB)
 mascot3d/renders/
 mascot3d/claude/renders/
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
