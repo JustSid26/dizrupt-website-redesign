@@ -492,6 +492,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const stationBuildings: THREE.Group[] = [];
   const signs: THREE.Mesh[] = [];
   const banners: { mat: THREE.MeshBasicMaterial; texs: THREE.Texture[]; i: number; next: number }[] = [];
+  const liveBoards: ReturnType<typeof glitchBoard>[] = [];
   stations.forEach((st, k) => {
     const u = stops[k + 1];
     curve.getPointAt(u, P);
@@ -514,6 +515,13 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         if (o.name === `stop_${k}` || o.name === `stop_${k}_frame`) sg.add(o.clone());
       });
       const face = stopsModel.getObjectByName(`banner_${k}`) as THREE.Mesh | undefined;
+      if (face && !st.images.length) {
+        // no work to show yet: the board runs DIZRUPT with its glitching Z
+        const gb = glitchBoard();
+        gb.tex.repeat.x = 1;
+        sg.add(new THREE.Mesh(face.geometry, new THREE.MeshBasicMaterial({ map: gb.tex, toneMapped: false, side: THREE.DoubleSide })));
+        liveBoards.push(gb);
+      }
       if (face && st.images.length) {
         // the banner: this solution's work, one picture after another
         const loader = new THREE.TextureLoader();
@@ -613,6 +621,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   }
 
   function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1) {
+    if (reveal > 0.001) liveBoards.forEach((b) => b.draw(time));
     for (const b of banners) {
       if (time > b.next && b.texs.length > 1) {
         b.i = (b.i + 1) % b.texs.length;

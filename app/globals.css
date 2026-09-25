@@ -1029,7 +1029,7 @@ body:has(.case-page) .nav::before { opacity: 1; }
 .sol-proof { margin-top: 22px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }
 .sol-proof span { color: var(--dim); margin-right: 1em; }
 .sol-item.glitching .sol-title { filter: drop-shadow(6px 0 rgba(255, 45, 79, 0.8)) drop-shadow(-6px 0 rgba(47, 107, 255, 0.8)); transform: translateX(4px); }
-.sol-dial { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; list-style: none; max-width: 560px; }
+.sol-dial { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; list-style: none; max-width: 560px; }
 .sol-dial li { display: grid; gap: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--dim); }
 .sol-dial li[aria-current] { color: var(--fg); }
 .sol-dial-bar { order: -1; position: relative; height: 2px; background: var(--line); overflow: hidden; }

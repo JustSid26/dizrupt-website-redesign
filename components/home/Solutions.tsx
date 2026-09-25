@@ -101,9 +101,9 @@ export function Solutions() {
                 <p className="sol-desc" data-line style={i ? { opacity: 0 } : undefined}>
                   {s.line}
                 </p>
-                <p className="sol-proof" data-line style={i ? { opacity: 0 } : undefined}>
+{s.work && (<p className="sol-proof" data-line style={i ? { opacity: 0 } : undefined}>
                   <span>Proof</span> {s.work}
-                </p>
+                </p>)}
               </div>
             ))}
           </div>

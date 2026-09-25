@@ -334,6 +334,38 @@ export const SHAPES = {
     ], { edgeShare: 0.3, size: 4.2, euler: new THREE.Euler(0.2, 0.55, 0) });
   },
 
+  // Tech & Automation: a gear driving a smaller one, over a circuit board's traces and chip
+  gear(arr) {
+    const cog = (r: number, teeth: number, depth: number, th: number) => {
+      const shape = new THREE.Shape();
+      const n = teeth * 4;
+      for (let i = 0; i <= n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const rr = i % 4 < 2 ? r + depth : r;
+        const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+        if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+      }
+      const hole = new THREE.Path();
+      hole.absarc(0, 0, r * 0.35, 0, Math.PI * 2, true);
+      shape.holes.push(hole);
+      return new THREE.ExtrudeGeometry(shape, { depth: th, bevelEnabled: false, curveSegments: 4 }).translate(0, 0, -th / 2);
+    };
+    const big = cog(1.25, 12, 0.22, 0.32);
+    const small = cog(0.62, 8, 0.18, 0.28).rotateZ(0.2).translate(1.95, 0.95, 0.05);
+    const chip = new THREE.BoxGeometry(0.9, 0.9, 0.12).translate(-1.7, -1.3, -0.3);
+    const traces = [
+      tube([[-1.25, -1.3, -0.3], [-0.4, -1.3, -0.3], [0, -0.9, -0.3]], 0.035, 2),
+      tube([[-1.7, -0.85, -0.3], [-1.7, -0.3, -0.3], [-1.1, 0.3, -0.3]], 0.035, 2),
+      tube([[-2.15, -1.3, -0.3], [-2.6, -1.3, -0.3], [-2.6, 0.6, -0.3]], 0.035, 2),
+    ];
+    fromParts(arr, [
+      { geo: big, weight: 2.2 },
+      { geo: small, weight: 1.1 },
+      { geo: chip, weight: 0.7 },
+      ...traces,
+    ], { edgeShare: 0.35, size: 4.4, euler: new THREE.Euler(0.25, -0.5, 0) });
+  },
+
   // Furnfetch: a lounge armchair
   armchair(arr) {
     const legs = [[1, 1], [1, -1], [-1, 1], [-1, -1]]

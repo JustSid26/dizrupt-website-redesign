@@ -137,7 +137,7 @@ export function Menu() {
         </nav>
         <section className="menu-solutions" aria-labelledby="menu-sol-title">
           <p className="menu-label" id="menu-sol-title">
-            <span className="hud-no">06</span> Solutions
+            <span className="hud-no">{String(SOLUTIONS.length).padStart(2, "0")}</span> Solutions
           </p>
           <ol onPointerLeave={() => preview(-1)}>
             {SOLUTIONS.map((s, i) => (

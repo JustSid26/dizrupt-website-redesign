@@ -5,7 +5,7 @@ export const site = {
   profile: { mark: '// who', line: 'Solutions designed for what’s next.', body: 'A solutions-led full stack digital marketing agency, headquartered in Mumbai.' },
   stats: [
     { key: 'EST', to: '2023', suffix: '', label: 'founded in' },
-    { key: 'SOL', to: '06', suffix: '', label: 'solutions' },
+    { key: 'SOL', to: '07', suffix: '', label: 'solutions' },
     { key: 'GEO', to: '08', suffix: '+', label: 'countries' },
     { key: 'CLI', to: '25', suffix: '+', label: 'clients' },
   ],
