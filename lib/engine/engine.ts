@@ -255,7 +255,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // the mark alone, drawn in light: its colour lifted towards white, glowing round its edges
     const lit = new THREE.Color(soc.color).lerp(new THREE.Color(1, 1, 1), 0.35);
     const lc = `#${lit.getHexString()}`;
-    x.shadowColor = lc; x.shadowBlur = 28;
+    x.shadowColor = lc; x.shadowBlur = 6;
     x.save(); x.translate(56, 56); x.fillStyle = lc; x.strokeStyle = lc;
     if (soc.path) { x.scale(400 / 24, 400 / 24); x.fill(new Path2D(soc.path)); }
     else if (soc.mark === 'in') {
@@ -271,7 +271,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BWd, BHt), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(1.2, 1.2, 1.2), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BWd, BHt), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.55, 0.55, 0.55), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     mesh.position.set(sp.x, sp.y, 3);
     mesh.lookAt(aerialPos.x, sp.y, aerialPos.z);
     mesh.visible = false;
