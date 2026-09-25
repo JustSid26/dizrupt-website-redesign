@@ -511,8 +511,11 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     if (new THREE.Vector3(1, 0, 0).applyQuaternion(sg.quaternion).dot(out) > 0) sg.rotateY(Math.PI);
     // the station building, modelled in Blender (public/models/stops.glb), one per solution
     if (stopsModel) {
+      // the banner rides up on its frame to stand on the roof, above the train and clear of the canopy
+      const lift = k === 4 ? 3.9 : 2.5;
       stopsModel.traverse((o) => {
-        if (o.name === `stop_${k}` || o.name === `stop_${k}_frame`) sg.add(o.clone());
+        if (o.name === `stop_${k}`) sg.add(o.clone());
+        if (o.name === `stop_${k}_frame`) { const f = o.clone(); f.position.y += lift; sg.add(f); }
       });
       const face = stopsModel.getObjectByName(`banner_${k}`) as THREE.Mesh | undefined;
       if (face && !st.images.length) {
@@ -526,15 +529,23 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         // the banner: this solution's work, one picture after another
         const loader = new THREE.TextureLoader();
         const texs = st.images.map((url) => {
-          const t = loader.load(url);
+          // cropped to fill the board, not stretched to it
+          const t = loader.load(url, (tx) => {
+            const img = tx.image as { width: number; height: number };
+            const board = 4.2 / 1.46, a = img.width / img.height;
+            if (a < board) { tx.repeat.y = a / board; tx.offset.y = (1 - tx.repeat.y) / 2; }
+            else { tx.repeat.x = -board / a; tx.offset.x = (1 + board / a) / 2; }
+          });
           t.colorSpace = THREE.SRGBColorSpace;
           t.flipY = false;
           t.wrapS = THREE.RepeatWrapping;
           t.repeat.x = -1;
           return t;
         });
-        const mat = new THREE.MeshBasicMaterial({ map: texs[0], toneMapped: false, side: THREE.DoubleSide });
+        // held under the bloom, or a lit photograph blows out to white
+        const mat = new THREE.MeshBasicMaterial({ map: texs[0], toneMapped: false, side: THREE.DoubleSide, color: new THREE.Color(0.42, 0.42, 0.42) });
         const m = new THREE.Mesh(face.geometry, mat);
+        m.position.y = lift;
         sg.add(m);
         banners.push({ mat, texs, i: 0, next: 3 + k });
       }
@@ -642,12 +653,13 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       h.points.position.y = h.base.y + Math.sin(time * 0.8 + k) * 0.25;
       h.points.visible = reveal > stops[k + 1];
       // the station rises out of the ground as the line reaches it
-      const up = Math.min(1, Math.max(0.001, (reveal - stops[k + 1] + 0.07) / 0.035));
+      // it rises as the track reaches the near end of its platform, done by the time the track reaches its middle
+      const up = Math.min(1, Math.max(0.001, (reveal - (stops[k + 1] - 5 / LEN)) / (5 / LEN)));
       stationBuildings[k].scale.y = up * up * (3 - 2 * up);
       stationBuildings[k].visible = up > 0.002;
       signs[k].visible = false;
     });
   }
 
-  return { group, curve, stops, poseAt, update, color: VIOLET, stationAt: S };
+  return { group, curve, stops, poseAt, update, color: VIOLET, stationAt: S, length: LEN };
 }

@@ -171,13 +171,14 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     SOLUTIONS.map((sol) => ({
       name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors,
       // the banner at each station shows the work that proves it
-      images: sol.work.split('·').map((w) => w.trim().toLowerCase())
+      images: [sol.image, ...sol.work.split('·').map((w) => w.trim().toLowerCase())
         .map((w) => Object.entries(BANNERS).find(([title]) => title.toLowerCase().startsWith(w.split(' ')[0]))?.[1])
-        .filter((u): u is string => !!u),
+        .filter((u): u is string => !!u)],
     })),
     stationModel ?? new THREE.Group(), stopsModel);
   scene.add(line.group);
   const trainLocal = trainShape(trainModel);
+  const TRAIN_HALF = (() => { let m = 0; for (let i = 2; i < trainLocal.length; i += 3) m = Math.max(m, trainLocal[i]); return m; })(); // origin to the nose tip
   /* The real train. Its particles land on it first; then it is shown solid, swept in from its
      wheels to its roof, and they fade. It rides wherever the particles do. */
   const trainClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4);
@@ -635,11 +636,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camLook.copy(stationCamLook).lerp(aerialLook, a);
       // alongside the train, on the outside of the loop, a little behind and above it
       const flat = tmpDir.set(pose.dir.x, 0, pose.dir.z).normalize();
-      const out = tmpOut.set(pose.pos.x, 0, pose.pos.z);
-      if (out.lengthSq() < 4) out.set(flat.z, 0, -flat.x); // still in the plaza: off to its side
-      out.normalize();
-      const chase = tmpA.copy(pose.pos).addScaledVector(out, 9.5).addScaledVector(flat, -7).add(tmpUp.set(0, 4.5, 0));
-      const target = tmpB.copy(pose.pos).addScaledVector(flat, 3).add(tmpUp.set(0, 0.8, 0));
+      /* Beside the train: on the avenue that is its left (the side the station camera was on); out on
+         the loop it is the outside of the curve. Blended between the two by how far out it is. */
+      const r = Math.hypot(pose.pos.x, pose.pos.z);
+      const beside = tmpOut.set(-flat.z, 0, flat.x);
+      if (beside.x > 0) beside.negate();
+      const radial = tmpB.set(pose.pos.x, 0, pose.pos.z).normalize();
+      const out = beside.lerp(radial, smooth(33, 36, r)).normalize(); // only once it is on the loop itself
+      const chase = tmpA.copy(pose.pos).addScaledVector(out, 9).addScaledVector(flat, -5).add(tmpUp.set(0, 6, 0));
+      const target = tmpB.copy(pose.pos).addScaledVector(flat, 7).add(tmpUp.set(0, 1.2, 0)); // ahead, where the track is being laid
       // the copy is on the left: lean the view so the train sits right of centre
       const left = tmpUp.copy(target).sub(chase).normalize().cross(new THREE.Vector3(0, -1, 0)).normalize();
       target.addScaledVector(left, innerWidth > 900 ? 3.2 : 0);
@@ -672,7 +677,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
     const at0 = line.stops[0] + 0.012;
-    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + 0.09) : 1.02; // built well ahead of the train, as it goes
+    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + (TRAIN_HALF + 1) / line.length) : 1.02; // laid a metre ahead of the train's nose, as it goes
     line.update(time, lineReveal, cityDim, s.trainS, stationT);
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
