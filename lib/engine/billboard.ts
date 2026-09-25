@@ -112,6 +112,8 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
   }
 
   let frameNo = 0;
+  let boardNext = 3, boardUntil = 0;
+  const snap = document.createElement('canvas');
   let nextBurst = 0;
   let burstUntil = 0;
   let tear: null | { jx: number; jy: number; rx: number; ry: number; bx: number; by: number; band: number[] | null } = null;
@@ -184,6 +186,26 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
         ctx.restore();
       } else ctx.fillText(g.text, g.x, g.y);
     }
+    /* Now and then the whole board loses the signal: the picture is copied back over itself in red
+       and blue, pulled apart, and bands of it slip sideways, for a few held frames. */
+    if (time > boardNext) { boardUntil = time + 0.18 + Math.random() * 0.25; boardNext = boardUntil + 2 + Math.random() * 4; }
+    if (time < boardUntil) {
+      snap.width = W; snap.height = H;
+      const sx = snap.getContext('2d')!;
+      sx.drawImage(canvas, 0, 0);
+      const sp = W * (0.006 + Math.random() * 0.018);
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.55;
+      ctx.filter = 'sepia(1) saturate(8) hue-rotate(-50deg)'; ctx.drawImage(snap, sp, 0);
+      ctx.filter = 'sepia(1) saturate(8) hue-rotate(180deg)'; ctx.drawImage(snap, -sp, 0);
+      ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      for (let b = 0; b < 4; b++) {
+        if (Math.random() < 0.5) continue;
+        const by = Math.random() * H, bh = H * (0.03 + Math.random() * 0.1);
+        ctx.drawImage(snap, 0, by, W, bh, (Math.random() - 0.5) * W * 0.08, by, W, bh);
+      }
+      group.position.x = center.x + (Math.random() - 0.5) * 0.15;
+    } else group.position.x = center.x;
     // scanlines, as on the page
     ctx.fillStyle = 'rgba(0,0,0,0.17)';
     for (let y = (time * 6) % 3; y < H; y += 3 * (H / innerHeight)) ctx.fillRect(0, y, W, H / innerHeight);

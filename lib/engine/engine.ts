@@ -271,7 +271,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BWd, BHt), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.55, 0.55, 0.55), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BWd, BHt), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.55, 0.55, 0.55), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
+    mesh.renderOrder = 70; // never hidden behind a tower
     mesh.position.set(sp.x, sp.y, 3);
     mesh.lookAt(aerialPos.x, sp.y, aerialPos.z);
     mesh.visible = false;
@@ -279,7 +280,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     mesh.updateMatrixWorld();
     // red and cyan copies of the mark, only seen while it glitches
     const ghosts = [new THREE.Color(1, 0.1, 0.3), new THREE.Color(0.1, 0.9, 1)].map((gc) => {
-      const gm = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: gc.multiplyScalar(0.6), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const gm = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: gc.multiplyScalar(0.6), clippingPlanes: [clip], side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
+      gm.renderOrder = 71;
       gm.visible = false;
       mesh.add(gm);
       return gm;
@@ -338,8 +340,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
           float core = smoothstep(0.5, 0.0, d);
           gl_FragColor = vec4(vCol * 1.5, (core * core * 0.7 + exp(-d * d * 40.0) * 0.8) * vA);
         }`,
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
     }));
+    pts.renderOrder = 70;
     pts.frustumCulled = false;
     pts.visible = false;
     scene.add(pts);

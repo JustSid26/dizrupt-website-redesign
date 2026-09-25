@@ -885,7 +885,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const faults = stationBuildings.map((sg, k) => {
     const scr = screens[k];
     const ghosts = [new THREE.Color(1, 0.1, 0.3), new THREE.Color(0.1, 0.9, 1)].map((gc) => {
-      const gm = new THREE.Mesh(scr.geometry, new THREE.MeshBasicMaterial({ toneMapped: false, color: gc.multiplyScalar(0.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const gm = new THREE.Mesh(scr.geometry, new THREE.MeshBasicMaterial({ toneMapped: false, color: gc.multiplyScalar(0.3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
       gm.visible = false;
       scr.add(gm);
       return gm;
@@ -896,15 +896,16 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
 
   function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1) {
     for (const f of faults) {
-      if (time > f.next) { f.until = time + 0.15 + Math.random() * 0.25; f.next = f.until + 1.8 + Math.random() * 3.5; }
+      if (time > f.next) { f.until = time + 0.22 + Math.random() * 0.3; f.next = f.until + 1.2 + Math.random() * 2.5; }
       const tearing = !reduced && time < f.until && f.sg.visible;
       f.sg.position.copy(f.base);
-      if (tearing) f.sg.translateZ((Math.random() - 0.5) * 0.35);
+      if (tearing) { f.sg.translateZ((Math.random() - 0.5) * 1.4); f.sg.translateY((Math.random() - 0.5) * 0.5); }
+      f.scr.scale.set(tearing && Math.random() < 0.4 ? 1 + Math.random() * 0.25 : 1, tearing && Math.random() < 0.3 ? 0.8 + Math.random() * 0.15 : 1, 1);
       const map = (f.scr.material as THREE.MeshBasicMaterial).map;
       f.ghosts.forEach((gm, gi) => {
         gm.visible = tearing;
         (gm.material as THREE.MeshBasicMaterial).map = map;
-        gm.position.set((gi ? 1 : -1) * (0.15 + Math.random() * 0.45), (Math.random() - 0.5) * 0.15, gi ? 0.012 : 0.008);
+        gm.position.set((gi ? 1 : -1) * (0.6 + Math.random() * 1.2), (Math.random() - 0.5) * 0.6, gi ? 0.012 : 0.008);
       });
     }
     if (reveal > 0.001) liveBoards.forEach((b) => b.draw(time));
