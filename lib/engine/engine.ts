@@ -16,6 +16,7 @@ import { createMascotLine, trainShape } from './mascotLine';
 import { signals } from '@/lib/signals';
 import { clients, slugOf, type Project } from '@/content/projects';
 import { SOLUTIONS } from '@/content/solutions';
+import { BANNERS } from '@/content/banners';
 
 /* =========================================================
    The engine: one canvas behind the whole site.
@@ -115,7 +116,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   /* ---------- the mascot ---------- */
   const loadModel = (url: string) => new GLTFLoader().loadAsync(url).then((g) => g.scene).catch(() => null);
-  const [mascot, landmarks, cityModel, trainModel, stationModel] = await Promise.all([
+  const [mascot, landmarks, cityModel, trainModel, stationModel, stopsModel] = await Promise.all([
     loadMascot(),
     // the NYC landmarks, modelled in Blender
     new GLTFLoader().loadAsync('/models/nyc.glb').then((g) => {
@@ -140,6 +141,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // the bullet train and its start station, modelled in Blender
     loadModel('/models/train.glb'),
     loadModel('/models/station.glb'),
+    loadModel('/models/stops.glb'),
   ]);
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
@@ -166,8 +168,14 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   scene.add(city.group, billboard.group);
   // his own line, with a station for each solution
   const line = createMascotLine(pixelRatio, GROUND, PLINTH_TOP, isMobile ? 34 : 48,
-    SOLUTIONS.map((sol) => ({ name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors })),
-    stationModel ?? new THREE.Group());
+    SOLUTIONS.map((sol) => ({
+      name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors,
+      // the banner at each station shows the work that proves it
+      images: sol.work.split('·').map((w) => w.trim().toLowerCase())
+        .map((w) => Object.entries(BANNERS).find(([title]) => title.toLowerCase().startsWith(w.split(' ')[0]))?.[1])
+        .filter((u): u is string => !!u),
+    })),
+    stationModel ?? new THREE.Group(), stopsModel);
   scene.add(line.group);
   const trainLocal = trainShape(trainModel);
   /* The real train. Its particles land on it first; then it is shown solid, swept in from its
@@ -664,7 +672,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
     const at0 = line.stops[0] + 0.012;
-    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + 0.035) : 1.02; // built just ahead of the train, as it goes
+    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + 0.09) : 1.02; // built well ahead of the train, as it goes
     line.update(time, lineReveal, cityDim, s.trainS, stationT);
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
