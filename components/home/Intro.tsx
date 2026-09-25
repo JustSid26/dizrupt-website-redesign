@@ -305,7 +305,8 @@ export function Intro() {
       cells().forEach((cell, i) => {
         const r = signals.statWindows[i];
         if (!r || r.w < 10) return;
-        cell.style.transform = `translate(${r.x.toFixed(1)}px, ${r.y.toFixed(1)}px)`;
+        // tilted with its window
+        cell.style.transform = `translate(${r.x.toFixed(1)}px, ${r.y.toFixed(1)}px) perspective(900px) rotateY(${r.yaw.toFixed(3)}rad) rotateX(${(-r.pitch).toFixed(3)}rad)`;
         cell.style.width = `${r.w.toFixed(1)}px`;
         cell.style.height = `${r.h.toFixed(1)}px`;
       });

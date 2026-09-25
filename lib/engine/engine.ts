@@ -256,45 +256,67 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
      (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
      made of the same particles he was. Rebuilt when the window changes shape. */
-  const statPanels: { x: number; y: number; w: number; h: number }[] = [];
+  type Panel = { x: number; y: number; z: number; w: number; h: number; yaw: number; pitch: number; m: THREE.Matrix4 };
+  const statPanels: Panel[] = [];
   function buildStatWindows() {
     const aspect = innerWidth / innerHeight;
     const halfH = CAMERA_Z * Math.tan(THREE.MathUtils.degToRad(22.5));
     const halfW = halfH * aspect;
     statPanels.length = 0;
+    const mk = (x: number, y: number, z: number, w: number, h: number, yaw: number, pitch: number) => {
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
+      statPanels.push({ x, y, z, w, h, yaw, pitch, m });
+    };
     if (aspect > 1) {
-      const w = Math.min(3.4, halfW * 0.78), h = Math.min(1.7, halfH * 0.62);
-      const gx = Math.min(halfW - w / 2 - 0.35, w / 2 + 0.35), gy = Math.min(halfH - h / 2 - 0.55, h / 2 + 0.3);
-      for (const [sx, sy] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) statPanels.push({ x: sx * gx, y: sy * gy - 0.15, w, h });
+      /* A curved HUD round you: the outer windows come forward and turn in, the top pair leans down
+         to you and the bottom pair up, so the four read as one bent sheet of light. */
+      const w = Math.min(2.7, halfW * 0.6), h = Math.min(1.35, halfH * 0.48);
+      const gx = Math.min(halfW - w / 2 - 0.2, w / 2 + 0.45), gy = Math.min(halfH - h / 2 - 0.5, h / 2 + 0.32);
+      for (const [sx, sy] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) mk(sx * gx, sy * gy - 0.15, 0.3, w, h, -sx * 0.5, sy * 0.24);
     } else {
-      const w = halfW * 1.7, h = Math.min(1.25, (halfH * 2 - 1.6) / 4 - 0.2);
-      for (let i = 0; i < 4; i++) statPanels.push({ x: 0, y: (1.5 - i) * (h + 0.22) - 0.2, w, h });
+      const w = halfW * 1.6, h = Math.min(1.2, (halfH * 2 - 1.6) / 4 - 0.25);
+      for (let i = 0; i < 4; i++) mk(0, (1.5 - i) * (h + 0.3) - 0.2, 0, w, h, (i % 2 ? 1 : -1) * 0.28, (1.5 - i) * 0.12);
     }
+    /* Particle i goes to a window by its own random number, low numbers first — so as the morph runs
+       (its stagger is by that same number) the windows build one after another, each drawing its
+       frame before its glass fills. */
     const arr = new Float32Array(COUNT * 3);
+    const v = new THREE.Vector3();
+    const R = field.randoms;
     let seed = 9;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
     for (let i = 0; i < COUNT; i++) {
-      const pnl = statPanels[i % 4];
-      const k = rnd();
-      let x, y;
-      if (k < 0.34) {
-        // the frame: all four sides, a little depth to it
-        const t = rnd() * 2 * (pnl.w + pnl.h);
+      const r = R[i];
+      const pi = Math.min(3, Math.floor(r * 4));
+      const pnl = statPanels[pi];
+      const within = r * 4 - pi; // 0..1: how early in this window's build
+      let x, y, z = 0;
+      if (within < 0.42) {
+        // the frame, front and back, traced round in order
+        const t = (within / 0.42) * 2 * (pnl.w + pnl.h);
         [x, y] = t < pnl.w ? [t - pnl.w / 2, -pnl.h / 2] : t < pnl.w + pnl.h ? [pnl.w / 2, t - pnl.w - pnl.h / 2]
           : t < 2 * pnl.w + pnl.h ? [pnl.w / 2 - (t - pnl.w - pnl.h), pnl.h / 2] : [-pnl.w / 2, pnl.h / 2 - (t - 2 * pnl.w - pnl.h)];
-      } else if (k < 0.44) {
-        // corner brackets, just outside
-        const cx = rnd() < 0.5 ? -1 : 1, cy = rnd() < 0.5 ? -1 : 1, along = rnd() * 0.3, hor = rnd() < 0.5;
-        x = cx * (pnl.w / 2 + 0.07 - (hor ? along : 0));
-        y = cy * (pnl.h / 2 + 0.07 - (hor ? 0 : along));
+        z = rnd() < 0.62 ? 0 : -0.16;
+      } else if (within < 0.5) {
+        // the depth between front and back at the four corners
+        x = (rnd() < 0.5 ? -1 : 1) * pnl.w / 2;
+        y = (rnd() < 0.5 ? -1 : 1) * pnl.h / 2;
+        z = -rnd() * 0.16;
+      } else if (within < 0.58) {
+        // corner brackets, standing proud
+        const cx = rnd() < 0.5 ? -1 : 1, cy = rnd() < 0.5 ? -1 : 1, along = rnd() * 0.32, hor = rnd() < 0.5;
+        x = cx * (pnl.w / 2 + 0.09 - (hor ? along : 0));
+        y = cy * (pnl.h / 2 + 0.09 - (hor ? 0 : along));
+        z = 0.05;
       } else {
-        // the glass: a faint scanline grid across the pane
+        // the glass, scanlines filling from the bottom
         x = (rnd() - 0.5) * pnl.w * 0.96;
-        y = Math.round((rnd() - 0.5) * pnl.h * 0.96 / 0.07) * 0.07;
+        y = -pnl.h * 0.48 + ((within - 0.58) / 0.42) * pnl.h * 0.96;
+        y = Math.round(y / 0.07) * 0.07;
       }
-      arr[i * 3] = pnl.x + x;
-      arr[i * 3 + 1] = pnl.y + y;
-      arr[i * 3 + 2] = (rnd() - 0.5) * 0.04;
+      v.set(x, y, z).applyMatrix4(pnl.m);
+      arr[i * 3] = v.x; arr[i * 3 + 1] = v.y; arr[i * 3 + 2] = v.z;
     }
     field.register('stats', new THREE.BufferAttribute(arr, 3));
   }
@@ -345,7 +367,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const gather = section === 'intro' && !view && !preview && key === 'mascot:full' && want === 'stats';
     if (want !== key) {
       const bothMascot = want.startsWith('mascot:') && key.startsWith('mascot:');
-      field.morphTo(field.shape(want), gather ? null : bothMascot ? 900 : 1700, gather ? 1.2 : bothMascot ? 0.1 : 1);
+      field.morphTo(field.shape(want), gather ? null : bothMascot ? 900 : 1700, gather ? 2.2 : bothMascot ? 0.1 : 1);
       scrubbing = gather;
       key = want;
     }
@@ -414,9 +436,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     points.rotation.x = damp(points.rotation.x, 0, 4, dt);
     points.rotation.z = damp(points.rotation.z, 0, 4, dt);
     points.position.x = damp(points.position.x, tx, onIntro ? 2.2 : 3, dt);
+    if (key === 'stats' && onIntro) {
+      points.rotation.x = damp(points.rotation.x, -signals.pointer.y * 0.1, 3, dt);
+      points.rotation.y = damp(points.rotation.y, signals.pointer.x * 0.16, 3, dt);
+    }
     points.position.y = onIntro ? ty : damp(points.position.y, ty, 4, dt);
     points.scale.setScalar(onIntro ? sc : damp(points.scale.x, sc, 4, dt));
-    if (rot !== null) points.rotation.y = damp(points.rotation.y, rot, 2.4, dt);
+    if (rot !== null && !(key === 'stats' && onIntro)) points.rotation.y = damp(points.rotation.y, rot, 2.4, dt);
     else if (view?.spin) points.rotation.y += dt * 0.35;
     else {
       // sway around the model's front, the shortest way back after a spin
@@ -569,12 +595,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     if (key === 'stats') {
       statPanels.forEach((pnl, i) => {
         const out = signals.statWindows[i];
-        corner.set(pnl.x - pnl.w / 2, pnl.y + pnl.h / 2, 0).applyMatrix4(points.matrixWorld).project(camera);
-        const x0 = (corner.x * 0.5 + 0.5) * innerWidth, y0 = (-corner.y * 0.5 + 0.5) * innerHeight;
-        corner.set(pnl.x + pnl.w / 2, pnl.y - pnl.h / 2, 0).applyMatrix4(points.matrixWorld).project(camera);
-        out.x = x0; out.y = y0;
-        out.w = (corner.x * 0.5 + 0.5) * innerWidth - x0;
-        out.h = (-corner.y * 0.5 + 0.5) * innerHeight - y0;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          corner.set((cx * pnl.w) / 2, (cy * pnl.h) / 2, 0).applyMatrix4(pnl.m).applyMatrix4(points.matrixWorld).project(camera);
+          const sx = (corner.x * 0.5 + 0.5) * innerWidth, sy = (-corner.y * 0.5 + 0.5) * innerHeight;
+          x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+        }
+        out.x = x0; out.y = y0; out.w = x1 - x0; out.h = y1 - y0;
+        out.yaw = pnl.yaw + points.rotation.y;
+        out.pitch = pnl.pitch + points.rotation.x;
       });
     }
     composer.render();

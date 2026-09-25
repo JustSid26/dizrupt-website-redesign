@@ -1085,7 +1085,7 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .intro-stats { position: absolute; inset: 0; left: 0; top: 0; translate: none; width: auto; display: block; }
 .intro-stats .stat {
   position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center !important; transform-origin: 0 0; transition: opacity 0.7s var(--ease-out) !important;
+  text-align: center !important; transform-origin: 50% 50%; transition: opacity 0.7s var(--ease-out) !important;
 }
 .intro-pin.stats-in .intro-stats .stat.is-in { opacity: 1; }
 .intro-stats .stat-n { font-size: clamp(28px, 3.6vw, 58px); }
