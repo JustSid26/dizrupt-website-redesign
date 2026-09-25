@@ -222,99 +222,121 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const stationCamLook = line.stationAt.clone().add(new THREE.Vector3(0, 2.2, 6));
   const aerialLook = new THREE.Vector3(0, GROUND + 12, 0);
 
-  /* ---------- the social skyscrapers: the tallest towers facing the city view carry the studio's
-     links as lit signs near their tops (clickable at contact, see SocialTowers.tsx) ---------- */
-  const socialSigns: THREE.Mesh[] = [];
-  if (cityModel) {
-    // each building's footprint and height, from the model's per-vertex building data
-    const g = (cityModel as unknown as { city: THREE.BufferGeometry }).city;
-    const pos = g.attributes.position, uvA = g.attributes.uv, u1 = g.attributes.uv1;
-    const blds = new Map<string, { cx: number; cz: number; h: number; maxZ: number; minX: number; maxX: number }>();
-    for (let i = 0; i < pos.count; i++) {
-      const cx = uvA.getX(i), cz = 1 - uvA.getY(i);
-      const key = `${cx.toFixed(2)},${cz.toFixed(2)}`;
-      const b = blds.get(key) ?? { cx, cz, h: u1.getX(i), maxZ: -1e9, minX: 1e9, maxX: -1e9 };
-      // only the tower's own upper part decides its face (not a podium)
-      if (pos.getY(i) > b.h * 0.6) { b.maxZ = Math.max(b.maxZ, pos.getZ(i)); b.minX = Math.min(b.minX, pos.getX(i)); b.maxX = Math.max(b.maxX, pos.getX(i)); }
-      blds.set(key, b);
+  /* ---------- the social banners: once he stands whole again at contact, light streams out of his
+     hands and builds four banners in the air — two on his left, two on his right — each one of the
+     studio's links (clickable, see SocialTowers.tsx), built bottom to top by the particles landing ---------- */
+  type Banner = { mesh: THREE.Mesh; clip: THREE.Plane; pts: THREE.Points; u: Record<string, { value: unknown }>; bottom: number; h: number; side: number };
+  const socialBanners: Banner[] = [];
+  // his hands, in his own frame: the outermost points at mid height of the full figure
+  const hands = { l: new THREE.Vector3(-1.4, -0.8, 0.2), r: new THREE.Vector3(1.4, -0.8, 0.2) };
+  if (mascot) {
+    const a2 = mascot.full.array as Float32Array;
+    let minY = Infinity, maxY = -Infinity;
+    for (let i = 1; i < a2.length; i += 3) { minY = Math.min(minY, a2[i]); maxY = Math.max(maxY, a2[i]); }
+    const lo = minY + (maxY - minY) * 0.38, hi = minY + (maxY - minY) * 0.62;
+    let lx = Infinity, rx = -Infinity;
+    for (let i = 0; i < a2.length; i += 3) {
+      const y = a2[i + 1];
+      if (y < lo || y > hi) continue;
+      if (a2[i] < lx) { lx = a2[i]; hands.l.set(a2[i], y, a2[i + 2]); }
+      if (a2[i] > rx) { rx = a2[i]; hands.r.set(a2[i], y, a2[i + 2]); }
     }
-    // tall, in front of the plaza from the camera's side, spread across the view
-    const candidates = [...blds.values()].filter((b) => b.h > 11 && b.cz > -26 && b.cz < 8 && Math.abs(b.cx) < 34 && b.maxZ > -1e8 && Math.hypot(b.cx, b.cz) > 13 && Math.abs(b.cx) > 7);
-    candidates.sort((a, b) => a.cx - b.cx);
-    const picks: typeof candidates = [];
-    const n = SOCIALS.length;
-    for (let k = 0; k < n; k++) {
-      const want = -30 + (60 * (k + 0.5)) / n;
-      const best = candidates.filter((c) => !picks.includes(c)).sort((a, b) => Math.abs(a.cx - want) - Math.abs(b.cx - want) + (b.h - a.h) * 0.08)[0];
-      if (best) picks.push(best);
-    }
-    picks.sort((a, b) => a.cx - b.cx);
-    picks.forEach((b, k) => {
-      const soc = SOCIALS[k];
-      const c = document.createElement('canvas');
-      c.width = c.height = 512;
-      const x = c.getContext('2d')!;
-      x.fillStyle = '#07070c'; x.fillRect(0, 0, 512, 512);
-      x.strokeStyle = soc.color; x.lineWidth = 14; x.strokeRect(20, 20, 472, 472);
-      x.fillStyle = soc.color === '#ffffff' ? '#ffffff' : soc.color;
-      if (soc.path) {
-        x.save(); x.translate(106, 106); x.scale(300 / 24, 300 / 24);
-        x.fill(new Path2D(soc.path)); x.restore();
-      } else if (soc.mark === 'in') {
-        // outlined, like the others: a rounded square and the letters, both lit
-        x.lineWidth = 24; x.strokeStyle = soc.color;
-        x.beginPath();
-        x.moveTo(146, 106); x.arcTo(406, 106, 406, 406, 40); x.arcTo(406, 406, 106, 406, 40); x.arcTo(106, 406, 106, 106, 40); x.arcTo(106, 106, 406, 106, 40);
-        x.closePath(); x.stroke();
-        x.fillStyle = soc.color; x.font = '800 210px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-        x.fillText('in', 262, 272);
-      } else {
-        x.lineWidth = 22; x.strokeStyle = soc.color; x.lineJoin = 'round';
-        x.strokeRect(96, 146, 320, 220);
-        x.beginPath(); x.moveTo(96, 146); x.lineTo(256, 276); x.lineTo(416, 146); x.stroke();
-      }
-      const tex = new THREE.CanvasTexture(c);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const w = Math.min(6, Math.max(4, (b.maxX - b.minX) * 1.3)); // big enough to read and click from the city view
-      void tex;
-      // the hit area: an invisible square where the logo is lit
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ visible: false }));
-      /* The logo is the tower's own windows: a grid of panes on its face, those inside the mark lit
-         in the brand's colour, the rest left as ordinary dim windows — the way buildings spell
-         things out at night. */
-      const G = 40; // finer, so the mark reads crisply
-      const img = x.getImageData(0, 0, 512, 512).data;
-      const lp: number[] = [], lc: number[] = [];
-      const base0 = new THREE.Color(soc.color), lumB = base0.r * 0.3 + base0.g * 0.59 + base0.b * 0.11;
-      // dark brand colours (LinkedIn's blue) are lifted so they carry as light
-      const brand = base0.clone().lerp(new THREE.Color(1, 1, 1), lumB < 0.3 ? 0.35 : 0.2).multiplyScalar(lumB < 0.3 ? 1.5 : 1), dimW = new THREE.Color(0.35, 0.3, 0.22);
-      for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) {
-        const px = Math.floor(((gx + 0.5) / G) * 512), py = Math.floor(((gy + 0.5) / G) * 512);
-        const i4 = (py * 512 + px) * 4;
-        const lum = (img[i4] + img[i4 + 1] + img[i4 + 2]) / 765;
-        const onMark = lum > 0.35 && !(px < 30 || py < 30 || px > 482 || py > 482); // not the old frame
-        lp.push((gx / (G - 1) - 0.5) * w, (0.5 - gy / (G - 1)) * w, 0);
-        const c = onMark ? brand : dimW;
-        const k = onMark ? 3.2 : Math.random() < 0.25 ? 0.08 : 0.0; // the mark blazes, the panes round it stay dark
-        lc.push(c.r * k, c.g * k, c.b * k);
-      }
-      const lg = new THREE.BufferGeometry();
-      lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
-      lg.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3));
-      const panes = new THREE.Points(lg, new THREE.PointsMaterial({ size: (w / G) * 0.82, vertexColors: true, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
-      panes.frustumCulled = false;
-      panes.renderOrder = 60; // a lit mark is never lost behind a nearer tower
-      sign.add(panes);
-      // the tower's other windows go dark behind the mark, so the lit ones read as one shape
-      const unlit = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.04, w * 1.04), new THREE.MeshBasicMaterial({ color: '#050508', transparent: true, opacity: 0.88, depthTest: false }));
-      unlit.renderOrder = 59;
-      sign.add(unlit);
-      sign.position.set(b.cx, GROUND + b.h * 0.78, b.maxZ + 0.08);
-      sign.visible = false;
-      scene.add(sign);
-      socialSigns.push(sign);
-    });
   }
+  const BWd = 6.6, BHt = 4.3;
+  const spots = [
+    { x: -14, y: GROUND + 9, side: -1 }, { x: -8.5, y: GROUND + 14.5, side: -1 },
+    { x: 8.5, y: GROUND + 14.5, side: 1 }, { x: 14, y: GROUND + 9, side: 1 },
+  ];
+  SOCIALS.slice(0, 4).forEach((soc, k) => {
+    const sp = spots[k];
+    const c = document.createElement('canvas');
+    c.width = 1040; c.height = 680;
+    const x = c.getContext('2d')!;
+    x.fillStyle = '#06060b'; x.fillRect(0, 0, 1040, 680);
+    x.strokeStyle = soc.color; x.lineWidth = 14; x.strokeRect(14, 14, 1012, 652);
+    const lc = soc.color;
+    x.save(); x.translate(180, 170); x.fillStyle = lc; x.strokeStyle = lc;
+    if (soc.path) { x.scale(300 / 24, 300 / 24); x.fill(new Path2D(soc.path)); }
+    else if (soc.mark === 'in') {
+      x.lineWidth = 26;
+      x.beginPath(); x.moveTo(40, 0); x.arcTo(300, 0, 300, 300, 40); x.arcTo(300, 300, 0, 300, 40); x.arcTo(0, 300, 0, 0, 40); x.arcTo(0, 0, 300, 0, 40); x.closePath(); x.stroke();
+      x.font = '800 200px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('in', 150, 162);
+    } else {
+      x.lineWidth = 24; x.lineJoin = 'round'; x.strokeRect(0, 40, 300, 220);
+      x.beginPath(); x.moveTo(0, 40); x.lineTo(150, 160); x.lineTo(300, 40); x.stroke();
+    }
+    x.restore();
+    x.fillStyle = '#ffffff'; x.font = '800 96px system-ui, sans-serif'; x.textBaseline = 'middle';
+    x.fillText(soc.name, 540, 290);
+    x.fillStyle = 'rgba(255,255,255,0.6)'; x.font = '500 38px ui-monospace, Menlo, monospace';
+    x.fillText(soc.href.replace(/^mailto:|^https?:\/\/(www\.)?/, '').replace(/\/$/, '').slice(0, 26), 540, 380);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BWd, BHt), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.9, 0.9, 0.9), clippingPlanes: [clip], side: THREE.DoubleSide }));
+    mesh.position.set(sp.x, sp.y, 3);
+    mesh.lookAt(aerialPos.x, sp.y, aerialPos.z);
+    mesh.visible = false;
+    scene.add(mesh);
+    mesh.updateMatrixWorld();
+    // the particles: each has its spot on the banner, and flies there from his hand, bottom row first
+    const n = isMobile ? 2200 : 5000;
+    const tgt = new Float32Array(n * 3), rnd = new Float32Array(n), col = new Float32Array(n * 3);
+    const v = new THREE.Vector3(), brand = new THREE.Color(soc.color).lerp(new THREE.Color(1, 1, 1), 0.3);
+    for (let i = 0; i < n; i++) {
+      const edge = Math.random() < 0.45;
+      const u = Math.random(), w2 = Math.random();
+      if (edge) { const t = Math.random() * 4; const sd = Math.floor(t); const f = t - sd; v.set(sd === 0 ? f - 0.5 : sd === 2 ? 0.5 - f : sd === 1 ? 0.5 : -0.5, sd === 1 ? f - 0.5 : sd === 3 ? 0.5 - f : sd === 0 ? -0.5 : 0.5, 0); }
+      else v.set(u - 0.5, w2 - 0.5, 0);
+      v.x *= BWd; v.y *= BHt;
+      v.applyMatrix4(mesh.matrixWorld);
+      tgt.set([v.x, v.y, v.z], i * 3);
+      rnd[i] = Math.random();
+      const cc = edge ? brand : new THREE.Color(0.85, 0.8, 1.0);
+      col.set([cc.r, cc.g, cc.b], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(tgt, 3));
+    g.setAttribute('aRand', new THREE.BufferAttribute(rnd, 1));
+    g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
+    const bottom = sp.y - BHt / 2;
+    const u = { uT: { value: 0 }, uTime: { value: 0 }, uHand: { value: new THREE.Vector3() }, uBottom: { value: bottom }, uH: { value: BHt }, uPixelRatio: { value: pixelRatio } };
+    const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+      uniforms: u,
+      vertexShader: /* glsl */ `
+        uniform float uT, uTime, uBottom, uH, uPixelRatio; uniform vec3 uHand;
+        attribute float aRand; attribute vec3 aCol;
+        varying vec3 vCol; varying float vA;
+        void main() {
+          // its turn comes by how high on the banner it lands: bottom first
+          float o = (position.y - uBottom) / uH * 0.75 + aRand * 0.25;
+          float t = clamp((uT * 1.35 - o) / 0.35, 0.0, 1.0);
+          float e = t * t * (3.0 - 2.0 * t);
+          vec3 mid = (uHand + position) * 0.5 + vec3(0.0, 3.0 + aRand * 2.0, 0.0);
+          float ie = 1.0 - e;
+          vec3 p = ie * ie * uHand + 2.0 * ie * e * mid + e * e * position;
+          p += vec3(sin(uTime * 2.0 + aRand * 30.0), cos(uTime * 1.7 + aRand * 20.0), 0.0) * 0.25 * sin(e * 3.14159);
+          vA = step(0.001, t) * (1.0 - smoothstep(0.98, 1.0, uT) * 0.8);
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = max(2.0, (2.4 + 3.0 * sin(e * 3.14159)) * 7.0 * uPixelRatio / -mv.z);
+          vCol = mix(vec3(0.85, 0.65, 1.0), aCol, e); // his violet, turning the banner's colour as it lands
+        }`,
+      fragmentShader: /* glsl */ `
+        varying vec3 vCol; varying float vA;
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          if (d > 0.5 || vA < 0.01) discard;
+          float core = smoothstep(0.5, 0.0, d);
+          gl_FragColor = vec4(vCol * 1.5, (core * core * 0.7 + exp(-d * d * 40.0) * 0.8) * vA);
+        }`,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    pts.frustumCulled = false;
+    pts.visible = false;
+    scene.add(pts);
+    socialBanners.push({ mesh, clip, pts, u, bottom, h: BHt, side: sp.side });
+  });
   billboard.measure();
 
   /* The landing's camera move. It starts square on to the board at the distance where the board
@@ -403,7 +425,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let key = 'mascot:neutral'; // the shape the field is heading for
   let scrubbing = false; // uProgress is being driven by the scroll
   let scrubFrom = '';
-  const ride = { s: 0, v: 0 }; // and what it is scrubbing away from
+  const ride = { s: 0, v: 0 };
+  const contactLook = new THREE.Vector3();
+  let wasContact = false; // and what it is scrubbing away from
 
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
      (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
@@ -551,6 +575,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     /* ---- the landing: a beam runs down him and leaves him lit ---- */
     const onIntro = section === 'intro' && !view && !preview;
+    if (section !== 'contact') wasContact = false;
     const reveal = onIntro ? smooth(0.22, 0.4, ip) : 1;
     u.uBeamOn.value = onIntro && ip < 0.44 ? 1 : 0;
     // from below his feet up past his crown: he is built foot to head
@@ -744,14 +769,17 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.position.y += p.y * 0.2 * lean;
       camera.lookAt(camLook);
     } else if (section === 'contact' && !view && !preview) {
-      // back to the view the city was first seen from
-      const k = smooth(0, 0.8, s.contact);
-      camPos.set(0, 0, CAMERA_Z).lerp(aerialPos, k);
-      camLook.set(0, 0, 0).lerp(aerialLook, k);
-      camera.position.copy(camPos);
-      camera.position.x += p.x * 0.6;
-      camera.position.y += p.y * 0.4;
-      camera.lookAt(camLook);
+      // back to the view the city was first seen from: a slow rise from wherever the camera was
+      if (!wasContact) contactLook.copy(camera.position).add(camera.getWorldDirection(tmpV).multiplyScalar(camera.position.length() || 7));
+      wasContact = true;
+      const k = smooth(0.3, 0.75, s.contact);
+      tmpA.set(0, 0, CAMERA_Z).lerp(aerialPos, k);
+      tmpB.set(0, 0, 0).lerp(aerialLook, k);
+      tmpA.x += p.x * 0.6 * k;
+      tmpA.y += p.y * 0.4 * k;
+      camera.position.lerp(tmpA, 1 - Math.exp(-2.2 * dt));
+      contactLook.lerp(tmpB, 1 - Math.exp(-2.2 * dt));
+      camera.lookAt(contactLook);
     } else if ((section === 'solutions' || (onIntro && ride.s > 0.001)) && !view && !preview) {
       const sp = s.solutions;
       const a = 0, b = smooth(0.0, 0.35, ride.s); // leaves the station view as the train does
@@ -870,21 +898,29 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       }
     }
     {
-      const on = section === 'contact' && !view && s.contact > 0.6;
-      socialSigns.forEach((sign, i) => {
-        sign.visible = on || s.contact > 0.3;
+      const atContact = section === 'contact' && !view;
+      socialBanners.forEach((bn, i) => {
+        // he stands for a moment, then the banners build one after another
+        const t = atContact ? Math.min(1, Math.max(0, (s.contact - 0.7 - i * 0.04) / 0.18)) : 0;
+        bn.u.uT.value = t;
+        bn.u.uTime.value = time;
+        (bn.u.uHand.value as THREE.Vector3).copy(bn.side < 0 ? hands.l : hands.r).applyMatrix4(points.matrixWorld);
+        bn.pts.visible = t > 0.001 && t < 0.999;
+        bn.mesh.visible = t > 0.35;
+        bn.clip.constant = t >= 0.999 ? 1e4 : bn.bottom + bn.h * Math.min(1, Math.max(0, (t * 1.35 - 0.35) / 0.9));
         const out = signals.socials[i];
-        out.on = on;
-        if (!on) return;
-        const g2 = (sign.geometry as THREE.PlaneGeometry).parameters;
+        out.on = t >= 0.999;
+        if (!out.on) return;
+        const g2 = (bn.mesh.geometry as THREE.PlaneGeometry).parameters;
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
         for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          corner.set((cx * g2.width) / 2, (cy * g2.height) / 2, 0).applyMatrix4(sign.matrixWorld).project(camera);
+          corner.set((cx * g2.width) / 2, (cy * g2.height) / 2, 0).applyMatrix4(bn.mesh.matrixWorld).project(camera);
           const sx = (corner.x * 0.5 + 0.5) * innerWidth, sy = (-corner.y * 0.5 + 0.5) * innerHeight;
           x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
         }
         Object.assign(out, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
       });
+      for (let i = socialBanners.length; i < signals.socials.length; i++) signals.socials[i].on = false;
     }
     composer.render();
   }
