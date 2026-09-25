@@ -278,6 +278,8 @@ export function Intro() {
       onUpdate: (self) => {
         const p = self.progress;
         signals.scroll.intro = p;
+        // the last line fades before the train sets off
+        el.style.setProperty('--profile-out', String(1 - Math.min(1, Math.max(0, (p - 0.93) / 0.06))));
         setBeat(p < BEATS.reveal ? "landing" : p < BEATS.stats ? "reveal" : p < BEATS.profile ? "stats" : "profile");
       },
     });

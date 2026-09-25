@@ -40,6 +40,10 @@ export function Solutions() {
         const at = Math.min(N - 1, Math.max(0, Math.round(signals.scroll.trainS) - 1));
         signals.scroll.solutionIndex = at;
         setActive(at);
+        // the copy is only there while the train stands at a station; between them it goes
+        const d = Math.abs(signals.scroll.trainS - Math.round(signals.scroll.trainS));
+        const docked = signals.scroll.trainS > 0.6 && d < 0.3;
+        section.current?.classList.toggle("sol-docked", docked);
         if (bar.current) bar.current.style.transform = `scaleX(${(p >= 1 ? 1 : x - i).toFixed(3)})`;
       },
     });

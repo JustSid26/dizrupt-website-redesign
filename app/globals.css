@@ -1114,3 +1114,8 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .intro-stats .stat-l.is-foreign { letter-spacing: 0; text-transform: none; font-size: 12px; }
 .intro-stats .stat-mark { color: rgba(201, 184, 255, 0.35); }
 @media (max-width: 600px) { .intro-stats .stat-n { font-size: clamp(30px, 10vw, 48px); } }
+
+/* the profile line fades before the train leaves; each solution's copy only while it stands at its station */
+.intro-pin.profile-in .intro-profile { opacity: var(--profile-out, 1); }
+.sol-copy { opacity: 0; transition: opacity 0.6s var(--ease-out); }
+#solutions.sol-docked .sol-copy { opacity: 1; }

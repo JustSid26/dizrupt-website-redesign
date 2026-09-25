@@ -664,7 +664,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
     const at0 = line.stops[0] + 0.012;
-    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, Math.min(1.02, smooth(0, 0.14, s.solutions) * 1.02)) : 1.02;
+    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + 0.035) : 1.02; // built just ahead of the train, as it goes
     line.update(time, lineReveal, cityDim, s.trainS, stationT);
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen

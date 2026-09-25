@@ -489,6 +489,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
 
   /* ---- the stations: platform, sign, and the solution turning over it ---- */
   const holos: { points: THREE.Points; mat: THREE.ShaderMaterial; base: THREE.Vector3 }[] = [];
+  const stationBuildings: THREE.Group[] = [];
+  const signs: THREE.Mesh[] = [];
   stations.forEach((st, k) => {
     const u = stops[k + 1];
     curve.getPointAt(u, P);
@@ -496,13 +498,77 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     side.crossVectors(tan, up).normalize();
     // the outside of the loop, away from the city's middle
     const out = side.dot(new THREE.Vector3(P.x, 0, P.z)) > 0 ? side.clone() : side.clone().negate();
-    const platform = new THREE.Mesh(
-      new THREE.BoxGeometry(2.2, 0.25, 7),
-      new THREE.MeshBasicMaterial({ color: '#07060c' }),
-    );
-    platform.position.copy(P).addScaledVector(out, 1.8).add(new THREE.Vector3(0, -0.2, 0));
-    platform.lookAt(platform.position.clone().add(tan));
-    group.add(platform);
+    /* Each station is its own building, in its solution's colours: an arched hall, a sawtooth
+       shed, a glass box, a cable-stayed roof on a mast, a dome, a slab on fins. Local frame:
+       +z along the track, +x out to the platform side. It rises into place as the line reaches it. */
+    const sg = new THREE.Group();
+    sg.position.copy(P);
+    sg.lookAt(P.clone().add(tan));
+    // lookAt aims +z along the track; make +x the platform side
+    if (new THREE.Vector3(1, 0, 0).applyQuaternion(sg.quaternion).dot(out) < 0) sg.rotateY(Math.PI);
+    const cA = new THREE.Color(st.colors[0]), cB = new THREE.Color(st.colors[1]);
+    const matA = new THREE.MeshStandardMaterial({ color: cA, roughness: 0.45, metalness: 0.3, emissive: cA, emissiveIntensity: 0.25 });
+    const matB = new THREE.MeshStandardMaterial({ color: cB, roughness: 0.3, metalness: 0.1, emissive: cB, emissiveIntensity: 0.15 });
+    const concrete = new THREE.MeshStandardMaterial({ color: '#8d9096', roughness: 0.85 });
+    const steel = new THREE.MeshStandardMaterial({ color: '#2a2e36', roughness: 0.35, metalness: 0.8 });
+    const glass = new THREE.MeshStandardMaterial({ color: '#9fd0ff', roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.3 });
+    const glow = new THREE.MeshBasicMaterial({ color: cB });
+    const put = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, rz = 0) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, z);
+      mesh.rotation.set(rx, 0, rz);
+      sg.add(mesh);
+      return mesh;
+    };
+    const SL = 8; // platform length
+    put(new THREE.BoxGeometry(2.4, 0.5, SL), concrete, 1.9, -0.05, 0);
+    put(new THREE.BoxGeometry(0.12, 0.02, SL), glow, 0.8, 0.21, 0); // lit platform edge
+    switch (k % 6) {
+      case 0: // an arched hall, ribs and a lit spine
+        for (let z = -SL / 2; z <= SL / 2; z += 1) put(new THREE.TorusGeometry(2.1, 0.06, 6, 24, Math.PI), matA, 1.0, 0.2, z);
+        put(new THREE.CylinderGeometry(2.1, 2.1, SL, 24, 1, true, -Math.PI / 2, Math.PI), glass, 1.0, 0.2, 0, Math.PI / 2, 0).rotation.set(Math.PI / 2, 0, 0);
+        put(new THREE.BoxGeometry(0.08, 0.08, SL), glow, 1.0, 2.32, 0);
+        break;
+      case 1: // a sawtooth shed
+        for (let z = -SL / 2 + 0.8; z < SL / 2; z += 1.6) {
+          put(new THREE.BoxGeometry(3.0, 0.08, 1.7), matA, 1.6, 2.6, z, 0.35);
+          put(new THREE.BoxGeometry(3.0, 0.55, 0.05), matB, 1.6, 2.75, z + 0.78);
+        }
+        for (const z of [-SL / 2 + 0.3, SL / 2 - 0.3]) for (const x of [0.3, 2.9]) put(new THREE.BoxGeometry(0.1, 2.5, 0.1), steel, x, 1.3, z);
+        break;
+      case 2: // a glass box pavilion
+        put(new THREE.BoxGeometry(2.6, 2.4, SL - 1), glass, 2.0, 1.4, 0);
+        put(new THREE.BoxGeometry(2.8, 0.14, SL - 0.8), matA, 2.0, 2.66, 0);
+        for (let z = -SL / 2 + 0.5; z <= SL / 2 - 0.5; z += 1.4) put(new THREE.BoxGeometry(0.06, 2.4, 0.06), matB, 0.72, 1.4, z);
+        break;
+      case 3: { // a mast with a cable-stayed roof
+        put(new THREE.CylinderGeometry(0.1, 0.16, 6, 10), steel, 3.4, 3.0, 0);
+        put(new THREE.BoxGeometry(3.4, 0.1, SL), matA, 1.6, 2.7, 0);
+        for (const z of [-SL / 2 + 0.4, -1.5, 1.5, SL / 2 - 0.4]) {
+          const a = new THREE.Vector3(3.4, 5.8, 0), b = new THREE.Vector3(0.3, 2.75, z);
+          const len = a.distanceTo(b);
+          const cable = put(new THREE.CylinderGeometry(0.02, 0.02, len, 4), glow, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+          cable.lookAt(sg.localToWorld(b.clone()));
+          cable.rotateX(Math.PI / 2);
+        }
+        break;
+      }
+      case 4: // a dome
+        put(new THREE.SphereGeometry(2.4, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass, 1.6, 0.2, 0);
+        for (let i = 0; i < 8; i++) {
+          const rib = put(new THREE.TorusGeometry(2.4, 0.04, 6, 24, Math.PI), matA, 1.6, 0.2, 0);
+          rib.rotation.set(0, (i / 8) * Math.PI, 0);
+        }
+        put(new THREE.SphereGeometry(0.2, 12, 8), glow, 1.6, 2.6, 0);
+        break;
+      default: // a slab on fins
+        put(new THREE.BoxGeometry(3.6, 0.3, SL + 0.6), matA, 1.7, 2.8, 0);
+        for (let z = -SL / 2; z <= SL / 2; z += 1) put(new THREE.BoxGeometry(0.1, 2.6, 0.5), matB, 3.2, 1.45, z);
+        put(new THREE.BoxGeometry(0.06, 0.04, SL), glow, 0.4, 2.62, 0);
+    }
+    sg.scale.set(1, 0.001, 1);
+    group.add(sg);
+    stationBuildings.push(sg);
     // the sign, facing out towards the camera's side of the track
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(4, 1),
@@ -511,6 +577,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     sign.position.copy(P).addScaledVector(out, 2.6).add(new THREE.Vector3(0, 2.2, 0)).addScaledVector(tan, -2);
     sign.lookAt(sign.position.clone().add(out));
     group.add(sign);
+    signs.push(sign);
     // the hologram: the solution's model, sampled down, turning above the platform ahead of the train
     const every = isMobile ? 10 : 6;
     const n = Math.floor(COUNT / every);
@@ -593,6 +660,11 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       h.points.rotation.y = time * 0.35 + k;
       h.points.position.y = h.base.y + Math.sin(time * 0.8 + k) * 0.25;
       h.points.visible = reveal > stops[k + 1];
+      // the station rises out of the ground as the line reaches it
+      const up = Math.min(1, Math.max(0.001, (reveal - stops[k + 1] + 0.02) / 0.03));
+      stationBuildings[k].scale.y = up * up * (3 - 2 * up);
+      stationBuildings[k].visible = up > 0.002;
+      signs[k].visible = up > 0.9;
     });
   }
 
