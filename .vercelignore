@@ -1,7 +1,6 @@
-serve.py
+legacy/
 mascot3d/
-mascot-points.bin
-mascot-points-claude.bin
-mascot-claude.json
-mascot.gif
 Website banners 2/
+*.md
+.next/
+node_modules/
