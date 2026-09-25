@@ -504,7 +504,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       attribute vec3 aFrac;   // x: how high up it sits (0..1), y: its building's start, z: that building's height
       attribute vec4 aRand;
       attribute vec3 aTint;
-      varying vec3 vTint; varying float vA;
+      varying vec3 vTint; varying float vA, vShine;
       void main() {
         float g = clamp((uBuild - aFrac.y * 0.6) / 0.4, 0.0, 1.0);
         g = g * g * (3.0 - 2.0 * g);
@@ -516,9 +516,15 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         float rad = (1.2 + aRand.y * 2.2) * (1.0 - e);
         vec3 start = vec3(cos(ang) * rad, -aFrac.x * aFrac.z * (1.0 - e) + (aRand.z - 0.5) * 0.6 * (1.0 - e), sin(ang) * rad);
         vec3 p = position + start;
+        /* Alive once it lands, the way the mascot is: each point drifts on its own small orbit, and
+           slow bands of brighter light climb up through the building like the rays in his aurora. */
+        float ph = aRand.w * 6.2832;
+        p += vec3(sin(uTime * (0.7 + aRand.x) + ph), sin(uTime * (0.9 + aRand.y) + ph * 1.7) * 0.6, cos(uTime * (0.8 + aRand.z) + ph)) * 0.045 * e;
+        float ray = 0.5 + 0.5 * sin(position.y * 1.6 - uTime * 1.4 + (position.x + position.z) * 0.35);
+        vShine = 0.75 + 1.1 * pow(ray, 3.0) + 0.5 * step(0.985, fract(aRand.w * 37.0 + uTime * 0.13));
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = max(1.6, (1.9 + 4.5 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
+        gl_PointSize = max(1.8, (2.4 + 4.2 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
         // on its way and just landed it is bright; once the facade has come up behind it, it settles to a sparkle
         vA = step(0.001, t);
         // white while it flies, its own colour once it lands
@@ -526,12 +532,14 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       }`,
     fragmentShader: /* glsl */ `
       uniform float uDim;
-      varying vec3 vTint; varying float vA;
+      varying vec3 vTint; varying float vA, vShine;
       void main() {
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5 || vA < 0.01) discard;
+        // a soft glow round a bright core, so each point reads as a light, not a dot
         float core = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(vTint * uDim * (0.8 + core * 0.6), core * vA);
+        float glow = core * core * 0.6 + exp(-d * d * 40.0) * 0.8;
+        gl_FragColor = vec4(vTint * uDim * vShine * 1.15, glow * vA);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));

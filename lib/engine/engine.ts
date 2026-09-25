@@ -457,7 +457,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     billboard.material.opacity = Math.min(1, cityDim * 1.5);
     const lineReveal = section === 'intro' ? 0 : section === 'solutions' ? Math.min(1.02, smooth(0, 0.14, s.solutions) * 1.02) : 1.02;
     line.update(time, lineReveal, cityDim, s.trainS);
-    if (onIntro && ip < 0.3) billboard.draw(time);
+    // the board stays live (its snow and its Z) for as long as it can be seen
+    if (billboard.material.opacity > 0.05) billboard.draw(time);
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();
 
     sky = damp(sky, onIntro ? smooth(0.1, 0.3, ip) : 1, 3, dt);

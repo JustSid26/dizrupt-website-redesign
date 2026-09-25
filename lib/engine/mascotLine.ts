@@ -206,9 +206,11 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
           float e = t * t * (3.0 - 2.0 * t);
           float a = aRand * 40.0 + (1.0 - e) * 6.0;
           p += vec3(cos(a) * 2.5, -3.0 - aRand * 4.0, sin(a) * 2.5) * (1.0 - e);
-          vA = step(0.001, t) * (1.0 - smoothstep(0.0, 0.08, -ahead) * 0.92);
+          vA = step(0.001, t) * (1.0 - smoothstep(0.0, 0.08, -ahead) * 0.55);
+          p += vec3(sin(uTime * 0.9 + aRand * 50.0), sin(uTime * 1.2 + aRand * 31.0) * 0.5, cos(uTime * 0.8 + aRand * 17.0)) * 0.05 * e;
         } else {
-          vA = step(ahead, 0.0);
+          // pulses of light running along the line, his way round
+          vA = step(ahead, 0.0) * (0.6 + 1.2 * pow(0.5 + 0.5 * sin(aU * 90.0 - uTime * 2.5), 6.0));
         }
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
@@ -222,7 +224,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5 || vA < 0.01) discard;
         vec3 col = vKind < 0.5 ? vec3(0.5, 0.28, 0.75) : vKind < 1.5 ? vec3(0.8, 0.65, 1.0) : vec3(0.2, 0.13, 0.32);
-        gl_FragColor = vec4(col * uDim, smoothstep(0.5, 0.0, d) * vA);
+        float core = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(col * uDim * 1.2, (core * core * 0.6 + exp(-d * d * 40.0) * 0.8) * vA);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));

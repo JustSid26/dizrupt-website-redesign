@@ -96,7 +96,9 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
   }
 
   let frameNo = 0;
-  let zSlip = 0;
+  let nextBurst = 0;
+  let burstUntil = 0;
+  let tear: null | { jx: number; jy: number; rx: number; ry: number; bx: number; by: number; band: number[] | null } = null;
   function draw(time: number) {
     if (frameNo++ % 2) return;
     const W = canvas.width, H = canvas.height;
@@ -116,8 +118,24 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
     ctx.drawImage(snow, 0, 0, W, H);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
-    // the Z still loses the signal now and then
-    zSlip = Math.random() < 0.02 ? (Math.random() - 0.5) * W * 0.02 : zSlip * 0.6;
+    /* The Z never stops losing the signal, the same fault it runs on the landing: every so often,
+       at an interval rolled fresh each time, it tears for a few held steps — the three colour
+       channels thrown apart by different amounts, the letter jumping, a band of it dropping out. */
+    if (time > nextBurst) {
+      burstUntil = time + 0.2 + Math.random() * 0.3;
+      nextBurst = burstUntil + 0.7 + Math.random() * 0.8;
+    }
+    const tearing = time < burstUntil;
+    const fs = Math.max(8, parseFloat(glyphs.find((g) => g.flip)?.font.split(' ')[1] ?? '100'));
+    if (tearing && frameNo % 4 < 2) {
+      const spread = fs * (0.05 + Math.random() * 0.2);
+      tear = {
+        jx: (Math.random() - 0.5) * fs * 0.16, jy: (Math.random() - 0.5) * fs * 0.06,
+        rx: (Math.random() - 0.5) * spread * 2, ry: (Math.random() - 0.5) * fs * 0.08,
+        bx: (Math.random() - 0.5) * spread * 2.4, by: (Math.random() - 0.5) * fs * 0.08,
+        band: Math.random() < 0.35 ? [Math.random() * 0.55, 0.1 + Math.random() * 0.3] : null,
+      };
+    } else if (!tearing) tear = null;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     for (const g of glyphs) {
@@ -125,18 +143,28 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
       ctx.fillStyle = g.color;
       if (g.flip) {
         ctx.save();
-        ctx.translate(g.x + zSlip, g.y);
+        ctx.translate(g.x + (tear?.jx ?? 0), g.y + (tear?.jy ?? 0));
         ctx.scale(-1, 1);
-        if (Math.abs(zSlip) > 2) {
+        if (tear) {
           ctx.globalCompositeOperation = 'screen';
           ctx.fillStyle = '#ff2d4f';
-          ctx.fillText(g.text, zSlip * 0.8, 0);
+          ctx.fillText(g.text, tear.rx, tear.ry);
           ctx.fillStyle = '#2f6bff';
-          ctx.fillText(g.text, -zSlip * 0.8, 0);
-          ctx.fillStyle = g.color;
+          ctx.fillText(g.text, tear.bx, tear.by);
           ctx.globalCompositeOperation = 'source-over';
-        }
-        ctx.fillText(g.text, 0, 0);
+          ctx.fillStyle = g.color;
+          if (tear.band) {
+            // a band of the letter is lost: draw it above and below the gap only
+            const [top, h] = tear.band;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-fs, -fs * 0.2, fs * 2, fs * (top + 0.2));
+            ctx.rect(-fs, fs * (top + h), fs * 2, fs * 1.5);
+            ctx.clip();
+            ctx.fillText(g.text, 0, 0);
+            ctx.restore();
+          } else ctx.fillText(g.text, 0, 0);
+        } else ctx.fillText(g.text, 0, 0);
         ctx.restore();
       } else ctx.fillText(g.text, g.x, g.y);
     }
