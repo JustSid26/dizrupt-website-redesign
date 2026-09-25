@@ -239,7 +239,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       blds.set(key, b);
     }
     // tall, in front of the plaza from the camera's side, spread across the view
-    const candidates = [...blds.values()].filter((b) => b.h > 11 && b.cz > -26 && b.cz < 8 && Math.abs(b.cx) < 34 && b.maxZ > -1e8 && Math.hypot(b.cx, b.cz) > 13);
+    const candidates = [...blds.values()].filter((b) => b.h > 11 && b.cz > -26 && b.cz < 8 && Math.abs(b.cx) < 34 && b.maxZ > -1e8 && Math.hypot(b.cx, b.cz) > 13 && Math.abs(b.cx) > 7);
     candidates.sort((a, b) => a.cx - b.cx);
     const picks: typeof candidates = [];
     const n = SOCIALS.length;
@@ -261,11 +261,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         x.save(); x.translate(106, 106); x.scale(300 / 24, 300 / 24);
         x.fill(new Path2D(soc.path)); x.restore();
       } else if (soc.mark === 'in') {
+        // outlined, like the others: a rounded square and the letters, both lit
+        x.lineWidth = 24; x.strokeStyle = soc.color;
         x.beginPath();
         x.moveTo(146, 106); x.arcTo(406, 106, 406, 406, 40); x.arcTo(406, 406, 106, 406, 40); x.arcTo(106, 406, 106, 106, 40); x.arcTo(106, 106, 406, 106, 40);
-        x.closePath(); x.fill();
-        x.fillStyle = '#fff'; x.font = '800 200px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-        x.fillText('in', 262, 270);
+        x.closePath(); x.stroke();
+        x.fillStyle = soc.color; x.font = '800 210px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.fillText('in', 262, 272);
       } else {
         x.lineWidth = 22; x.strokeStyle = soc.color; x.lineJoin = 'round';
         x.strokeRect(96, 146, 320, 220);
@@ -273,17 +275,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       }
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
-      const w = Math.min(4.8, Math.max(2.8, (b.maxX - b.minX) * 1.1)); // big enough to read and click from the city view
+      const w = Math.min(6, Math.max(4, (b.maxX - b.minX) * 1.3)); // big enough to read and click from the city view
       void tex;
       // the hit area: an invisible square where the logo is lit
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ visible: false }));
       /* The logo is the tower's own windows: a grid of panes on its face, those inside the mark lit
          in the brand's colour, the rest left as ordinary dim windows — the way buildings spell
          things out at night. */
-      const G = 26;
+      const G = 40; // finer, so the mark reads crisply
       const img = x.getImageData(0, 0, 512, 512).data;
       const lp: number[] = [], lc: number[] = [];
-      const brand = new THREE.Color(soc.color), dimW = new THREE.Color(0.35, 0.3, 0.22);
+      const base0 = new THREE.Color(soc.color), lumB = base0.r * 0.3 + base0.g * 0.59 + base0.b * 0.11;
+      // dark brand colours (LinkedIn's blue) are lifted so they carry as light
+      const brand = base0.clone().lerp(new THREE.Color(1, 1, 1), lumB < 0.3 ? 0.35 : 0.2).multiplyScalar(lumB < 0.3 ? 1.5 : 1), dimW = new THREE.Color(0.35, 0.3, 0.22);
       for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) {
         const px = Math.floor(((gx + 0.5) / G) * 512), py = Math.floor(((gy + 0.5) / G) * 512);
         const i4 = (py * 512 + px) * 4;
@@ -291,16 +295,20 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         const onMark = lum > 0.35 && !(px < 30 || py < 30 || px > 482 || py > 482); // not the old frame
         lp.push((gx / (G - 1) - 0.5) * w, (0.5 - gy / (G - 1)) * w, 0);
         const c = onMark ? brand : dimW;
-        const k = onMark ? 4 : Math.random() < 0.4 ? 0.35 : 0.04;
+        const k = onMark ? 3.2 : Math.random() < 0.25 ? 0.08 : 0.0; // the mark blazes, the panes round it stay dark
         lc.push(c.r * k, c.g * k, c.b * k);
       }
       const lg = new THREE.BufferGeometry();
       lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
       lg.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3));
-      const panes = new THREE.Points(lg, new THREE.PointsMaterial({ size: (w / G) * 0.9, vertexColors: true, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
+      const panes = new THREE.Points(lg, new THREE.PointsMaterial({ size: (w / G) * 0.82, vertexColors: true, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
       panes.frustumCulled = false;
       panes.renderOrder = 60; // a lit mark is never lost behind a nearer tower
       sign.add(panes);
+      // the tower's other windows go dark behind the mark, so the lit ones read as one shape
+      const unlit = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.04, w * 1.04), new THREE.MeshBasicMaterial({ color: '#050508', transparent: true, opacity: 0.88, depthTest: false }));
+      unlit.renderOrder = 59;
+      sign.add(unlit);
       sign.position.set(b.cx, GROUND + b.h * 0.78, b.maxZ + 0.08);
       sign.visible = false;
       scene.add(sign);
