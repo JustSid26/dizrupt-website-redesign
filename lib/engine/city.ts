@@ -34,8 +34,8 @@ attribute float aSeed;
 varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
 varying float vStyle, vSeed, vGrow;
 void main() {
-  float g = clamp((uBuild - aStart * 0.72) / 0.28, 0.0, 1.0);
-  g = 1.0 - pow(1.0 - g, 2.4);
+  float g = clamp((uBuild - aStart * 0.6) / 0.4, 0.0, 1.0);
+  g = g * g * (3.0 - 2.0 * g);
   vec3 local = position * aSize;
   vec4 world = modelMatrix * instanceMatrix * vec4(local, 1.0);
   gl_Position = projectionMatrix * viewMatrix * world;
@@ -56,7 +56,9 @@ void main() {
   float h = vSize.y;
   float y = vLocal.y;
   // built only as far as the particles have landed; the roof goes on last
-  float front = vGrow * h;
+  // the particles land first; the solid building fades in a little way below them
+  float front = clamp((vGrow - 0.22) / 0.78, 0.0, 1.0) * h;
+  float fresh = smoothstep(front - 0.8, front, y); // the newest floors are still only particles
   if (y > front + 0.001 || (n.y > 0.5 && vGrow < 0.999)) discard;
   vec3 col;
   if (n.y > 0.5) {
@@ -98,7 +100,7 @@ void main() {
     col += vec3(1.0, 0.72, 0.4) * step(y, 0.3) * step(0.08, y) * step(0.5, hash(vec2(floor(u / 0.6), 3.0))) * (vStyle > 0.5 ? 0.3 : 0.0);
   }
   // the line of light at the top while it is still going up
-  col += vec3(0.9, 0.95, 1.0) * (1.0 - step(0.999, vGrow)) * exp(-(front - y) * 10.0) * 0.5;
+  col *= 1.0 - fresh * (1.0 - step(0.999, vGrow)) * 0.85;
   float d = distance(vWorld, uCam);
   col = mix(col, uFog, smoothstep(40.0, 130.0, d));
   gl_FragColor = vec4(col * uDim, 1.0);
@@ -351,8 +353,8 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       attribute vec3 aSize; attribute vec3 aTint; attribute float aStart;
       varying vec3 vTint, vWorld; varying float vGrow, vY;
       void main() {
-        float g = clamp((uBuild - aStart * 0.72) / 0.28, 0.0, 1.0);
-        g = 1.0 - pow(1.0 - g, 2.4);
+        float g = clamp((uBuild - aStart * 0.6) / 0.4, 0.0, 1.0);
+        g = g * g * (3.0 - 2.0 * g);
         vec3 local = position * vec3(aSize.x, min(aSize.x, aSize.z), aSize.z) * step(0.999, g);
         local.y += aSize.y;
         vec4 w = modelMatrix * instanceMatrix * vec4(local, 1.0);
@@ -388,12 +390,20 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   roofs.frustumCulled = false;
   group.add(roofs);
 
+  /* ---- the railway's plan: an elevated ring on pillars round downtown ---- */
+  const RAIL_R = Math.min(30, EXTENT * 0.62);
+  const RAIL_Y = GROUND + 6.4;
+  const RAIL_H = RAIL_Y - GROUND;
+  const pillarCount = 48;
+  // no randomness here: the track's shader works out the same start times from its position
+  const railStart = (x: number, z: number) => Math.min(1, Math.hypot(x - boardXZ.x, z - boardXZ.y) / (EXTENT * 1.7)) * 0.85;
+
   /* ---- construction: each building is assembled out of particles, floor by floor ----
      Points sampled over its faces stream in from a loose cloud around it and land on its surface in
      order of height, bottom first, the way the mascot is lit from the top down; the solid facade is
      only drawn below the line where they have landed. Once it is up they burn out. */
   const cp: number[] = [], cf: number[] = [], cr: number[] = [], cc: number[] = [];
-  const budget = isMobile ? 45000 : 110000;
+  const budget = isMobile ? 60000 : 160000;
   const area = blds.reduce((a, b) => a + (2 * (b.w + b.d) * b.h + b.w * b.d), 0);
   const perUnit = budget / area;
   for (const b of blds) {
@@ -415,6 +425,31 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       }
     }
   }
+  // the railway goes up the same way: pillars rise out of the particles, then the deck is laid on top
+  const railTint = new THREE.Color('#5fe3ff');
+  for (let i = 0; i < pillarCount; i++) {
+    const a = (i / pillarCount) * Math.PI * 2;
+    const px = Math.cos(a) * RAIL_R, pz = Math.sin(a) * RAIL_R;
+    const st = railStart(px, pz);
+    for (let k = 0; k < (isMobile ? 70 : 150); k++) {
+      const ang = rnd() * Math.PI * 2;
+      const y = rnd() * RAIL_H;
+      cp.push(px + Math.cos(ang) * 0.19, GROUND + y, pz + Math.sin(ang) * 0.19);
+      cf.push(y / RAIL_H, st, RAIL_H);
+      cr.push(rnd(), rnd(), rnd(), rnd());
+      cc.push(railTint.r, railTint.g, railTint.b);
+    }
+  }
+  for (let k = 0; k < (isMobile ? 2500 : 6000); k++) {
+    const a = rnd() * Math.PI * 2;
+    const rr = RAIL_R + (rnd() - 0.5) * 0.9;
+    const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+    cp.push(x, RAIL_Y + (rnd() - 0.5) * 0.12, z);
+    // the deck lands after the pillars under it have topped out
+    cf.push(0.97 + rnd() * 0.03, railStart(x, z), RAIL_H);
+    cr.push(rnd(), rnd(), rnd(), rnd());
+    cc.push(railTint.r, railTint.g, railTint.b);
+  }
   const cGeo = new THREE.BufferGeometry();
   cGeo.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));
   cGeo.setAttribute('aFrac', new THREE.Float32BufferAttribute(cf, 3));
@@ -430,20 +465,23 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       attribute vec3 aTint;
       varying vec3 vTint; varying float vA;
       void main() {
-        float g = clamp((uBuild - aFrac.y * 0.72) / 0.28, 0.0, 1.0);
-        g = 1.0 - pow(1.0 - g, 2.4);
-        // its turn comes when the build reaches its height; it flies the last stretch in
-        float t = clamp((g - aFrac.x) / 0.12 + 1.0, 0.0, 1.0);
+        float g = clamp((uBuild - aFrac.y * 0.6) / 0.4, 0.0, 1.0);
+        g = g * g * (3.0 - 2.0 * g);
+        // its turn comes when the build reaches its height: it rises from the ground beside the building
+        // and spirals in to its place
+        float t = clamp((g - aFrac.x * 0.8) / 0.22, 0.0, 1.0);
         float e = t * t * (3.0 - 2.0 * t);
-        vec3 scatter = (aRand.xyz - 0.5) * vec3(2.4, 1.2, 2.4) + vec3(0.0, 1.0 + aRand.w * 2.0, 0.0);
-        scatter += vec3(sin(uTime * 1.3 + aRand.w * 20.0), 0.0, cos(uTime * 1.1 + aRand.x * 20.0)) * 0.3;
-        vec3 p = position + scatter * (1.0 - e) * max(1.0, aFrac.z * 0.15);
+        float ang = aRand.x * 6.2832 + (1.0 - e) * 5.0;
+        float rad = (1.2 + aRand.y * 2.2) * (1.0 - e);
+        vec3 start = vec3(cos(ang) * rad, -aFrac.x * aFrac.z * (1.0 - e) + (aRand.z - 0.5) * 0.6 * (1.0 - e), sin(ang) * rad);
+        vec3 p = position + start;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = max(1.2, (1.6 + 2.0 * (1.0 - e)) * 5.5 * uPixelRatio / -mv.z);
-        // there once its turn is near; gone again once the building stands
-        vA = smoothstep(0.0, 0.25, t) * (1.0 - smoothstep(0.85, 1.0, g) * 0.9) * step(0.001, g);
-        vTint = mix(vec3(1.0), aTint, e * 0.6);
+        gl_PointSize = max(2.0, (3.2 + 3.5 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
+        // on its way and just landed it is bright; once the facade has come up behind it, it settles to a sparkle
+        float settled = smoothstep(0.1, 0.45, g - aFrac.x * 0.8 - 0.22);
+        vA = step(0.001, t) * mix(1.0, 0.12, settled) * (1.0 - smoothstep(0.97, 1.0, g) * 0.85);
+        vTint = mix(vec3(1.0, 0.98, 0.95), aTint * 1.3, 0.35 + e * 0.5);
       }`,
     fragmentShader: /* glsl */ `
       uniform float uDim;
@@ -451,7 +489,8 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       void main() {
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5 || vA < 0.01) discard;
-        gl_FragColor = vec4(vTint * uDim, smoothstep(0.5, 0.0, d) * vA * 0.8);
+        float core = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vTint * uDim * (0.7 + core), core * vA);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
@@ -689,13 +728,11 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   cars.frustumCulled = false;
   group.add(cars);
   /* ---- the railway: an elevated line on pillars ringing downtown, and two trains on it ---- */
-  const RAIL_R = Math.min(30, EXTENT * 0.62);
-  const RAIL_Y = GROUND + 6.4;
   const railPts: number[] = [], railK: number[] = [], railS: number[] = [], railSt: number[] = [], railD: number[] = [];
   for (let a = 0; a < Math.PI * 2; a += 0.004) {
     for (const off of [-0.32, 0.32]) {
       railPts.push(Math.cos(a) * (RAIL_R + off), RAIL_Y, Math.sin(a) * (RAIL_R + off));
-      railK.push(LED); railS.push(rnd()); railSt.push(startAt(Math.cos(a) * RAIL_R, Math.sin(a) * RAIL_R)); railD.push(0, 0, 0);
+      railK.push(LED); railS.push(rnd()); railSt.push(Math.min(1, railStart(Math.cos(a) * RAIL_R, Math.sin(a) * RAIL_R) + 0.35)); railD.push(0, 0, 0);
     }
   }
   // the rails are lit strips, drawn with the same lights as the streets
@@ -708,14 +745,43 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   const rails = new THREE.Points(railGeo, sparks.material);
   rails.frustumCulled = false;
   group.add(rails);
+  const railUniforms = { uBuild: buildingUniforms.uBuild, uBoard: { value: billboard.center.clone() }, uExtent: { value: EXTENT }, uGround: { value: GROUND }, uH: { value: RAIL_H }, uDim: buildingUniforms.uDim };
+  const railGrow = /* glsl */ `
+    uniform float uBuild, uExtent, uGround, uH, uDim;
+    uniform vec3 uBoard;
+    float growAt(vec3 w) {
+      float st = min(1.0, distance(w.xz, uBoard.xz) / (uExtent * 1.7)) * 0.85;
+      float g = clamp((uBuild - st * 0.6) / 0.4, 0.0, 1.0);
+      return g * g * (3.0 - 2.0 * g);
+    }`;
   const deck = new THREE.Mesh(
     new THREE.TorusGeometry(RAIL_R, 0.45, 4, 220).rotateX(Math.PI / 2).scale(1, 0.25, 1).translate(0, RAIL_Y - 0.12, 0),
-    new THREE.MeshBasicMaterial({ color: '#12151f' }),
+    new THREE.ShaderMaterial({
+      uniforms: railUniforms,
+      vertexShader: `varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: railGrow + `
+        varying vec3 vW;
+        void main() {
+          // laid only once its particles have landed on top of the pillars
+          if (growAt(vW) < 0.985) discard;
+          gl_FragColor = vec4(vec3(0.07, 0.08, 0.12) * uDim, 1.0);
+        }`,
+    }),
   );
   group.add(deck);
   const pillarGeo = new THREE.CylinderGeometry(0.16, 0.2, RAIL_Y - GROUND, 8).translate(0, (RAIL_Y + GROUND) / 2, 0);
-  const pillarCount = 48;
-  const pillars = new THREE.InstancedMesh(pillarGeo, new THREE.MeshBasicMaterial({ color: '#1a1e2c' }), pillarCount);
+  const pillars = new THREE.InstancedMesh(pillarGeo, new THREE.ShaderMaterial({
+    uniforms: railUniforms,
+    vertexShader: `varying vec3 vW; varying vec3 vBase; void main() { vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; vBase = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: railGrow + `
+      varying vec3 vW; varying vec3 vBase;
+      void main() {
+        // solid only below where its particles have landed, as the buildings are
+        float front = clamp((growAt(vBase) - 0.22) / 0.78, 0.0, 1.0) * uH;
+        if (vW.y - uGround > front) discard;
+        gl_FragColor = vec4(vec3(0.1, 0.12, 0.17) * uDim, 1.0);
+      }`,
+  }), pillarCount);
   for (let i = 0; i < pillarCount; i++) {
     const a = (i / pillarCount) * Math.PI * 2;
     pillars.setMatrixAt(i, m.makeTranslation(Math.cos(a) * RAIL_R, 0, Math.sin(a) * RAIL_R));
@@ -795,8 +861,6 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     sparkUniforms.uDim.value = dim;
     plinth.visible = build > 0.3;
     // the railway goes up with the city; the trains run once it is there
-    const railUp = build > 0.55;
-    deck.visible = pillars.visible = railUp;
     carriages.visible = build > 0.8;
     if (carriages.visible) placeTrains(time);
     for (const p of planes) {
