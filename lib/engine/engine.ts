@@ -252,6 +252,55 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   let key = 'mascot:neutral'; // the shape the field is heading for
   let scrubbing = false; // uProgress is being driven by the scroll
+
+  /* The count, as four windows of his light. Laid out for the close framing the camera lands on
+     (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
+     made of the same particles he was. Rebuilt when the window changes shape. */
+  const statPanels: { x: number; y: number; w: number; h: number }[] = [];
+  function buildStatWindows() {
+    const aspect = innerWidth / innerHeight;
+    const halfH = CAMERA_Z * Math.tan(THREE.MathUtils.degToRad(22.5));
+    const halfW = halfH * aspect;
+    statPanels.length = 0;
+    if (aspect > 1) {
+      const w = Math.min(3.4, halfW * 0.78), h = Math.min(1.7, halfH * 0.62);
+      const gx = Math.min(halfW - w / 2 - 0.35, w / 2 + 0.35), gy = Math.min(halfH - h / 2 - 0.55, h / 2 + 0.3);
+      for (const [sx, sy] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) statPanels.push({ x: sx * gx, y: sy * gy - 0.15, w, h });
+    } else {
+      const w = halfW * 1.7, h = Math.min(1.25, (halfH * 2 - 1.6) / 4 - 0.2);
+      for (let i = 0; i < 4; i++) statPanels.push({ x: 0, y: (1.5 - i) * (h + 0.22) - 0.2, w, h });
+    }
+    const arr = new Float32Array(COUNT * 3);
+    let seed = 9;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    for (let i = 0; i < COUNT; i++) {
+      const pnl = statPanels[i % 4];
+      const k = rnd();
+      let x, y;
+      if (k < 0.34) {
+        // the frame: all four sides, a little depth to it
+        const t = rnd() * 2 * (pnl.w + pnl.h);
+        [x, y] = t < pnl.w ? [t - pnl.w / 2, -pnl.h / 2] : t < pnl.w + pnl.h ? [pnl.w / 2, t - pnl.w - pnl.h / 2]
+          : t < 2 * pnl.w + pnl.h ? [pnl.w / 2 - (t - pnl.w - pnl.h), pnl.h / 2] : [-pnl.w / 2, pnl.h / 2 - (t - 2 * pnl.w - pnl.h)];
+      } else if (k < 0.44) {
+        // corner brackets, just outside
+        const cx = rnd() < 0.5 ? -1 : 1, cy = rnd() < 0.5 ? -1 : 1, along = rnd() * 0.3, hor = rnd() < 0.5;
+        x = cx * (pnl.w / 2 + 0.07 - (hor ? along : 0));
+        y = cy * (pnl.h / 2 + 0.07 - (hor ? 0 : along));
+      } else {
+        // the glass: a faint scanline grid across the pane
+        x = (rnd() - 0.5) * pnl.w * 0.96;
+        y = Math.round((rnd() - 0.5) * pnl.h * 0.96 / 0.07) * 0.07;
+      }
+      arr[i * 3] = pnl.x + x;
+      arr[i * 3 + 1] = pnl.y + y;
+      arr[i * 3 + 2] = (rnd() - 0.5) * 0.04;
+    }
+    field.register('stats', new THREE.BufferAttribute(arr, 3));
+  }
+  buildStatWindows();
+  addEventListener('resize', () => { if (key !== 'stats') buildStatWindows(); });
+  const corner = new THREE.Vector3();
   let wasCase = false;
   let sky = 0;
   let boardMeasure = 0;
@@ -282,7 +331,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       want = preview.shape;
       colors = preview.colors;
     } else if (section === 'intro') {
-      want = ip >= 0.58 ? 'mascot:flex' : ip >= 0.42 ? 'mascot:neutral' : 'mascot:full';
+      // whole in the city → comes apart into the four windows of the count → back into him for the profile
+      want = ip >= 0.76 ? 'mascot:neutral' : ip >= 0.44 ? 'stats' : 'mascot:full';
     } else if (section === 'solutions') {
       // he stands whole in the city for a moment, then becomes his train
       want = s.solutions < 0.035 ? 'mascot:full' : 'train';
@@ -291,15 +341,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     } else {
       want = 'mascot:neutral'; // he sees you out
     }
-    // gathering from head-to-toe into the bust is scrubbed by the scroll, as the camera flies in
-    const gather = section === 'intro' && !view && !preview && key === 'mascot:full' && want === 'mascot:neutral';
+    // coming apart into the windows is scrubbed by the scroll, as the camera flies in
+    const gather = section === 'intro' && !view && !preview && key === 'mascot:full' && want === 'stats';
     if (want !== key) {
       const bothMascot = want.startsWith('mascot:') && key.startsWith('mascot:');
-      field.morphTo(field.shape(want), gather ? null : bothMascot ? 900 : 1700, gather ? 0.15 : bothMascot ? 0.1 : 1);
+      field.morphTo(field.shape(want), gather ? null : bothMascot ? 900 : 1700, gather ? 1.2 : bothMascot ? 0.1 : 1);
       scrubbing = gather;
       key = want;
     }
-    if (scrubbing && key === 'mascot:neutral' && section === 'intro') u.uProgress.value = smooth(0.42, 0.55, ip);
+    if (scrubbing && key === 'stats' && section === 'intro') u.uProgress.value = smooth(0.44, 0.58, ip);
     else if (scrubbing) {
       scrubbing = false;
       u.uProgress.value = 1;
@@ -311,7 +361,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     /* ---- the landing: a beam runs down him and leaves him lit ---- */
     const onIntro = section === 'intro' && !view && !preview;
     const reveal = onIntro ? smooth(0.22, 0.4, ip) : 1;
-    u.uBeamOn.value = onIntro ? 1 : 0;
+    u.uBeamOn.value = onIntro && ip < 0.44 ? 1 : 0;
     // from below his feet up past his crown: he is built foot to head
     const feetY = mascot ? mascot.feet : -6;
     u.uBeam.value = feetY - 0.4 + reveal * (BUST_HEIGHT / 2 - feetY + 1.0);
@@ -336,7 +386,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     } else if (onIntro) {
       const turned = signals.introBeat === 'profile';
       tx = turned ? profileShift() : 0;
-      ty = BUST_DROP;
+      ty = key === 'stats' ? 0 : BUST_DROP;
       sc = 1;
       rot = turned ? -Math.PI / 2 : 0;
     } else if (key === 'train') {
@@ -417,7 +467,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     ndc.set(p.x, p.y);
     raycaster.setFromCamera(ndc, camera);
     if (raycaster.ray.intersectPlane(plane, mouseWorld)) u.uMouse.value.lerp(mouseWorld, 1 - Math.exp(-8 * dt));
-    u.uMouseStrength.value = damp(u.uMouseStrength.value, p.active && !isMascot && !view && key !== 'train' ? 1 : 0, 3, dt);
+    u.uMouseStrength.value = damp(u.uMouseStrength.value, p.active && !isMascot && !view && key !== 'train' && key !== 'stats' ? 1 : 0, 3, dt);
 
     /* ---- the spiral ---- */
     if (wasCase && !view) {
@@ -509,6 +559,24 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     });
     mascotVisible = windowField.update(dt, time, { index, field: source, camera, height: innerHeight * pixelRatio });
 
+    // the windows hang in front of the city, never behind a tower
+    const onTop = key === 'stats';
+    for (const pts of [points, ...field.ghosts]) {
+      const m = pts.material as THREE.ShaderMaterial;
+      if (m.depthTest === onTop) { m.depthTest = !onTop; m.needsUpdate = true; }
+    }
+    points.renderOrder = onTop ? 50 : 0;
+    if (key === 'stats') {
+      statPanels.forEach((pnl, i) => {
+        const out = signals.statWindows[i];
+        corner.set(pnl.x - pnl.w / 2, pnl.y + pnl.h / 2, 0).applyMatrix4(points.matrixWorld).project(camera);
+        const x0 = (corner.x * 0.5 + 0.5) * innerWidth, y0 = (-corner.y * 0.5 + 0.5) * innerHeight;
+        corner.set(pnl.x + pnl.w / 2, pnl.y - pnl.h / 2, 0).applyMatrix4(points.matrixWorld).project(camera);
+        out.x = x0; out.y = y0;
+        out.w = (corner.x * 0.5 + 0.5) * innerWidth - x0;
+        out.h = (-corner.y * 0.5 + 0.5) * innerHeight - y0;
+      });
+    }
     composer.render();
   }
   frame();

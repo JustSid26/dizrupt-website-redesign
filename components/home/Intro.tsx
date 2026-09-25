@@ -15,7 +15,7 @@ import { useSection } from "@/components/home/useSection";
      profile  he turns side on and the line stands in the space he leaves
    Scroll back and every beat runs backwards. */
 const WORD = ["D", "I", "Z", "R", "U", "P", "T"];
-const BEATS = { reveal: 0.015, stats: 0.58, profile: 0.78 };
+const BEATS = { reveal: 0.015, stats: 0.57, profile: 0.78 };
 const HOLE = 280; // px, the radius the cursor opens in the black
 
 const STAT_TONGUES: Record<string, { text: string; latin: boolean }[]> = {
@@ -37,7 +37,7 @@ const STAT_TONGUES: Record<string, { text: string; latin: boolean }[]> = {
   ],
 };
 // where each number is, as a place for him to look (the cursor's own left-right, up-down)
-const STAT_CORNER: [number, number][] = [[-0.52, -0.2], [0.52, -0.2], [-0.5, 0.17], [0.5, 0.17]];
+const STAT_CORNER: [number, number][] = [[0, 0], [0, 0], [0, 0], [0, 0]]; // he is the windows now; nothing to look at
 const STAT_STEP = 1050;
 const STAT_LOOK = 160;
 const STAT_TONGUE = 560;
@@ -299,8 +299,21 @@ export function Intro() {
       }
     };
     gsap.ticker.add(tick);
+    // each number sits in its own window: the engine says where those are on screen
+    const placeStats = () => {
+      if (beat !== "stats") return;
+      cells().forEach((cell, i) => {
+        const r = signals.statWindows[i];
+        if (!r || r.w < 10) return;
+        cell.style.transform = `translate(${r.x.toFixed(1)}px, ${r.y.toFixed(1)}px)`;
+        cell.style.width = `${r.w.toFixed(1)}px`;
+        cell.style.height = `${r.h.toFixed(1)}px`;
+      });
+    };
+    gsap.ticker.add(placeStats);
 
     return () => {
+      gsap.ticker.remove(placeStats);
       st.kill();
       gsap.ticker.remove(tick);
       clearTimers();

@@ -27,6 +27,8 @@ export const signals = {
   // the menu's hovered solution takes the field over
   preview: null as null | { shape: string; colors: [string, string] },
   menuOpen: false,
+  // the count's four windows on screen (the engine writes them, the landing places the numbers in them)
+  statWindows: Array.from({ length: 4 }, () => ({ x: 0, y: 0, w: 0, h: 0 })),
   night: 0, // 0 blue hour, 1 full night (the nav's switch)
   ready: false, // the engine has built everything it needs
 };
