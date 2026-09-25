@@ -507,7 +507,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     {
       if (section !== 'intro' && section !== 'solutions') signals.rideTarget = null;
       const target = signals.rideTarget ?? (section === 'intro' ? 0 : s.trainS);
-      const K = 0.55, C = 1.5, VMAX = 0.13; // stops per second at most: a slow, stately ride
+      const K = 0.55, C = 1.5, VMAX = 0.40; // stops per second at most: a slow, stately ride
       ride.v += ((target - ride.s) * K - ride.v * C) * dt;
       ride.v = Math.max(-VMAX, Math.min(VMAX, ride.v));
       ride.s += ride.v * dt;
@@ -518,7 +518,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     /* The camera frames each stop the same way: while the train stands at a station it holds on
        that station's own framing, rather than drifting with the train through it. */
     const nearStop = Math.round(ride.s);
-    const dock = nearStop >= 1 ? 1 - smooth(0.15, 0.4, Math.abs(ride.s - nearStop)) : 0;
+    const dock = nearStop >= 1 ? 1 - smooth(0.03, 0.14, Math.abs(ride.s - nearStop)) : 0; // only as it pulls in
     const camPose = line.poseAt(ride.s + (nearStop - ride.s) * dock);
     if (riding) {
       // on the line: eased onto it while the morph lands, then held to it exactly
@@ -663,9 +663,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const radial = tmpB.set(camPose.pos.x, 0, camPose.pos.z).normalize();
       const out = beside.lerp(radial, smooth(33, 36, r)).normalize(); // only once it is on the loop itself
       // docked, it stands further back and wider, so the whole billboard is in frame beside the train
-      const chase = tmpA.copy(camPose.pos).addScaledVector(out, 9 + 3 * dock).addScaledVector(flat, -5 - 5 * dock).add(tmpUp.set(0, 6 + 0.5 * dock, 0));
+      const chase = tmpA.copy(camPose.pos).addScaledVector(out, 9 + 3 * dock).addScaledVector(flat, -5 - 5 * dock).add(tmpUp.set(0, 6 + 0.5 * dock + 5 * (1 - dock) * smooth(0.05, 0.3, ride.s), 0)); // over the rooftops while it runs
       // between the train and its billboard (which stands on the far side of the track), a little ahead
-      const target = tmpB.copy(camPose.pos).addScaledVector(flat, 5 - 3 * dock).addScaledVector(out, -2.5 - 1.5 * dock).add(tmpUp.set(0, 2.2 + 0.4 * dock, 0));
+      const target = tmpB.copy(camPose.pos).addScaledVector(flat, 5 - 3 * dock).addScaledVector(out, -2.5 - 1.5 * dock).add(tmpUp.set(0, 2.2 + 0.4 * dock - 2.4 * (1 - dock) * smooth(0.05, 0.3, ride.s), 0)); // raised, it looks down to keep the train in frame
       // the copy is on the left: lean the view so the train sits right of centre
       const left = tmpUp.copy(target).sub(chase).normalize().cross(new THREE.Vector3(0, -1, 0)).normalize();
       target.addScaledVector(left, innerWidth > 900 ? -3 : 0); // the copy is on the right: train and board sit left
@@ -698,7 +698,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
     const at0 = line.stops[0] + 0.012;
-    const lineReveal = section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, pose.u + (TRAIN_HALF + 1.5) / line.length) : 1.02; // laid a metre ahead of the train's nose, as it goes
+    // laid a metre and a half ahead of the train's nose from the moment it leaves the station
+    const ahead = pose.u + (TRAIN_HALF + 1.5) / line.length;
+    const lineReveal = ride.s > 0.001 ? Math.max(at0, ahead)
+      : section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, ahead) : 1.02;
     line.update(time, lineReveal, cityDim, ride.s, stationT);
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
