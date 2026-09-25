@@ -239,6 +239,7 @@ uniform float uTime;
 uniform float uBodyReveal;
 uniform float uEyeReveal;
 uniform float uKindle;
+uniform float uFill;
 void main() {
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
@@ -289,7 +290,8 @@ void main() {
     /* The threshold sits low now: the value it reads is a lighting term, not a distance, and most
        of a body at a grazing angle lands well under half. Cutting at the old level left only the
        hardest edges and threw the modelling away. */
-    float rim = smoothstep(0.32, 0.80, vEdge);
+    // uFill lets some light into the body too, so from far off he reads as a figure, not an outline
+    float rim = max(smoothstep(0.32, 0.80, vEdge), uFill * (0.35 + 0.65 * vRay));
     /* The rays used to carry nearly all the brightness, which meant a jawline only showed where a
        ray happened to cross it and read as dashes rather than as a jaw. The band itself now carries
        most of it and the rays modulate what is already there, so the structure is continuous and

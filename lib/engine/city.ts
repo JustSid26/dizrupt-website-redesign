@@ -2,308 +2,816 @@ import * as THREE from 'three';
 import { isMobile } from './config';
 
 /* =========================================================
-   The city: every house, tower, street and car a point of light.
+   The city at night, around the mascot.
 
-   Laid out on a street grid round a plaza where the mascot stands,
-   head to toe, on a low plinth. The buildings get taller towards
-   him: houses with pitched roofs and a tree or two on the edge of
-   town, mid-rise blocks with water tanks further in, and near the
-   plaza skyscrapers that step back as they rise and end in a spire
-   with a blinking light.
+   Solid buildings with lit windows, drawn in one instanced pass:
+   houses with pitched roofs on the edge of town, blocks of flats,
+   office towers, and near the plaza glass skyscrapers — the
+   tallest as tall as he is — with LED edges and a beacon on top.
+   Asphalt streets with lane markings and pavements, a grand
+   avenue up to his plaza, parks, trees, streetlights, traffic,
+   and aeroplanes crossing overhead.
 
-   It builds itself. Each building has a start time that spreads
-   outward from the billboard; when its turn comes, a line of light
-   climbs from the ground and the floors light up behind it, with
-   the roof riding on top until it reaches its height. uBuild runs
-   the whole thing, 0 → 1, off the scroll.
+   It builds itself: every building has a start time spreading
+   out from the billboard, and rises out of the ground with a line
+   of light at its top; the streets and everything on them are
+   laid down as the build passes. uBuild runs it, 0 → 1.
+
+   Only the mascot is purple. Everything here takes other colours.
    ========================================================= */
 export type Billboard = { center: THREE.Vector3; normal: THREE.Vector3; height: number };
 
-// kinds, read by the shader
-const EDGE = 0, WINDOW = 1, ROOF = 2, LANE = 3, CAR = 4, PLINTH = 5, BEACON = 6, TREE = 7;
+const FOG = new THREE.Color('#0f1726'); // the horizon's own colour, so the far city melts into it
 
-const vertex = /* glsl */ `
-uniform float uTime, uPixelRatio, uSize, uBuild;
-attribute float aKind, aSeed;
-attribute vec3 aDir;      // cars: which way the street runs, and how long it is
-attribute vec3 aBuilding; // x: its ground, y: its height, z: when it starts (0..1)
-varying float vKind, vSeed, vFade, vShow, vFront;
+/* ---------- buildings ---------- */
+const buildingVertex = /* glsl */ `
+uniform float uBuild;
+attribute vec3 aSize;    // width, height, depth
+attribute vec3 aTint;
+attribute float aStyle;  // 0 house, 1 flats, 2 office, 3 glass tower
+attribute float aStart;
+attribute float aSeed;
+varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
+varying float vStyle, vSeed, vGrow;
+void main() {
+  float g = clamp((uBuild - aStart * 0.72) / 0.28, 0.0, 1.0);
+  g = 1.0 - pow(1.0 - g, 2.4);
+  vec3 local = position * aSize;
+  vec4 world = modelMatrix * instanceMatrix * vec4(local, 1.0);
+  gl_Position = projectionMatrix * viewMatrix * world;
+  vLocal = local; // floors stay where they are in the world, so rising uncovers them one by one
+  vNormal = normal;
+  vTint = aTint; vSize = aSize; vStyle = aStyle; vSeed = aSeed; vGrow = g; vWorld = world.xyz;
+}`;
+
+const buildingFragment = /* glsl */ `
+uniform float uTime, uDim;
+uniform vec3 uFog, uCam;
+varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
+varying float vStyle, vSeed, vGrow;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + vSeed * 91.3) * 43758.5453); }
+void main() {
+  if (vGrow < 0.001) discard;
+  vec3 n = normalize(vNormal);
+  float h = vSize.y;
+  float y = vLocal.y;
+  // built only as far as the particles have landed; the roof goes on last
+  float front = vGrow * h;
+  if (y > front + 0.001 || (n.y > 0.5 && vGrow < 0.999)) discard;
+  vec3 col;
+  if (n.y > 0.5) {
+    // the roof: dark, with a lit rim
+    vec2 q = abs(vLocal.xz) / (vSize.xz * 0.5);
+    float rim = smoothstep(0.86, 1.0, max(q.x, q.y));
+    col = vTint * (0.02 + rim * 0.3);
+  } else {
+    bool alongX = abs(n.z) > 0.5;
+    float width = alongX ? vSize.x : vSize.z;
+    float u = (alongX ? vLocal.x : vLocal.z) + width * 0.5;
+    float fh = vStyle < 0.5 ? 0.34 : vStyle < 1.5 ? 0.4 : vStyle < 2.5 ? 0.42 : 0.5;
+    float bay = vStyle < 2.5 ? 0.3 : 0.46;
+    vec2 cell = vec2(u / bay, y / fh);
+    vec2 id = floor(cell) + (alongX ? vec2(0.0, 0.0) : vec2(57.0, 0.0)) + (n.x + n.z > 0.0 ? vec2(0.0, 311.0) : vec2(0.0));
+    vec2 f = fract(cell);
+    float win = step(0.2, f.x) * step(f.x, 0.8) * step(0.28, f.y) * step(f.y, 0.78);
+    // keep windows off the corners and the ground floor
+    win *= step(0.12, u) * step(u, width - 0.12) * step(fh * 0.9, y) * step(y, h - fh * 0.4);
+    float floorOn = step(0.18, hash(vec2(id.y, 7.0)));
+    float on = step(vStyle < 0.5 ? 0.55 : 0.4, hash(id)) * floorOn;
+    float warm = vStyle < 1.5 ? 0.85 : vStyle < 2.5 ? 0.35 : 0.1;
+    vec3 lamp = mix(vec3(0.7, 0.88, 1.0), vec3(1.0, 0.76, 0.42), step(1.0 - warm, hash(id + 3.1)));
+    lamp *= 0.38 + 0.3 * hash(id + 9.7);
+    // a very few flicker
+    lamp *= 1.0 - step(0.985, hash(id + 1.3)) * step(0.5, fract(uTime * 0.7 + hash(id + 2.0)));
+    vec3 facade = vTint * (0.018 + 0.03 * (y / max(vSize.y, 1.0)));
+    col = facade + lamp * win * on * (vStyle > 2.5 ? 0.9 : 1.1);
+    if (vStyle > 2.5) {
+      // glass: mullions and floor lines catch the light, and the panes carry the tint
+      float mull = (1.0 - step(0.06, f.x)) + (1.0 - step(0.05, f.y)) * 0.6;
+      col += vTint * (0.025 + mull * 0.12);
+    }
+    // lit corners: the edges of every building glow, the towers' brightest
+    float edge = min(u, width - u);
+    col += vTint * exp(-edge * (vStyle > 1.5 ? 14.0 : 20.0)) * (vStyle > 1.5 ? 0.42 : 0.18);
+    // a crown of light round the top, and shopfronts at the bottom
+    col += vTint * exp(-(h - y) * 7.0) * (vStyle > 1.5 ? 0.38 : 0.12);
+    col += vec3(1.0, 0.72, 0.4) * step(y, 0.3) * step(0.08, y) * step(0.5, hash(vec2(floor(u / 0.6), 3.0))) * (vStyle > 0.5 ? 0.3 : 0.0);
+  }
+  // the line of light at the top while it is still going up
+  col += vec3(0.9, 0.95, 1.0) * (1.0 - step(0.999, vGrow)) * exp(-(front - y) * 10.0) * 0.5;
+  float d = distance(vWorld, uCam);
+  col = mix(col, uFog, smoothstep(40.0, 130.0, d));
+  gl_FragColor = vec4(col * uDim, 1.0);
+}`;
+
+/* ---------- the ground: streets, pavements, parks, the plaza ---------- */
+const groundVertex = /* glsl */ `
+varying vec3 vWorld;
+void main() {
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vWorld = w.xyz;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const groundFragment = /* glsl */ `
+uniform float uPitch, uPlaza, uExtent, uBuild, uDim, uTime;
+uniform vec3 uFog, uCam, uBoard;
+varying vec3 vWorld;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main() {
+  vec2 p = vWorld.xz;
+  float r = length(p);
+  // how far the build has got, spreading out from the billboard
+  float reach = distance(p, uBoard.xz) / (uExtent * 1.7);
+  if (reach * 0.85 > uBuild * 1.05) discard;
+  vec3 col = vec3(0.022, 0.022, 0.03);
+  // the street grid: asphalt, a dashed centre line, pavements either side
+  vec2 g = abs(fract(p / uPitch + 0.5) - 0.5) * uPitch;
+  float avenue = step(0.0, p.y) * step(abs(p.x), 2.4);
+  float road = max(step(min(g.x, g.y), 0.9), avenue);
+  float pave = step(min(g.x, g.y), 1.2) * (1.0 - road);
+  col = mix(col, vec3(0.05, 0.05, 0.06), pave);
+  col = mix(col, vec3(0.012, 0.012, 0.016), road);
+  vec2 dash = fract(p / 0.9);
+  float centre = (1.0 - step(0.04, g.x)) * step(0.5, dash.y) + (1.0 - step(0.04, g.y)) * step(0.5, dash.x);
+  col += vec3(1.0, 0.72, 0.28) * centre * 0.7 * (1.0 - avenue);
+  // the avenue: two carriageways with a lit median
+  col += vec3(0.35, 0.9, 1.0) * avenue * (1.0 - step(0.07, abs(p.x))) * 0.8;
+  col += vec3(0.9, 0.9, 1.0) * avenue * (1.0 - step(0.03, abs(abs(p.x) - 1.2))) * step(0.5, dash.y) * 0.5;
+  // parks: some blocks are grass
+  vec2 lot = floor(p / uPitch + 0.5);
+  float park = step(0.9, hash(lot)) * (1.0 - road) * (1.0 - pave) * step(uPlaza + 3.0, r);
+  col = mix(col, vec3(0.02, 0.07, 0.035), park);
+  // the plaza: pale paving in rings, a glowing ring at its edge
+  float plaza = 1.0 - step(uPlaza, r);
+  col = mix(col, vec3(0.06, 0.065, 0.075) + 0.02 * step(0.5, fract(r * 0.8)), plaza);
+  col += vec3(0.4, 0.95, 1.0) * (1.0 - smoothstep(0.0, 0.12, abs(r - uPlaza))) * 0.9;
+  col += vec3(1.0, 0.85, 0.6) * (1.0 - smoothstep(0.0, 0.05, abs(r - uPlaza * 0.55))) * 0.5;
+  // the edge of town fades into the dark
+  col *= 1.0 - smoothstep(uExtent - 2.0, uExtent + 12.0, max(abs(p.x), abs(p.y)));
+  col = mix(col, uFog, smoothstep(40.0, 130.0, distance(vWorld, uCam)));
+  gl_FragColor = vec4(col * uDim, 1.0);
+}`;
+
+/* ---------- everything small and bright: lights, trees, cars, beacons ---------- */
+const LIGHT = 0, TREE = 1, HEAD = 2, TAIL = 3, BEACON = 4, PLINTH = 5, LED = 6;
+const sparkVertex = /* glsl */ `
+uniform float uTime, uPixelRatio, uBuild;
+uniform vec3 uBoard;
+uniform float uExtent;
+attribute float aKind, aSeed, aStart;
+attribute vec3 aDir;
+varying float vKind, vSeed, vShow, vFade;
 void main() {
   vec3 p = position;
-  // how far up this building has got: a line of light climbs, the floors light behind it
-  float g = clamp((uBuild - aBuilding.z * 0.72) / 0.28, 0.0, 1.0);
-  g = 1.0 - pow(1.0 - g, 2.2);
-  float front = aBuilding.x + g * aBuilding.y + 0.001;
-  float rel = p.y - aBuilding.x;
-  vShow = step(p.y, front) * step(0.0005, g);
-  // the roof and the spire ride the front up until it tops out
-  if (aKind > 1.5 && aKind < 2.5 || aKind > 5.5 && aKind < 6.5) {
-    p.y = min(p.y, front);
-    vShow = step(0.0005, g);
-  }
-  vFront = (1.0 - smoothstep(0.0, 0.35, abs(front - p.y))) * (1.0 - step(0.999, g));
-  if (aKind > 3.5 && aKind < 4.5) {
-    // a car: runs along its street and wraps round
+  vShow = step(aStart * 0.72 + 0.2, uBuild + 0.001);
+  if (aKind > 1.5 && aKind < 3.5) {
     float len = length(aDir);
-    float t = fract(aSeed * 7.13 + uTime * (0.4 + fract(aSeed * 3.7) * 0.6) / max(len, 1.0));
+    float t = fract(aSeed * 7.13 + uTime * (0.5 + fract(aSeed * 3.7) * 0.7) / max(len, 1.0));
     p += aDir * (t - 0.5);
   }
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
-  float s = aKind < 0.5 ? 1.0 : aKind < 1.5 ? 0.85 : aKind < 2.5 ? 1.2 : aKind < 3.5 ? 0.7 : aKind < 4.5 ? 1.7 : aKind < 5.5 ? 1.1 : aKind < 6.5 ? 2.6 : 1.3;
-  gl_PointSize = max(1.2, uSize * s * (1.0 + vFront * 1.5) * uPixelRatio / -mv.z);
-  vKind = aKind;
-  vSeed = aSeed;
-  vFade = 1.0 - smoothstep(55.0, 140.0, -mv.z);
+  float s = aKind < 0.5 ? 2.2 : aKind < 1.5 ? 1.6 : aKind < 3.5 ? 1.6 : aKind < 4.5 ? 3.0 : aKind < 5.5 ? 1.1 : 1.4;
+  gl_PointSize = max(1.5, 5.5 * s * uPixelRatio / -mv.z);
+  vKind = aKind; vSeed = aSeed;
+  vFade = 1.0 - smoothstep(50.0, 130.0, -mv.z);
 }`;
-
-const fragment = /* glsl */ `
-uniform float uTime, uOpacity;
-uniform vec3 uEdge, uWindow, uRoof, uLane, uCarA, uCarB, uTree, uBeacon;
-varying float vKind, vSeed, vFade, vShow, vFront;
+const sparkFragment = /* glsl */ `
+uniform float uTime, uDim;
+varying float vKind, vSeed, vShow, vFade;
 void main() {
   if (vShow < 0.5) discard;
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
-  float a = smoothstep(0.5, 0.05, d);
-  vec3 col; float alpha;
-  if (vKind < 0.5) { col = uEdge; alpha = 0.75; }
-  else if (vKind < 1.5) {
-    float on = step(0.3, fract(vSeed * 91.7));
-    float flick = step(0.94, fract(vSeed * 13.1)) * step(0.5, fract(uTime * (0.6 + fract(vSeed * 5.3)) + vSeed * 10.0));
-    col = mix(uWindow, vec3(1.0, 0.8, 0.52), step(0.78, fract(vSeed * 41.3)) * 0.7);
-    alpha = 0.34 * on * (1.0 - flick);
-  }
-  else if (vKind < 2.5) { col = uRoof; alpha = 0.55 + 0.3 * sin(uTime * 1.3 + vSeed * 40.0); }
-  else if (vKind < 3.5) { col = uLane; alpha = 0.22; }
-  else if (vKind < 4.5) { col = mix(uCarA, uCarB, step(0.5, fract(vSeed * 17.0))); alpha = 0.9; }
-  else if (vKind < 5.5) { col = uEdge; alpha = 0.45; }
-  else if (vKind < 6.5) { col = uBeacon; alpha = 0.25 + 0.75 * step(0.6, fract(uTime * 0.8 + vSeed)); }
-  else { col = uTree; alpha = 0.45; }
-  // the build line: whatever it is passing burns white for a moment
-  col = mix(col, vec3(1.0, 0.95, 1.0), vFront * 0.8);
-  alpha = min(1.0, alpha + vFront * 0.6);
-  gl_FragColor = vec4(col, a * alpha * uOpacity * vFade);
+  float a = smoothstep(0.5, 0.0, d);
+  vec3 col; float alpha = 0.9;
+  if (vKind < 0.5) { col = vec3(1.0, 0.7, 0.35); a = a * a; }                      // streetlight
+  else if (vKind < 1.5) { col = mix(vec3(0.12, 0.55, 0.25), vec3(0.35, 0.85, 0.35), fract(vSeed * 13.0)); alpha = 0.55; }
+  else if (vKind < 2.5) { col = vec3(1.0, 0.97, 0.88); }                            // headlights
+  else if (vKind < 3.5) { col = vec3(1.0, 0.12, 0.1); }                             // tail lights
+  else if (vKind < 4.5) { col = vec3(1.0, 0.15, 0.2); alpha = 0.2 + 0.8 * step(0.55, fract(uTime * 0.7 + vSeed)); }
+  else if (vKind < 5.5) { col = vec3(0.4, 0.95, 1.0); alpha = 0.5; }                // the plinth's rings
+  else { col = mix(vec3(0.2, 0.9, 1.0), vec3(1.0, 0.35, 0.7), step(0.5, fract(vSeed * 5.0))); alpha = 0.8; }
+  gl_FragColor = vec4(col * uDim, a * alpha * vFade);
 }`;
 
-export function createCity(pixelRatio: number, billboard: Billboard, GROUND: number, plinthTop: number) {
-  const EXTENT = isMobile ? 32 : 46;
-  const PITCH = 5.2;
+/* ---------- aeroplanes ---------- */
+function makePlane() {
+  const pts: number[] = [];
+  const col: number[] = [];
+  const add = (x: number, y: number, z: number, c: [number, number, number]) => {
+    pts.push(x, y, z);
+    col.push(...c);
+  };
+  const body: [number, number, number] = [0.55, 0.58, 0.65];
+  for (let i = 0; i <= 30; i++) add(0, 0, -0.9 + i * 0.06, body); // fuselage
+  for (let i = 0; i <= 20; i++) {
+    const x = (i / 20) * 1.1;
+    add(x, 0, 0.1 - x * 0.25, body);
+    add(-x, 0, 0.1 - x * 0.25, body);
+  }
+  for (let i = 0; i <= 8; i++) {
+    const x = (i / 8) * 0.4;
+    add(x, 0, -0.8, body);
+    add(-x, 0, -0.8, body);
+  }
+  for (let i = 0; i < 6; i++) add(0, i * 0.05, -0.85, body);
+  const lights = { red: pts.length / 3, green: pts.length / 3 + 1, strobe: pts.length / 3 + 2 };
+  add(-1.1, 0, -0.17, [1, 0.1, 0.1]);
+  add(1.1, 0, -0.17, [0.1, 1, 0.3]);
+  add(0, 0.3, -0.85, [1, 1, 1]);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const mat = new THREE.PointsMaterial({ size: 0.12, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const p = new THREE.Points(geo, mat);
+  p.frustumCulled = false;
+  return { points: p, lights };
+}
+
+export function createCity(pixelRatio: number, billboard: Billboard, GROUND: number, plinthTop: number, mascotTop: number) {
+  const EXTENT = isMobile ? 34 : 48;
+  const PITCH = 5.6;
   const PLAZA = 11;
-  let seed = 1;
+  let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  const pos: number[] = [];
-  const kind: number[] = [];
-  const sd: number[] = [];
-  const dir: number[] = [];
-  const bld: number[] = [];
-  // the building everything added now belongs to: its ground, its height, its start time
-  const cur = { base: GROUND, h: 1, t: 0 };
-  const add = (x: number, y: number, z: number, k: number, dx = 0, dy = 0, dz = 0) => {
-    pos.push(x, y, z);
-    kind.push(k);
-    sd.push(rnd());
-    dir.push(dx, dy, dz);
-    bld.push(cur.base, cur.h, cur.t);
-  };
-  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-  const line = (a: THREE.Vector3, b: THREE.Vector3, step: number, k: number) => {
-    const n = Math.max(2, Math.ceil(a.distanceTo(b) / step));
-    for (let i = 0; i <= n; i++) {
-      const t = i / n;
-      add(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, k);
-    }
-  };
-  // when a building starts: spreading out from the billboard, the way the camera pulls back
+  const group = new THREE.Group();
+  const boardXZ = new THREE.Vector2(billboard.center.x, billboard.center.z);
   const startAt = (x: number, z: number) =>
-    Math.min(1, Math.hypot(x - billboard.center.x, z - billboard.center.z) / (EXTENT * 1.7)) * 0.85 + rnd() * 0.15;
+    Math.min(1, Math.hypot(x - boardXZ.x, z - boardXZ.y) / (EXTENT * 1.7)) * 0.85 + rnd() * 0.12;
+  const TALL = mascotTop - GROUND; // the tallest towers stand as tall as he does
 
-  // a box: twelve edges, windows on its faces (floor height fh), a roof glow if it is the top
-  const box = (cx: number, cz: number, w: number, d: number, y0: number, y1: number, fh = 0.45, roof = true) => {
-    const x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2;
-    const c = [V(x0, y0, z0), V(x1, y0, z0), V(x1, y0, z1), V(x0, y0, z1), V(x0, y1, z0), V(x1, y1, z0), V(x1, y1, z1), V(x0, y1, z1)];
-    for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) line(c[a], c[b], 0.06, EDGE);
-    const bay = 0.42;
-    for (let y = y0 + fh * 0.7; y < y1 - fh * 0.3; y += fh) {
-      for (let x = x0 + bay * 0.6; x < x1 - bay * 0.3; x += bay) {
-        add(x, y, z1 + 0.01, WINDOW);
-        add(x, y, z0 - 0.01, WINDOW);
-      }
-      for (let z = z0 + bay * 0.6; z < z1 - bay * 0.3; z += bay) {
-        add(x1 + 0.01, y, z, WINDOW);
-        add(x0 - 0.01, y, z, WINDOW);
-      }
-    }
-    if (roof) for (let i = 0; i < 18 + w * d * 4; i++) add(x0 + rnd() * w, y1 + 0.02, z0 + rnd() * d, ROOF);
-  };
-
-  // a house: a low box under a pitched roof, ridge running the long way
-  const house = (cx: number, cz: number, w: number, d: number, h: number) => {
-    const roofH = Math.min(w, d) * 0.45;
-    cur.h = h + roofH;
-    box(cx, cz, w, d, GROUND, GROUND + h, 0.38, false);
-    const alongX = w >= d;
-    const y1 = GROUND + h, yr = y1 + roofH;
-    const x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2;
-    const ridgeA = alongX ? V(x0, yr, cz) : V(cx, yr, z0);
-    const ridgeB = alongX ? V(x1, yr, cz) : V(cx, yr, z1);
-    line(ridgeA, ridgeB, 0.05, ROOF);
-    // the four slopes down to the eaves
-    const eaves = alongX
-      ? [[V(x0, y1, z0), ridgeA], [V(x0, y1, z1), ridgeA], [V(x1, y1, z0), ridgeB], [V(x1, y1, z1), ridgeB]]
-      : [[V(x0, y1, z0), ridgeA], [V(x1, y1, z0), ridgeA], [V(x0, y1, z1), ridgeB], [V(x1, y1, z1), ridgeB]];
-    for (const [a, b] of eaves) line(a, b, 0.05, EDGE);
-  };
-
-  // a tree: a trunk and a ball of leaves
-  const tree = (x: number, z: number) => {
-    const h = 0.5 + rnd() * 0.3;
-    cur.h = h + 0.4;
-    line(V(x, GROUND, z), V(x, GROUND + h, z), 0.06, EDGE);
-    for (let i = 0; i < 40; i++) {
-      const v = new THREE.Vector3().randomDirection().multiplyScalar(0.28 * Math.cbrt(rnd()));
-      add(x + v.x, GROUND + h + 0.15 + v.y, z + v.z, TREE);
-    }
-  };
-
-  // a skyscraper: stacked, stepping back as it rises, a spire and a beacon on top
-  const tower = (cx: number, cz: number, w: number, d: number, h: number) => {
-    const tiers = 1 + Math.floor(rnd() * 3);
-    const share = [[1], [0.65, 0.35], [0.55, 0.28, 0.17]][tiers - 1];
-    let y = GROUND;
-    let tw = w, td = d;
-    const spire = 0.8 + rnd() * 1.6;
-    cur.h = h + spire;
-    share.forEach((f, t) => {
-      const top = y + h * f;
-      box(cx, cz, tw, td, y, top, 0.4, t === tiers - 1);
-      y = top;
-      tw *= 0.72;
-      td *= 0.72;
-    });
-    line(V(cx, y, cz), V(cx, y + spire, cz), 0.04, BEACON);
-    add(cx, y + spire, cz, BEACON);
-  };
-
-  // the blocks, zoned by how far they are from him
+  /* ---- plan the buildings ---- */
+  type B = { x: number; z: number; w: number; d: number; h: number; style: number; tint: THREE.Color; start: number };
+  const blds: B[] = [];
+  const glass = ['#2ad4ff', '#58c4ff', '#3fe0c0', '#7fd8ff', '#ff5ba8'];
+  const office = ['#9fc4ff', '#dfe8ff', '#6fb0ff', '#ffd27a'];
+  const flats = ['#ffb070', '#ff9a5a', '#ffd08a', '#8fd0ff'];
+  const pick = (a: string[]) => new THREE.Color(a[Math.floor(rnd() * a.length)]);
   for (let gx = -EXTENT; gx < EXTENT; gx += PITCH) {
     for (let gz = -EXTENT; gz < EXTENT; gz += PITCH) {
       const cx = gx + PITCH / 2, cz = gz + PITCH / 2;
       const r = Math.hypot(cx, cz);
-      if (r < PLAZA + 1.5 || r > EXTENT) continue;
-      if (Math.hypot(cx - billboard.center.x, cz - billboard.center.z) < 3.4) continue;
-      const lotW = PITCH - 1.8;
-      cur.base = GROUND;
-      cur.t = startAt(cx, cz);
-      const zone = (r - PLAZA) / (EXTENT - PLAZA); // 0 by the plaza, 1 at the edge of town
-      if (zone < 0.32) {
-        // downtown: one or two towers
-        const n = rnd() < 0.6 ? 1 : 2;
-        for (let i = 0; i < n; i++) {
-          const w = (lotW / n) * (0.75 + rnd() * 0.2);
-          tower(gx + 0.9 + (lotW / n) * (i + 0.5), cz, w, lotW * (0.6 + rnd() * 0.3), 5 + rnd() * 7 * (1 - zone));
-        }
-      } else if (zone < 0.62) {
-        // mid-rise: blocks of flats, some with a water tank on the roof
+      if (r < PLAZA + 2 || r > EXTENT) continue;
+      if (cz > 0 && Math.abs(cx) < PITCH * 0.6) continue; // the avenue up to his plaza stays open
+      const nearBoard = Math.hypot(cx - boardXZ.x, cz - boardXZ.y);
+      if (nearBoard < 3.6) continue;
+      const lot = PITCH - 2.6; // the buildable part between the pavements
+      const zone = (r - PLAZA) / (EXTENT - PLAZA);
+      const start = startAt(cx, cz);
+      // keep the billboard in view: nothing near it stands above it
+      const cap = nearBoard < 12 ? billboard.center.y - billboard.height / 2 - GROUND - 0.5 : Infinity;
+      const put = (x: number, z: number, w: number, d: number, h: number, style: number, tint: THREE.Color) =>
+        blds.push({ x, z, w, d, h: Math.min(h, cap), style, tint, start });
+      const inView = cz > 0 && Math.abs(cx) < 16 + cz * 0.25; // the wedge the camera looks at him through
+      if (inView && zone < 0.45) {
         const n = 1 + Math.floor(rnd() * 2);
         for (let i = 0; i < n; i++) {
-          const w = (lotW / n) * (0.72 + rnd() * 0.22);
-          const h = 1.6 + rnd() * 2.8;
-          const x = gx + 0.9 + (lotW / n) * (i + 0.5);
-          cur.h = h + 0.5;
-          box(x, cz, w, lotW * (0.55 + rnd() * 0.4), GROUND, GROUND + h);
-          if (rnd() < 0.4) {
-            cur.h = h + 0.5;
-            box(x + w * 0.2, cz, 0.35, 0.35, GROUND + h, GROUND + h + 0.4, 1, true);
-          }
+          const w = (lot / n) * 0.85;
+          put(gx + 1.3 + (lot / n) * (i + 0.5), cz, w, lot * (0.55 + rnd() * 0.35), 1.8 + rnd() * 3, 1, rnd() < 0.4 ? pick(office) : pick(flats));
+        }
+      } else if (zone < 0.22 && rnd() < 0.6) {
+        // the landmark ring: glass skyscrapers, the tallest as tall as he is
+        const h = TALL * (0.55 + rnd() * 0.45);
+        put(cx, cz, lot * (0.7 + rnd() * 0.25), lot * (0.7 + rnd() * 0.25), h, 3, pick(glass));
+      } else if (zone < 0.45) {
+        const n = rnd() < 0.5 ? 1 : 2;
+        for (let i = 0; i < n; i++) {
+          const w = (lot / n) * 0.9;
+          const glassy = rnd() < 0.35;
+          put(gx + 1.3 + (lot / n) * (i + 0.5), cz, w, lot * (0.6 + rnd() * 0.35), 6 + rnd() * 10 * (1 - zone), glassy ? 3 : 2, glassy ? pick(glass) : pick(office));
+        }
+      } else if (zone < 0.72) {
+        const n = 1 + Math.floor(rnd() * 2);
+        for (let i = 0; i < n; i++) {
+          const w = (lot / n) * 0.88;
+          put(gx + 1.3 + (lot / n) * (i + 0.5), cz + (rnd() - 0.5) * 0.4, w, lot * (0.5 + rnd() * 0.4), 2 + rnd() * 3.5, rnd() < 0.3 ? 2 : 1, rnd() < 0.3 ? pick(office) : pick(flats));
         }
       } else {
-        // the edge of town: houses in a row, with trees
         const n = 2 + Math.floor(rnd() * 2);
         for (let i = 0; i < n; i++) {
-          const w = (lotW / n) * (0.6 + rnd() * 0.2);
-          house(gx + 0.9 + (lotW / n) * (i + 0.5), cz + (rnd() - 0.5) * 0.8, w, 0.9 + rnd() * 0.5, 0.55 + rnd() * 0.35);
+          const w = (lot / n) * 0.7;
+          put(gx + 1.3 + (lot / n) * (i + 0.5), cz + (rnd() - 0.5) * 0.8, w, 1 + rnd() * 0.5, 0.7 + rnd() * 0.3, 0, pick(flats));
         }
-        for (let i = 0; i < 2; i++) if (rnd() < 0.7) tree(gx + 0.9 + rnd() * lotW, cz + (rnd() < 0.5 ? -1 : 1) * (lotW / 2));
       }
     }
   }
-
-  // the streets: dashed centre lines both ways, and traffic, laid as the build reaches them
-  cur.h = 0.2;
-  for (let g = -EXTENT; g <= EXTENT; g += PITCH) {
-    for (let t = -EXTENT; t <= EXTENT; t += 0.5) {
-      if (Math.hypot(g, t) < PLAZA || Math.floor(t / 0.5) % 2) continue;
-      cur.t = startAt(g, t);
-      add(g, GROUND + 0.01, t, LANE);
-      cur.t = startAt(t, g);
-      add(t, GROUND + 0.01, g, LANE);
-    }
-    const cars = isMobile ? 5 : 10;
-    for (let i = 0; i < cars; i++) {
-      const lane = (rnd() < 0.5 ? -1 : 1) * 0.28;
-      const way = rnd() < 0.5 ? -1 : 1;
-      const len = EXTENT * 2;
-      cur.t = 0.9;
-      for (let k = 0; k < 4; k++) {
-        const s = rnd() * 0.015 + i * 0.0831 + g * 0.013;
-        add(g + lane, GROUND + 0.08, 0, CAR, 0, 0, len * way);
-        sd[sd.length - 1] = s;
-        add(0, GROUND + 0.08, g + lane, CAR, len * way, 0, 0);
-        sd[sd.length - 1] = s + 0.37;
-      }
-    }
-  }
-
-  // the plaza: two rings, and the plinth he stands on
-  cur.t = startAt(0, 0);
-  for (let i = 0; i < 1100; i++) {
-    const a = rnd() * Math.PI * 2;
-    add(Math.cos(a) * PLAZA, GROUND + 0.02, Math.sin(a) * PLAZA, EDGE);
-    add(Math.cos(a) * (PLAZA - 3), GROUND + 0.02, Math.sin(a) * (PLAZA - 3), LANE);
-  }
-  cur.h = plinthTop - GROUND;
-  for (let i = 0; i < 2400; i++) {
-    const a = rnd() * Math.PI * 2;
-    const y = GROUND + rnd() * (plinthTop - GROUND);
-    const ring = rnd() < 0.35;
-    const rad = 3.4 * (1 - ((y - GROUND) / (plinthTop - GROUND)) * 0.15);
-    add(Math.cos(a) * rad, ring ? plinthTop - Math.round((plinthTop - y) * 3) / 3 : y, Math.sin(a) * rad, ring ? ROOF : PLINTH);
-  }
-
-  // the billboard's tower: first up, since it is where the city starts
-  const b = billboard;
-  const boardBottom = b.center.y - b.height / 2;
-  cur.t = 0;
-  cur.h = boardBottom - 0.3 - GROUND;
-  box(b.center.x - b.normal.x * 1.2, b.center.z - b.normal.z * 1.2, 2.2, 2.2, GROUND, boardBottom - 0.3);
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 1));
-  geo.setAttribute('aSeed', new THREE.Float32BufferAttribute(sd, 1));
-  geo.setAttribute('aDir', new THREE.Float32BufferAttribute(dir, 3));
-  geo.setAttribute('aBuilding', new THREE.Float32BufferAttribute(bld, 3));
-  const uniforms = {
-    uTime: { value: 0 },
-    uOpacity: { value: 0 },
-    uBuild: { value: 1 },
-    uPixelRatio: { value: pixelRatio },
-    uSize: { value: 5.5 },
-    uEdge: { value: new THREE.Color('#8f6bff') },
-    uWindow: { value: new THREE.Color('#58c4ff') },
-    uRoof: { value: new THREE.Color('#ff4fd8') },
-    uLane: { value: new THREE.Color('#6f4dff') },
-    uCarA: { value: new THREE.Color('#fff1d6') },
-    uCarB: { value: new THREE.Color('#ff3d5a') },
-    uTree: { value: new THREE.Color('#3fe08a') },
-    uBeacon: { value: new THREE.Color('#ff2d4f') },
-  };
-  const material = new THREE.ShaderMaterial({
-    uniforms, vertexShader: vertex, fragmentShader: fragment,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  // the billboard's tower
+  const bb = billboard;
+  blds.push({
+    x: bb.center.x - bb.normal.x * 1.2, z: bb.center.z - bb.normal.z * 1.2, w: 2.4, d: 2.4,
+    h: bb.center.y - bb.height / 2 - 0.3 - GROUND, style: 2, tint: new THREE.Color('#dfe8ff'), start: 0,
   });
-  const points = new THREE.Points(geo, material);
-  points.frustumCulled = false;
-  return { points, uniforms, count: kind.length };
+
+  /* ---- build them: one instanced box pass ---- */
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const N = blds.length;
+  const size = new Float32Array(N * 3), tint = new Float32Array(N * 3), style = new Float32Array(N), start = new Float32Array(N), bseed = new Float32Array(N);
+  const buildingUniforms = {
+    uBuild: { value: 1 }, uTime: { value: 0 }, uDim: { value: 1 },
+    uFog: { value: FOG }, uCam: { value: new THREE.Vector3() },
+  };
+  const bMat = new THREE.ShaderMaterial({ uniforms: buildingUniforms, vertexShader: buildingVertex, fragmentShader: buildingFragment });
+  const bMesh = new THREE.InstancedMesh(boxGeo, bMat, N);
+  const m = new THREE.Matrix4();
+  blds.forEach((b, i) => {
+    m.makeTranslation(b.x, GROUND, b.z);
+    bMesh.setMatrixAt(i, m);
+    size.set([b.w, b.h, b.d], i * 3);
+    tint.set([b.tint.r, b.tint.g, b.tint.b], i * 3);
+    style[i] = b.style;
+    start[i] = b.start;
+    bseed[i] = rnd();
+  });
+  boxGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(size, 3));
+  boxGeo.setAttribute('aTint', new THREE.InstancedBufferAttribute(tint, 3));
+  boxGeo.setAttribute('aStyle', new THREE.InstancedBufferAttribute(style, 1));
+  boxGeo.setAttribute('aStart', new THREE.InstancedBufferAttribute(start, 1));
+  boxGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(bseed, 1));
+  bMesh.frustumCulled = false;
+  group.add(bMesh);
+
+  // the houses' pitched roofs: a prism on each, rising with it
+  const houses = blds.filter((b) => b.style === 0);
+  const prism = new THREE.BufferGeometry();
+  // a unit gable, ridge along x, sitting on y = 0
+  const v = [
+    -0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0.5, 0, -0.5, 0.5, 0, // back slope
+    -0.5, 0, 0.5, -0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, 0, 0.5, // front slope
+    -0.5, 0, -0.5, -0.5, 0.5, 0, -0.5, 0, 0.5, // gable ends
+    0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 0.5, 0,
+  ];
+  prism.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  prism.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 11, 12, 13]);
+  prism.computeVertexNormals();
+  const roofMat = new THREE.ShaderMaterial({
+    uniforms: buildingUniforms,
+    vertexShader: /* glsl */ `
+      uniform float uBuild;
+      attribute vec3 aSize; attribute vec3 aTint; attribute float aStart;
+      varying vec3 vTint, vWorld; varying float vGrow, vY;
+      void main() {
+        float g = clamp((uBuild - aStart * 0.72) / 0.28, 0.0, 1.0);
+        g = 1.0 - pow(1.0 - g, 2.4);
+        vec3 local = position * vec3(aSize.x, min(aSize.x, aSize.z), aSize.z) * step(0.999, g);
+        local.y += aSize.y;
+        vec4 w = modelMatrix * instanceMatrix * vec4(local, 1.0);
+        gl_Position = projectionMatrix * viewMatrix * w;
+        vTint = aTint; vGrow = g; vWorld = w.xyz; vY = position.y;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uFog, uCam; uniform float uDim;
+      varying vec3 vTint, vWorld; varying float vGrow, vY;
+      void main() {
+        if (vGrow < 0.999) discard;
+        vec3 col = vec3(0.045, 0.02, 0.016) + vTint * 0.35 * smoothstep(0.44, 0.5, vY); // tiles, lit ridge
+        col = mix(col, uFog, smoothstep(40.0, 130.0, distance(vWorld, uCam)));
+        gl_FragColor = vec4(col * uDim, 1.0);
+      }`,
+    side: THREE.DoubleSide,
+  });
+  const roofs = new THREE.InstancedMesh(prism, roofMat, Math.max(1, houses.length));
+  const rs = new Float32Array(houses.length * 3), rt = new Float32Array(houses.length * 3), rst = new Float32Array(houses.length);
+  houses.forEach((b, i) => {
+    // the ridge runs the long way
+    m.makeRotationY(b.w >= b.d ? 0 : Math.PI / 2).setPosition(b.x, GROUND, b.z);
+    roofs.setMatrixAt(i, m);
+    const along = b.w >= b.d;
+    rs.set([along ? b.w : b.d, b.h, along ? b.d : b.w], i * 3);
+    rt.set([1.0, 0.5, 0.3], i * 3);
+    rst[i] = b.start;
+  });
+  prism.setAttribute('aSize', new THREE.InstancedBufferAttribute(rs, 3));
+  prism.setAttribute('aTint', new THREE.InstancedBufferAttribute(rt, 3));
+  prism.setAttribute('aStart', new THREE.InstancedBufferAttribute(rst, 1));
+  roofs.count = houses.length;
+  roofs.frustumCulled = false;
+  group.add(roofs);
+
+  /* ---- construction: each building is assembled out of particles, floor by floor ----
+     Points sampled over its faces stream in from a loose cloud around it and land on its surface in
+     order of height, bottom first, the way the mascot is lit from the top down; the solid facade is
+     only drawn below the line where they have landed. Once it is up they burn out. */
+  const cp: number[] = [], cf: number[] = [], cr: number[] = [], cc: number[] = [];
+  const budget = isMobile ? 45000 : 110000;
+  const area = blds.reduce((a, b) => a + (2 * (b.w + b.d) * b.h + b.w * b.d), 0);
+  const perUnit = budget / area;
+  for (const b of blds) {
+    const faces = [
+      { n: [0, 0, 1], w: b.w, a: 'x' }, { n: [0, 0, -1], w: b.w, a: 'x' },
+      { n: [1, 0, 0], w: b.d, a: 'z' }, { n: [-1, 0, 0], w: b.d, a: 'z' },
+    ];
+    for (const f of faces) {
+      const k = Math.round(f.w * b.h * perUnit);
+      for (let i = 0; i < k; i++) {
+        const u = (rnd() - 0.5) * f.w;
+        const y = rnd() * b.h;
+        const x = f.a === 'x' ? b.x + u : b.x + f.n[0] * b.w * 0.5;
+        const z = f.a === 'x' ? b.z + f.n[2] * b.d * 0.5 : b.z + u;
+        cp.push(x + f.n[0] * 0.01, GROUND + y, z + f.n[2] * 0.01);
+        cf.push(y / b.h, b.start, b.h);
+        cr.push(rnd(), rnd(), rnd(), rnd());
+        cc.push(b.tint.r, b.tint.g, b.tint.b);
+      }
+    }
+  }
+  const cGeo = new THREE.BufferGeometry();
+  cGeo.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));
+  cGeo.setAttribute('aFrac', new THREE.Float32BufferAttribute(cf, 3));
+  cGeo.setAttribute('aRand', new THREE.Float32BufferAttribute(cr, 4));
+  cGeo.setAttribute('aTint', new THREE.Float32BufferAttribute(cc, 3));
+  const constructUniforms = { uBuild: { value: 1 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio }, uDim: { value: 1 } };
+  const construct = new THREE.Points(cGeo, new THREE.ShaderMaterial({
+    uniforms: constructUniforms,
+    vertexShader: /* glsl */ `
+      uniform float uBuild, uTime, uPixelRatio;
+      attribute vec3 aFrac;   // x: how high up it sits (0..1), y: its building's start, z: that building's height
+      attribute vec4 aRand;
+      attribute vec3 aTint;
+      varying vec3 vTint; varying float vA;
+      void main() {
+        float g = clamp((uBuild - aFrac.y * 0.72) / 0.28, 0.0, 1.0);
+        g = 1.0 - pow(1.0 - g, 2.4);
+        // its turn comes when the build reaches its height; it flies the last stretch in
+        float t = clamp((g - aFrac.x) / 0.12 + 1.0, 0.0, 1.0);
+        float e = t * t * (3.0 - 2.0 * t);
+        vec3 scatter = (aRand.xyz - 0.5) * vec3(2.4, 1.2, 2.4) + vec3(0.0, 1.0 + aRand.w * 2.0, 0.0);
+        scatter += vec3(sin(uTime * 1.3 + aRand.w * 20.0), 0.0, cos(uTime * 1.1 + aRand.x * 20.0)) * 0.3;
+        vec3 p = position + scatter * (1.0 - e) * max(1.0, aFrac.z * 0.15);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = max(1.2, (1.6 + 2.0 * (1.0 - e)) * 5.5 * uPixelRatio / -mv.z);
+        // there once its turn is near; gone again once the building stands
+        vA = smoothstep(0.0, 0.25, t) * (1.0 - smoothstep(0.85, 1.0, g) * 0.9) * step(0.001, g);
+        vTint = mix(vec3(1.0), aTint, e * 0.6);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uDim;
+      varying vec3 vTint; varying float vA;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if (d > 0.5 || vA < 0.01) discard;
+        gl_FragColor = vec4(vTint * uDim, smoothstep(0.5, 0.0, d) * vA * 0.8);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  construct.frustumCulled = false;
+  group.add(construct);
+
+  /* ---- the night sky: a clear, bright one, deep blue at the top, glowing at the horizon ---- */
+  const skyUniforms = { uTime: { value: 0 }, uDim: { value: 1 } };
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(360, 48, 24),
+    new THREE.ShaderMaterial({
+      uniforms: skyUniforms,
+      vertexShader: /* glsl */ `varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */ `
+        uniform float uDim;
+        varying vec3 vDir;
+        void main() {
+          float h = vDir.y;
+          vec3 zenith = vec3(0.012, 0.02, 0.055);
+          vec3 mid = vec3(0.025, 0.045, 0.1);
+          vec3 horizon = vec3(0.06, 0.09, 0.15);
+          vec3 col = mix(horizon, mid, smoothstep(0.0, 0.25, h));
+          col = mix(col, zenith, smoothstep(0.25, 0.9, h));
+          // a band of the galaxy across the sky
+          float band = exp(-pow((vDir.y - 0.35 + vDir.x * 0.4) * 5.0, 2.0));
+          col += vec3(0.025, 0.035, 0.05) * band;
+          col = mix(col, vec3(0.04, 0.05, 0.08), smoothstep(0.02, -0.2, h)); // below the horizon
+          gl_FragColor = vec4(col * uDim, 1.0);
+        }`,
+      side: THREE.BackSide, depthWrite: false,
+    }),
+  );
+  sky.renderOrder = -2000;
+  sky.frustumCulled = false;
+  const starPos: number[] = [], starSeed: number[] = [];
+  for (let i = 0; i < (isMobile ? 1800 : 4000); i++) {
+    const v3 = new THREE.Vector3().randomDirection();
+    if (v3.y < -0.05) v3.y = -v3.y;
+    // more of them along the galaxy's band
+    if (rnd() < 0.35) v3.y = 0.35 - v3.x * 0.4 + (rnd() - 0.5) * 0.25;
+    v3.normalize().multiplyScalar(340);
+    starPos.push(v3.x, v3.y, v3.z);
+    starSeed.push(rnd());
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  starGeo.setAttribute('aSeed', new THREE.Float32BufferAttribute(starSeed, 1));
+  const stars = new THREE.Points(starGeo, new THREE.ShaderMaterial({
+    uniforms: { ...skyUniforms, uPixelRatio: { value: pixelRatio } },
+    vertexShader: /* glsl */ `
+      uniform float uTime, uPixelRatio; attribute float aSeed; varying float vB; varying float vS;
+      void main() {
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        float big = step(0.93, aSeed);
+        gl_PointSize = (1.2 + big * 2.2 + aSeed * 1.2) * uPixelRatio;
+        vB = 0.45 + 0.55 * (0.5 + 0.5 * sin(uTime * (0.6 + aSeed * 2.5) + aSeed * 60.0));
+        vS = aSeed;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uDim; varying float vB; varying float vS;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if (d > 0.5) discard;
+        vec3 col = mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.9, 0.75), step(0.7, fract(vS * 13.0)));
+        gl_FragColor = vec4(col * uDim, smoothstep(0.5, 0.0, d) * vB);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  stars.renderOrder = -1999;
+  stars.frustumCulled = false;
+  group.add(sky, stars);
+
+  /* ---- the ground ---- */
+  const groundUniforms = {
+    uPitch: { value: PITCH }, uPlaza: { value: PLAZA }, uExtent: { value: EXTENT }, uBuild: { value: 1 },
+    uDim: { value: 1 }, uTime: { value: 0 }, uFog: { value: FOG }, uCam: buildingUniforms.uCam,
+    uBoard: { value: billboard.center.clone() },
+  };
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(EXTENT * 2 + 40, EXTENT * 2 + 40).rotateX(-Math.PI / 2).translate(0, GROUND, 0),
+    new THREE.ShaderMaterial({ uniforms: groundUniforms, vertexShader: groundVertex, fragmentShader: groundFragment }),
+  );
+  ground.frustumCulled = false;
+  group.add(ground);
+
+  /* ---- the small bright things ---- */
+  const sp: number[] = [], sk: number[] = [], ss: number[] = [], sst: number[] = [], sd: number[] = [];
+  const add = (x: number, y: number, z: number, k: number, st: number, dx = 0, dy = 0, dz = 0) => {
+    sp.push(x, y, z); sk.push(k); ss.push(rnd()); sst.push(st); sd.push(dx, dy, dz);
+  };
+  // streetlights along the pavements, trees between them
+  for (let g = -EXTENT; g <= EXTENT; g += PITCH) {
+    for (let t = -EXTENT; t <= EXTENT; t += 1.4) {
+      for (const [x, z] of [[g + 1.05, t], [t, g + 1.05], [g - 1.05, t], [t, g - 1.05]]) {
+        const r = Math.hypot(x, z);
+        if (r < PLAZA + 0.5 || r > EXTENT) continue;
+        const st = startAt(x, z);
+        if (rnd() < 0.5) add(x, GROUND + 0.45, z, LIGHT, st);
+        else if (rnd() < 0.55) {
+          // a tree: a ball of leaves on a short trunk
+          const hgt = 0.35 + rnd() * 0.25;
+          for (let k = 0; k < 22; k++) {
+            const v3 = new THREE.Vector3().randomDirection().multiplyScalar(0.3 * Math.cbrt(rnd()));
+            add(x + v3.x, GROUND + hgt + 0.2 + v3.y * 0.9, z + v3.z, TREE, st);
+          }
+        }
+      }
+    }
+  }
+  // parks get their own trees
+  for (let gx = -EXTENT; gx < EXTENT; gx += PITCH) {
+    for (let gz = -EXTENT; gz < EXTENT; gz += PITCH) {
+      const cx = gx + PITCH / 2, cz = gz + PITCH / 2;
+      const r = Math.hypot(cx, cz);
+      const lotHash = (() => { const s = Math.sin(Math.floor(cx / PITCH + 0.5) * 12.9898 + Math.floor(cz / PITCH + 0.5) * 78.233) * 43758.5453; return s - Math.floor(s); })();
+      if (lotHash < 0.9 || r < PLAZA + 3 || r > EXTENT) continue;
+      for (let t = 0; t < 7; t++) {
+        const x = cx + (rnd() - 0.5) * (PITCH - 2.8), z = cz + (rnd() - 0.5) * (PITCH - 2.8);
+        for (let k = 0; k < 26; k++) {
+          const v3 = new THREE.Vector3().randomDirection().multiplyScalar(0.36 * Math.cbrt(rnd()));
+          add(x + v3.x, GROUND + 0.6 + v3.y, z + v3.z, TREE, startAt(cx, cz));
+        }
+      }
+    }
+  }
+  // the towers' beacons and LED spines
+  for (const b of blds) {
+    if (b.style < 2) continue;
+    if (b.style === 3 || b.h > 9) {
+      const spire = 0.6 + rnd() * 1.4;
+      for (let y = 0; y < spire; y += 0.08) add(b.x, GROUND + b.h + y, b.z, LED, b.start);
+      add(b.x, GROUND + b.h + spire, b.z, BEACON, b.start);
+    }
+  }
+  // his plinth: rings of light
+  for (let i = 0; i < 1600; i++) {
+    const a = rnd() * Math.PI * 2;
+    const y = GROUND + Math.round(rnd() * 4) / 4 * (plinthTop - GROUND);
+    add(Math.cos(a) * 3.2, y, Math.sin(a) * 3.2, PLINTH, 0.3);
+  }
+  const sparkGeo = new THREE.BufferGeometry();
+  sparkGeo.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+  sparkGeo.setAttribute('aKind', new THREE.Float32BufferAttribute(sk, 1));
+  sparkGeo.setAttribute('aSeed', new THREE.Float32BufferAttribute(ss, 1));
+  sparkGeo.setAttribute('aStart', new THREE.Float32BufferAttribute(sst, 1));
+  sparkGeo.setAttribute('aDir', new THREE.Float32BufferAttribute(sd, 3));
+  const sparkUniforms = {
+    uTime: { value: 0 }, uPixelRatio: { value: pixelRatio }, uBuild: { value: 1 }, uDim: { value: 1 },
+    uBoard: { value: billboard.center.clone() }, uExtent: { value: EXTENT },
+  };
+  const sparks = new THREE.Points(sparkGeo, new THREE.ShaderMaterial({
+    uniforms: sparkUniforms, vertexShader: sparkVertex, fragmentShader: sparkFragment,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  sparks.frustumCulled = false;
+  group.add(sparks);
+
+  // the plinth itself
+  const plinth = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.1, 3.4, plinthTop - GROUND, 48, 1).translate(0, (GROUND + plinthTop) / 2, 0),
+    new THREE.MeshBasicMaterial({ color: '#0a0a12' }),
+  );
+  group.add(plinth);
+
+  /* ---- traffic: cars with bodies, headlights and tail lights, driving the streets ---- */
+  type Lane = [number, number, number, number, number]; // x0, z0, dirX, dirZ, length (centred on x0,z0)
+  const lanes: Lane[] = [];
+  for (let g = -EXTENT; g <= EXTENT; g += PITCH) {
+    for (const way of [-1, 1]) {
+      lanes.push([g + way * 0.42, 0, 0, way, EXTENT * 2]);
+      lanes.push([0, g - way * 0.42, way, 0, EXTENT * 2]);
+    }
+  }
+  for (const way of [-1, 1]) lanes.push([way * 0.75, PLAZA + (EXTENT - PLAZA) / 2, 0, -way, EXTENT - PLAZA]);
+  const perLane = isMobile ? 3 : 6;
+  const carCount = lanes.length * perLane;
+  const carGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const cLane = new Float32Array(carCount * 4), cLen = new Float32Array(carCount), cSpeed = new Float32Array(carCount), cPhase = new Float32Array(carCount), cCol = new Float32Array(carCount * 3);
+  const paints = ['#e8e8ee', '#1b1d26', '#c0342b', '#2c5dbd', '#f2c230', '#7a7f8c', '#1f6f5c', '#ececec'];
+  let ci = 0;
+  for (const l of lanes) {
+    for (let k = 0; k < perLane; k++, ci++) {
+      cLane.set([l[0], l[1], l[2], l[3]], ci * 4);
+      cLen[ci] = l[4];
+      cSpeed[ci] = 1.6 + rnd() * 1.6;
+      cPhase[ci] = (k + rnd() * 0.6) / perLane;
+      const c = new THREE.Color(paints[Math.floor(rnd() * paints.length)]);
+      cCol.set([c.r, c.g, c.b], ci * 3);
+    }
+  }
+  carGeo.setAttribute('aLane', new THREE.InstancedBufferAttribute(cLane, 4));
+  carGeo.setAttribute('aLen', new THREE.InstancedBufferAttribute(cLen, 1));
+  carGeo.setAttribute('aSpeed', new THREE.InstancedBufferAttribute(cSpeed, 1));
+  carGeo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(cPhase, 1));
+  carGeo.setAttribute('aPaint', new THREE.InstancedBufferAttribute(cCol, 3));
+  const carUniforms = { uTime: buildingUniforms.uTime, uBuild: buildingUniforms.uBuild, uDim: buildingUniforms.uDim, uFog: buildingUniforms.uFog, uCam: buildingUniforms.uCam, uGround: { value: GROUND }, uPlaza: { value: PLAZA } };
+  const cars = new THREE.InstancedMesh(carGeo, new THREE.ShaderMaterial({
+    uniforms: carUniforms,
+    vertexShader: /* glsl */ `
+      uniform float uTime, uGround, uBuild, uPlaza;
+      attribute vec4 aLane; attribute float aLen, aSpeed, aPhase; attribute vec3 aPaint;
+      varying vec3 vLocal, vPaint, vWorld, vN; varying float vHide;
+      void main() {
+        float t = fract(aPhase + uTime * aSpeed / aLen);
+        vec2 dir = aLane.zw;
+        vec2 c = aLane.xy + dir * (t - 0.5) * aLen;
+        // a body with a cabin: the top half is narrower, which the fragment shades as glass
+        vec3 lp = position;
+        float cabin = step(0.5, lp.y);
+        lp.x *= mix(1.0, 0.8, cabin);
+        lp.z = lp.z * mix(1.0, 0.55, cabin) - cabin * 0.04;
+        vec3 local = lp * vec3(0.32, 0.24, 0.64);
+        // turn to face its way
+        vec2 side = vec2(dir.y, -dir.x);
+        vec3 w = vec3(c.x + side.x * local.x + dir.x * local.z, uGround + 0.02 + local.y, c.y + side.y * local.x + dir.y * local.z);
+        // they drive round the plaza, not through it, and only once the streets are laid
+        vHide = step(length(c), uPlaza + 0.6) + step(uBuild, 0.9);
+        vLocal = lp; vPaint = aPaint; vWorld = w; vN = normal;
+        gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uFog, uCam; uniform float uDim;
+      varying vec3 vLocal, vPaint, vWorld, vN; varying float vHide;
+      void main() {
+        if (vHide > 0.5) discard;
+        vec3 col = vPaint * (0.25 + 0.2 * max(vN.y, 0.0));
+        if (vLocal.y > 0.5) col = mix(col, vec3(0.08, 0.12, 0.18), 0.7); // glass
+        // headlights at the front, tail lights at the back
+        if (vN.z > 0.5 && vLocal.y < 0.5) col = vec3(1.4, 1.35, 1.2) * step(0.2, abs(vLocal.x)) + col * 0.3;
+        if (vN.z < -0.5 && vLocal.y < 0.5) col = vec3(1.2, 0.08, 0.06) * step(0.2, abs(vLocal.x)) + col * 0.3;
+        col = mix(col, uFog, smoothstep(40.0, 130.0, distance(vWorld, uCam)));
+        gl_FragColor = vec4(col * uDim, 1.0);
+      }`,
+  }), carCount);
+  cars.frustumCulled = false;
+  group.add(cars);
+  /* ---- the railway: an elevated line on pillars ringing downtown, and two trains on it ---- */
+  const RAIL_R = Math.min(30, EXTENT * 0.62);
+  const RAIL_Y = GROUND + 6.4;
+  const railPts: number[] = [], railK: number[] = [], railS: number[] = [], railSt: number[] = [], railD: number[] = [];
+  for (let a = 0; a < Math.PI * 2; a += 0.004) {
+    for (const off of [-0.32, 0.32]) {
+      railPts.push(Math.cos(a) * (RAIL_R + off), RAIL_Y, Math.sin(a) * (RAIL_R + off));
+      railK.push(LED); railS.push(rnd()); railSt.push(startAt(Math.cos(a) * RAIL_R, Math.sin(a) * RAIL_R)); railD.push(0, 0, 0);
+    }
+  }
+  // the rails are lit strips, drawn with the same lights as the streets
+  const railGeo = new THREE.BufferGeometry();
+  railGeo.setAttribute('position', new THREE.Float32BufferAttribute(railPts, 3));
+  railGeo.setAttribute('aKind', new THREE.Float32BufferAttribute(railK, 1));
+  railGeo.setAttribute('aSeed', new THREE.Float32BufferAttribute(railS, 1));
+  railGeo.setAttribute('aStart', new THREE.Float32BufferAttribute(railSt, 1));
+  railGeo.setAttribute('aDir', new THREE.Float32BufferAttribute(railD, 3));
+  const rails = new THREE.Points(railGeo, sparks.material);
+  rails.frustumCulled = false;
+  group.add(rails);
+  const deck = new THREE.Mesh(
+    new THREE.TorusGeometry(RAIL_R, 0.45, 4, 220).rotateX(Math.PI / 2).scale(1, 0.25, 1).translate(0, RAIL_Y - 0.12, 0),
+    new THREE.MeshBasicMaterial({ color: '#12151f' }),
+  );
+  group.add(deck);
+  const pillarGeo = new THREE.CylinderGeometry(0.16, 0.2, RAIL_Y - GROUND, 8).translate(0, (RAIL_Y + GROUND) / 2, 0);
+  const pillarCount = 48;
+  const pillars = new THREE.InstancedMesh(pillarGeo, new THREE.MeshBasicMaterial({ color: '#1a1e2c' }), pillarCount);
+  for (let i = 0; i < pillarCount; i++) {
+    const a = (i / pillarCount) * Math.PI * 2;
+    pillars.setMatrixAt(i, m.makeTranslation(Math.cos(a) * RAIL_R, 0, Math.sin(a) * RAIL_R));
+  }
+  group.add(pillars);
+  const CARS_PER_TRAIN = 7;
+  const trains = [{ a: 0.3, speed: 0.05 }, { a: 3.4, speed: -0.042 }];
+  const carriageGeo = new THREE.BoxGeometry(0.62, 0.5, 1.55).translate(0, 0.25, 0);
+  const carriages = new THREE.InstancedMesh(carriageGeo, new THREE.ShaderMaterial({
+    uniforms: { uDim: buildingUniforms.uDim, uFog: buildingUniforms.uFog, uCam: buildingUniforms.uCam },
+    vertexShader: /* glsl */ `
+      varying vec3 vL, vN, vW;
+      void main() {
+        vL = position; vN = normal;
+        vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        vW = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uFog, uCam; uniform float uDim;
+      varying vec3 vL, vN, vW;
+      void main() {
+        vec3 col = vec3(0.55, 0.6, 0.68) * (0.35 + 0.25 * max(vN.y, 0.0));
+        // a band of lit windows down each side, and a stripe under it
+        if (abs(vN.x) > 0.5) {
+          float win = step(0.2, vL.y) * step(vL.y, 0.38) * step(0.25, fract(vL.z * 3.2)) * step(abs(vL.z), 0.7);
+          col = mix(col, vec3(1.0, 0.92, 0.7), win);
+          col += vec3(0.1, 0.8, 1.0) * step(0.1, vL.y) * step(vL.y, 0.14);
+        }
+        if (abs(vN.z) > 0.5) col += vec3(1.2, 1.15, 1.0) * step(0.1, vL.y) * step(vL.y, 0.22) * step(0.12, abs(vL.x));
+        col = mix(col, uFog, smoothstep(40.0, 130.0, distance(vW, uCam)));
+        gl_FragColor = vec4(col * uDim, 1.0);
+      }`,
+  }), CARS_PER_TRAIN * trains.length);
+  carriages.frustumCulled = false;
+  group.add(carriages);
+  const placeTrains = (time: number) => {
+    let k = 0;
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    for (const t of trains) {
+      for (let c = 0; c < CARS_PER_TRAIN; c++) {
+        const a = t.a + time * t.speed - Math.sign(t.speed) * c * (1.62 / RAIL_R);
+        q.setFromAxisAngle(up, -a + (t.speed > 0 ? 0 : Math.PI));
+        m.compose(new THREE.Vector3(Math.cos(a) * RAIL_R, RAIL_Y, Math.sin(a) * RAIL_R), q, new THREE.Vector3(1, 1, 1));
+        carriages.setMatrixAt(k++, m);
+      }
+    }
+    carriages.instanceMatrix.needsUpdate = true;
+  };
+
+  /* ---- aeroplanes, crossing overhead ---- */
+  const planes = Array.from({ length: isMobile ? 3 : 5 }, (_, i) => {
+    const p = makePlane();
+    group.add(p.points);
+    return { ...p, r: 30 + i * 9 + rnd() * 6, y: GROUND + TALL + 6 + i * 3.5, speed: 0.04 + rnd() * 0.03, phase: rnd() * Math.PI * 2, way: i % 2 ? 1 : -1 };
+  });
+
+  function update(time: number, build: number, dim: number, cam: THREE.Vector3) {
+    // the sky is always round the camera, however far it goes
+    sky.position.copy(cam);
+    stars.position.copy(cam);
+    skyUniforms.uTime.value = time;
+    skyUniforms.uDim.value = 0.55 + 0.45 * dim;
+    constructUniforms.uBuild.value = build;
+    constructUniforms.uTime.value = time;
+    constructUniforms.uDim.value = dim;
+    construct.visible = build < 0.999;
+    buildingUniforms.uBuild.value = build;
+    buildingUniforms.uTime.value = time;
+    buildingUniforms.uDim.value = dim;
+    buildingUniforms.uCam.value.copy(cam);
+    groundUniforms.uBuild.value = build;
+    groundUniforms.uDim.value = dim;
+    sparkUniforms.uBuild.value = build;
+    sparkUniforms.uTime.value = time;
+    sparkUniforms.uDim.value = dim;
+    plinth.visible = build > 0.3;
+    // the railway goes up with the city; the trains run once it is there
+    const railUp = build > 0.55;
+    deck.visible = pillars.visible = railUp;
+    carriages.visible = build > 0.8;
+    if (carriages.visible) placeTrains(time);
+    for (const p of planes) {
+      const a = p.phase + time * p.speed * p.way;
+      p.points.position.set(Math.cos(a) * p.r, p.y, Math.sin(a) * p.r);
+      // nose along the direction of travel, banked into the turn
+      p.points.rotation.set(0, Math.atan2(-Math.sin(a) * p.way, Math.cos(a) * p.way), -p.way * 0.2);
+      // blinking: the strobe flashes, the wing lights stay on
+      const c = p.points.geometry.attributes.color as THREE.BufferAttribute;
+      const on = Math.sin(time * 6 + p.phase * 3) > 0.85 ? 1 : 0.1;
+      c.setXYZ(p.lights.strobe, on, on, on);
+      c.needsUpdate = true;
+      (p.points.material as THREE.PointsMaterial).opacity = dim * (build > 0.5 ? 1 : 0);
+    }
+  }
+
+  return { group, update };
 }

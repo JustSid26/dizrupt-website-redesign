@@ -64,6 +64,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const points = field.points;
 
   const atmosphere = createAtmosphere({ scene, camera, colorA: u.uColorA.value, colorB: u.uColorB.value });
+  atmosphere.gradient.visible = false; // the city's night sky is the backdrop now
 
   // the spiral of client cards (spiral.ts); clicking one presents it, then its case page opens
   let presentTimer = 0;
@@ -132,8 +133,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const boardAt = new THREE.Vector3(10, GROUND + 9.5, 22);
   const boardFacing = new THREE.Vector3(-0.25, 0, 1).normalize();
   const billboard = createBillboard(boardAt, boardFacing);
-  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP);
-  scene.add(city.points, billboard.group);
+  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP, BUST_DROP + BUST_HEIGHT / 2);
+  scene.add(city.group, billboard.group);
   billboard.measure();
 
   /* The landing's camera move. It starts square on to the board at the distance where the board
@@ -221,6 +222,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let wasCase = false;
   let sky = 0;
   let boardMeasure = 0;
+  let cityDim = 1;
   const clock = new THREE.Timer();
   let raf = 0;
 
@@ -283,6 +285,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     u.uBodyReveal.value = onIntro ? reveal : 1;
     u.uEyeReveal.value = onIntro ? reveal : 1;
     const whole = key === 'mascot:full' || scrubbing ? 1 - (scrubbing ? u.uProgress.value : 0) : 0;
+    u.uFill.value = whole * 0.6;
     u.uKindle.value = (0.94 + 0.06 * Math.sin(now * 0.0042) + 0.02 * Math.sin(now * 0.017)) * (1 + whole * 1.6);
 
     /* ---- where it stands ---- */
@@ -406,11 +409,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     u.uSize.value = 22 * Math.min(3.2, Math.max(1, Math.sqrt(far)));
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
-    city.uniforms.uTime.value = time;
-    city.uniforms.uBuild.value = onIntro ? smooth(0.1, 0.4, ip) : 1;
-    const cityTarget = landing ? 1 : onIntro ? 1 : view ? 0.12 : 0.3;
-    city.uniforms.uOpacity.value = damp(city.uniforms.uOpacity.value, cityTarget, 2, dt);
-    billboard.material.opacity = city.uniforms.uOpacity.value;
+    // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
+    cityDim = damp(cityDim, onIntro && ip < 0.5 ? 1 : view ? 0.15 : 0.35, 2, dt);
+    city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position);
+    billboard.material.opacity = Math.min(1, cityDim * 1.5);
     if (onIntro && ip < 0.3) billboard.draw(time);
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();
 
