@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
-import { SOLUTIONS } from "@/content/solutions";
+import { SOLUTIONS, solutionSlug } from "@/content/solutions";
+import { useRouter } from "next/navigation";
 import { useSection } from "@/components/home/useSection";
 
 /* What Dizrupt does, six stations long. The mascot turns himself into a train and rides his own
@@ -20,6 +21,25 @@ export function Solutions() {
   const [active, setActive] = useState(0);
   const prev = useRef(0);
   const reduce = useStore((s) => s.reducedMotion);
+  const hit = useRef<HTMLButtonElement>(null);
+  const router = useRouter();
+
+  // a click target riding on the billboard the train stands at
+  useEffect(() => {
+    const tick = () => {
+      const el = hit.current;
+      const b = signals.billboardHit;
+      if (!el) return;
+      el.style.visibility = b.on ? "visible" : "hidden";
+      if (!b.on) return;
+      el.style.transform = `translate3d(${b.x.toFixed(1)}px, ${b.y.toFixed(1)}px, 0)`;
+      el.style.width = `${b.w.toFixed(1)}px`;
+      el.style.height = `${b.h.toFixed(1)}px`;
+      el.dataset.index = String(b.index);
+    };
+    gsap.ticker.add(tick);
+    return () => gsap.ticker.remove(tick);
+  }, []);
   useSection(section, "solutions");
 
   useEffect(() => {
@@ -77,6 +97,19 @@ export function Solutions() {
   return (
     <section ref={section} id="solutions" aria-labelledby="solutions-title" style={{ height: `${N * 110 + 60}svh` }}>
       <div className="sol-pin">
+        <button
+          ref={hit}
+          type="button"
+          className="billboard-hit"
+          aria-label={`See the ${SOLUTIONS[active].name} work`}
+          onClick={() => {
+            const k = Number(hit.current?.dataset.index ?? active);
+            sessionStorage.setItem("home-scroll", String(scrollY));
+            router.push(`/solutions/${solutionSlug(SOLUTIONS[k] ?? SOLUTIONS[active])}`);
+          }}
+        >
+          <span>View the work →</span>
+        </button>
         <div className="sol-copy">
           <h2 id="solutions-title" className="eyebrow">
             <span className="hud-no">02</span> Solutions

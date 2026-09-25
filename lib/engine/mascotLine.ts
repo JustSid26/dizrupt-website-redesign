@@ -339,7 +339,7 @@ function signTexture(n: number, name: string, colors: [string, string]) {
   return t;
 }
 
-export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: number, extent: number, stations: Station[], stationModel: THREE.Object3D, stopsModel: THREE.Object3D | null = null) {
+export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: number, extent: number, stations: Station[], stationModel: THREE.Object3D) {
   const group = new THREE.Group();
   const TRACK_Y = GROUND + 10.5;
   const R = Math.min(36, extent * 0.76);
@@ -497,6 +497,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const signs: THREE.Mesh[] = [];
   const banners: { mat: THREE.MeshBasicMaterial; texs: THREE.Texture[]; i: number; next: number }[] = [];
   const liveBoards: ReturnType<typeof glitchBoard>[] = [];
+  const screens: THREE.Mesh[] = [];
   stations.forEach((st, k) => {
     const u = stops[k + 1];
     curve.getPointAt(u, P);
@@ -570,6 +571,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     const first = compose(null);
     const screenMat = new THREE.MeshBasicMaterial({ map: first, toneMapped: false, color: new THREE.Color(0.42, 0.42, 0.42) });
     const screen = add(new THREE.PlaneGeometry(BW, BH), screenMat, BX - 0.01, BY, 0);
+    screens.push(screen);
     screen.rotation.y = -Math.PI / 2; // facing the track
     const texs: THREE.Texture[] = [first];
     const [photo, ...work] = st.images;
@@ -697,5 +699,5 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     });
   }
 
-  return { group, curve, stops, poseAt, update, color: VIOLET, stationAt: S, length: LEN };
+  return { group, curve, stops, poseAt, update, color: VIOLET, stationAt: S, length: LEN, screens };
 }

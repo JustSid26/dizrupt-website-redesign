@@ -29,6 +29,8 @@ export const signals = {
   menuOpen: false,
   // the count's four windows on screen (the engine writes them, the landing places the numbers in them)
   statWindows: Array.from({ length: 4 }, () => ({ x: 0, y: 0, w: 0, h: 0, yaw: 0, pitch: 0 })),
+  // the billboard the train is standing at, on screen (the engine writes it; Solutions puts a link on it)
+  billboardHit: { x: 0, y: 0, w: 0, h: 0, on: false, index: -1 },
   night: 0, // 0 blue hour, 1 full night (the nav's switch)
   ready: false, // the engine has built everything it needs
 };

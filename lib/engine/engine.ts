@@ -726,6 +726,26 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         out.pitch = pnl.pitch + points.rotation.x;
       });
     }
+    // the billboard the train stands at, on screen, so it can be clicked
+    {
+      const out = signals.billboardHit;
+      const k = Math.round(s.trainS) - 1;
+      const docked = section === 'solutions' && !view && !preview && k >= 0 && Math.abs(s.trainS - (k + 1)) < 0.25 && line.screens[k];
+      out.on = !!docked;
+      out.index = k;
+      if (docked) {
+        const scr = line.screens[k];
+        scr.updateMatrixWorld();
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        const g = (scr.geometry as THREE.PlaneGeometry).parameters;
+        for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          corner.set((cx * g.width) / 2, (cy * g.height) / 2, 0).applyMatrix4(scr.matrixWorld).project(camera);
+          const sx = (corner.x * 0.5 + 0.5) * innerWidth, sy = (-corner.y * 0.5 + 0.5) * innerHeight;
+          x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+        }
+        Object.assign(out, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+      }
+    }
     composer.render();
   }
   frame();
