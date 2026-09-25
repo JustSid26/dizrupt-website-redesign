@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { SectionRail } from "@/components/SectionRail";
+import { ModeToggle } from "@/components/ModeToggle";
 
 export function Nav() {
   const open = useStore((s) => s.menuOpen);
@@ -17,6 +18,7 @@ export function Nav() {
       </Link>
       <SectionRail />
       <div className="nav-right">
+        <ModeToggle />
         <button
           type="button"
           className="menu-btn"

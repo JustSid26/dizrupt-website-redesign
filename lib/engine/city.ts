@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { isMobile } from './config';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
+import { FACADE_GLSL, lightingUniforms, setMode } from './facade';
+import { BANNERS } from '@/content/banners';
 
 /* =========================================================
    The city at night, around the mascot.
@@ -47,70 +49,103 @@ void main() {
   vTint = aTint; vSize = aSize; vStyle = aStyle; vSeed = aSeed; vGrow = g; vWorld = world.xyz; vStack = aStack;
 }`;
 
-const buildingFragment = /* glsl */ `
-uniform float uTime, uDim;
-uniform vec3 uFog, uCam;
+const ROOF_GLSL = /* glsl */ `
+vec3 roofCol(vec3 n) {
+  vec3 amb = uSkyTop * uAmbient * 2.2;
+  return vec3(0.05, 0.05, 0.055) * (amb + uSunCol * max(dot(n, uSunDir), 0.0) * 0.8);
+}`;
+
+const buildingFragment = FACADE_GLSL + ROOF_GLSL + /* glsl */ `
+uniform float uDim, uGround;
+uniform vec3 uCam;
 varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
 varying float vStyle, vSeed, vGrow;
 varying vec2 vStack;
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + vSeed * 91.3) * 43758.5453); }
 void main() {
   if (vGrow < 0.001) discard;
   vec3 n = normalize(vNormal);
-  float h = vSize.y;
   float y = vLocal.y;
-  // built only as far as the particles have landed; the roof goes on last
-  // the particles land first; the solid building fades in a little way below them
+  // the particles land first; the building stands only as far as they have got
   float front = clamp((vGrow - 0.22) / 0.78, 0.0, 1.0) * vStack.y - vStack.x;
-  float fresh = smoothstep(front - 0.8, front, y); // the newest floors are still only particles
   if (y > front + 0.001 || (n.y > 0.5 && vGrow < 0.999)) discard;
+  vec3 view = normalize(uCam - vWorld);
+  float mat = vStyle < 0.5 ? 0.0 : vStyle < 1.5 ? 1.0 : vStyle < 2.5 ? (vSeed < 0.5 ? 2.0 : 5.0) : 3.0;
+  vec3 tint = mat < 1.5 ? vec3(0.3, 0.11, 0.07) : mat < 2.5 ? vec3(0.6, 0.55, 0.46) : mat < 3.5 ? vec3(0.1, 0.12, 0.16) : vec3(0.2, 0.2, 0.22);
   vec3 col;
-  if (n.y > 0.5) {
-    // the roof: dark, with a lit rim
-    vec2 q = abs(vLocal.xz) / (vSize.xz * 0.5);
-    float rim = smoothstep(0.86, 1.0, max(q.x, q.y));
-    col = vTint * (0.02 + rim * 0.3);
-  } else {
-    bool alongX = abs(n.z) > 0.5;
-    float width = alongX ? vSize.x : vSize.z;
-    float u = (alongX ? vLocal.x : vLocal.z) + width * 0.5;
-    float fh = vStyle < 0.5 ? 0.34 : vStyle < 1.5 ? 0.4 : vStyle < 2.5 ? 0.42 : 0.5;
-    float bay = vStyle < 2.5 ? 0.3 : 0.46;
-    vec2 cell = vec2(u / bay, y / fh);
-    vec2 id = floor(cell) + (alongX ? vec2(0.0, 0.0) : vec2(57.0, 0.0)) + (n.x + n.z > 0.0 ? vec2(0.0, 311.0) : vec2(0.0));
-    vec2 f = fract(cell);
-    float win = step(0.2, f.x) * step(f.x, 0.8) * step(0.28, f.y) * step(f.y, 0.78);
-    // keep windows off the corners and the ground floor
-    win *= step(0.12, u) * step(u, width - 0.12) * step(fh * 0.9, y) * step(y, h - fh * 0.4);
-    float floorOn = step(0.18, hash(vec2(id.y, 7.0)));
-    float on = step(vStyle < 0.5 ? 0.55 : 0.4, hash(id)) * floorOn;
-    float warm = vStyle < 1.5 ? 0.85 : vStyle < 2.5 ? 0.35 : 0.1;
-    vec3 lamp = mix(vec3(0.7, 0.88, 1.0), vec3(1.0, 0.76, 0.42), step(1.0 - warm, hash(id + 3.1)));
-    lamp *= 0.38 + 0.3 * hash(id + 9.7);
-    // a very few flicker
-    lamp *= 1.0 - step(0.985, hash(id + 1.3)) * step(0.5, fract(uTime * 0.7 + hash(id + 2.0)));
-    vec3 facade = vTint * (0.018 + 0.03 * (y / max(vSize.y, 1.0)));
-    col = facade + lamp * win * on * (vStyle > 2.5 ? 0.9 : 1.1);
-    if (vStyle > 2.5) {
-      // glass: mullions and floor lines catch the light, and the panes carry the tint
-      float mull = (1.0 - step(0.06, f.x)) + (1.0 - step(0.05, f.y)) * 0.6;
-      col += vTint * (0.025 + mull * 0.12);
-    }
-    // lit corners: the edges of every building glow, the towers' brightest
-    float edge = min(u, width - u);
-    col += vTint * exp(-edge * (vStyle > 1.5 ? 14.0 : 20.0)) * (vStyle > 1.5 ? 0.42 : 0.18);
-    // a crown of light round the top, and shopfronts at the bottom
-    col += vTint * exp(-(h - y) * 7.0) * (vStyle > 1.5 ? 0.38 : 0.12);
-    col += vec3(1.0, 0.72, 0.4) * step(y, 0.3) * step(0.08, y) * step(0.5, hash(vec2(floor(u / 0.6), 3.0))) * (vStyle > 0.5 ? 0.3 : 0.0);
+  if (n.y > 0.5) col = roofCol(n);
+  else {
+    float u = abs(n.z) > 0.5 ? vWorld.x : vWorld.z;
+    col = facade(vWorld, n, view, mat, tint, vSeed, u + 500.0, 10000.0, y + vStack.x, vStack.y, uGround);
   }
-  // the line of light at the top while it is still going up
-  col *= 1.0 - fresh * (1.0 - step(0.999, vGrow)) * 0.85;
-  // the light is all in the particles; the mesh is only the dark mass they are on
-  // (in linear light: what looks near-black on screen is a very small number here)
-  col = vTint * (0.003 + 0.004 * (vLocal.y + vStack.x) / max(vStack.y, 1.0)) + vec3(0.0015, 0.002, 0.0035);
-  float d = distance(vWorld, uCam);
-  col = mix(col, uFog, smoothstep(40.0, 130.0, d) * 0.6);
+  col = mix(col, uSkyHorizon, smoothstep(45.0, 150.0, distance(vWorld, uCam)) * 0.75);
   gl_FragColor = vec4(col * uDim, 1.0);
+}`;
+
+/* The city modelled in Blender (public/models/nyc-city.glb): every vertex carries its building's
+   centre (uv), its height and material with a per-building seed (uv1), and its stone or brick
+   colour. glTF stores v flipped, which is undone here. */
+const modelVertex = /* glsl */ `
+attribute vec2 uv1;
+attribute vec3 color;
+varying vec3 vWorld, vN, vTint;
+varying float vH, vMat, vSeed, vStart;
+uniform vec3 uBoard;
+uniform float uExtent;
+void main() {
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vWorld = w.xyz;
+  vN = normalize(mat3(modelMatrix) * normal);
+  vec2 centre = vec2(uv.x, 1.0 - uv.y);
+  vH = uv1.x;
+  float ms = 1.0 - uv1.y;
+  vMat = floor(ms + 0.001);
+  vSeed = fract(ms) / 0.9;
+  vTint = color;
+  vStart = min(1.0, distance(centre, uBoard.xz) / (uExtent * 1.7)) * 0.85;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const modelFragment = FACADE_GLSL + ROOF_GLSL + /* glsl */ `
+uniform float uDim, uGround, uBuild;
+uniform vec3 uCam;
+varying vec3 vWorld, vN, vTint;
+varying float vH, vMat, vSeed, vStart;
+void main() {
+  float g = clamp((uBuild - vStart * 0.6) / 0.4, 0.0, 1.0);
+  g = g * g * (3.0 - 2.0 * g);
+  float y = vWorld.y - uGround;
+  if (y > clamp((g - 0.22) / 0.78, 0.0, 1.0) * vH + 0.001) discard;
+  vec3 n = normalize(vN);
+  vec3 view = normalize(uCam - vWorld);
+  vec3 col;
+  if (vMat > 5.5) {
+    // a crown: lit metal, in its own light at night
+    vec3 amb = mix(uSkyHorizon, uSkyTop, n.y * 0.5 + 0.5) * uAmbient * 2.2;
+    col = vTint * (amb + uSunCol * max(dot(n, uSunDir), 0.0)) * 0.9 + vTint * (0.12 + uNight * 0.35);
+  } else if (n.y > 0.6) col = roofCol(n);
+  else {
+    float u = abs(n.x) > abs(n.z) ? vWorld.z : vWorld.x;
+    col = facade(vWorld, n, view, vMat, vTint, vSeed, u + 500.0, 10000.0, y, vH, uGround);
+  }
+  col = mix(col, uSkyHorizon, smoothstep(45.0, 150.0, distance(vWorld, uCam)) * 0.75);
+  gl_FragColor = vec4(col * uDim, 1.0);
+}`;
+
+/* A Times Square screen: a client's banner, or an ad of ours, bright, cut from one to the next with
+   a fault; rows of LEDs visible up close. */
+const screenFragment = /* glsl */ `
+uniform sampler2D uA, uB;
+uniform float uMix, uGlitch, uTime, uDim, uOn;
+varying vec2 vUv;
+void main() {
+  if (uOn < 0.5) discard;
+  vec2 uv = vUv;
+  if (!gl_FrontFacing) uv.x = 1.0 - uv.x;
+  float band = floor(uv.y * 14.0);
+  uv.x += (fract(sin(band * 91.7 + uTime * 30.0) * 43758.5) - 0.5) * 0.08 * uGlitch;
+  vec3 a = texture2D(uA, uv).rgb, b = texture2D(uB, uv).rgb;
+  vec3 col = mix(a, b, uMix);
+  col *= 0.85 + 0.15 * step(0.3, fract(gl_FragCoord.y * 0.5));
+  gl_FragColor = vec4(col * 0.55 * uDim, 1.0);
 }`;
 
 /* ---------- the ground: streets, pavements, parks, the plaza ---------- */
@@ -122,7 +157,8 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const groundFragment = /* glsl */ `
-uniform float uPitch, uPlaza, uExtent, uBuild, uDim, uTime;
+uniform float uPitch, uPlaza, uExtent, uBuild, uDim, uTime, uNight, uAmbient;
+uniform vec3 uSkyHorizon;
 uniform vec3 uFog, uCam, uBoard;
 varying vec3 vWorld;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -155,9 +191,15 @@ void main() {
   col = mix(col, vec3(0.06, 0.065, 0.075) + 0.02 * step(0.5, fract(r * 0.8)), plaza);
   col += vec3(0.4, 0.95, 1.0) * (1.0 - smoothstep(0.0, 0.12, abs(r - uPlaza))) * 0.9;
   col += vec3(1.0, 0.85, 0.6) * (1.0 - smoothstep(0.0, 0.05, abs(r - uPlaza * 0.55))) * 0.5;
+  // zebra crossings where each street meets the next
+  float cw = step(g.x, 0.9) * step(0.95, g.y) * step(g.y, 1.35) * step(0.5, fract(p.x / 0.16))
+           + step(g.y, 0.9) * step(0.95, g.x) * step(g.x, 1.35) * step(0.5, fract(p.y / 0.16));
+  col = mix(col, vec3(0.32, 0.32, 0.3), clamp(cw, 0.0, 1.0) * 0.85 * (1.0 - avenue));
+  // at blue hour the streets are still in daylight's last of it
+  col *= 1.0 + (1.0 - uNight) * 1.2;
   // the edge of town fades into the dark
   col *= 1.0 - smoothstep(uExtent - 2.0, uExtent + 12.0, max(abs(p.x), abs(p.y)));
-  col = mix(col, uFog, smoothstep(40.0, 130.0, distance(vWorld, uCam)));
+  col = mix(col, uSkyHorizon * 0.8, smoothstep(40.0, 140.0, distance(vWorld, uCam)));
   gl_FragColor = vec4(col * uDim, 1.0);
 }`;
 
@@ -249,7 +291,11 @@ const LANDMARKS: Record<string, { x: number; z: number; rot: number; scale: numb
   flatiron: { x: 21, z: 4, rot: -0.6, scale: 1.1, crownFrom: 2, crown: ['#ffffff', '#ffffff'], tint: '#ffb070' },
 };
 
-export function createCity(pixelRatio: number, billboard: Billboard, GROUND: number, plinthTop: number, mascotTop: number, landmarks: Landmark[] = []) {
+export type CityModel = { city: THREE.BufferGeometry; screens: THREE.BufferGeometry[] };
+
+export function createCity(pixelRatio: number, billboard: Billboard, GROUND: number, plinthTop: number, mascotTop: number, landmarks: Landmark[] = [], model: CityModel | null = null) {
+  // the light the whole city is seen in (blue hour ↔ night), shared by every material here
+  const light = { ...lightingUniforms(), uTime: { value: 0 } };
   const EXTENT = isMobile ? 34 : 48;
   const PITCH = 5.6;
   const PLAZA = 11;
@@ -271,7 +317,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   const office = ['#9fc4ff', '#dfe8ff', '#6fb0ff', '#ffd27a'];
   const flats = ['#ffb070', '#ff9a5a', '#ffd08a', '#8fd0ff'];
   const pick = (a: string[]) => new THREE.Color(a[Math.floor(rnd() * a.length)]);
-  for (let gx = -EXTENT; gx < EXTENT; gx += PITCH) {
+  for (let gx = -EXTENT; gx < EXTENT && !model; gx += PITCH) {
     for (let gz = -EXTENT; gz < EXTENT; gz += PITCH) {
       const cx = gx + PITCH / 2, cz = gz + PITCH / 2;
       const r = Math.hypot(cx, cz);
@@ -349,7 +395,8 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   const N = blds.length;
   const size = new Float32Array(N * 3), tint = new Float32Array(N * 3), style = new Float32Array(N), start = new Float32Array(N), bseed = new Float32Array(N), bbase = new Float32Array(N * 2);
   const buildingUniforms = {
-    uBuild: { value: 1 }, uTime: { value: 0 }, uDim: { value: 1 },
+    ...light,
+    uBuild: { value: 1 }, uDim: { value: 1 }, uGround: { value: GROUND },
     uFog: { value: FOG }, uCam: { value: new THREE.Vector3() },
   };
   const bMat = new THREE.ShaderMaterial({ uniforms: buildingUniforms, vertexShader: buildingVertex, fragmentShader: buildingFragment });
@@ -622,10 +669,86 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     cr.push(rnd(), rnd(), rnd(), rnd());
     cc.push(railTint.r, railTint.g, railTint.b);
   }
+  /* ---- what the Times Square screens show: the clients' banners, and ads of ours ---- */
+  const adTextures: THREE.Texture[] = [];
+  const loader = new THREE.TextureLoader();
+  for (const url of Object.values(BANNERS)) {
+    const t = loader.load(url);
+    t.colorSpace = THREE.SRGBColorSpace;
+    adTextures.push(t);
+  }
+  const ads: [string, string, string][] = [['DIZRUPT', '#a310e7', '#1a0633'], ['SOLUTIONS FOR WHAT’S NEXT', '#58c4ff', '#051a2e'], ['HAVE A PROJECT?', '#ff3d8b', '#2a0616'], ['MUMBAI · NYC · LONDON', '#ffd27a', '#221400']];
+  for (const [text, fg, bg] of ads) {
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = 512;
+    const x = c.getContext('2d')!;
+    const gr = x.createLinearGradient(0, 0, 1024, 512);
+    gr.addColorStop(0, bg); gr.addColorStop(1, '#000');
+    x.fillStyle = gr; x.fillRect(0, 0, 1024, 512);
+    x.fillStyle = fg; x.textAlign = 'center'; x.textBaseline = 'middle';
+    let size = 150;
+    x.font = `800 ${size}px system-ui, sans-serif`;
+    while (x.measureText(text).width > 940 && size > 40) x.font = `800 ${(size -= 6)}px system-ui, sans-serif`;
+    x.fillText(text, 512, 256);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    adTextures.push(t);
+  }
+  const pickAd = () => adTextures[Math.floor(Math.random() * adTextures.length)];
+
+  /* ---- the modelled city ---- */
+  const screenMats: THREE.ShaderMaterial[] = [];
+  if (model) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { ...buildingUniforms, uBoard: { value: billboard.center.clone() }, uExtent: { value: EXTENT } },
+      vertexShader: modelVertex, fragmentShader: modelFragment,
+    });
+    const mesh = new THREE.Mesh(model.city.clone().translate(0, GROUND, 0), mat);
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    // the construction particles, sampled over its surface; each needs its building's height
+    const uvA = mesh.geometry.attributes.uv as THREE.BufferAttribute, uv1A = mesh.geometry.attributes.uv1 as THREE.BufferAttribute;
+    const heights = new Map<string, number>();
+    const key = (x: number, z: number) => `${Math.round(x * 10)},${Math.round(z * 10)}`;
+    for (let i = 0; i < uvA.count; i++) heights.set(key(uvA.getX(i), 1 - uvA.getY(i)), uv1A.getX(i));
+    const sampler = new MeshSurfaceSampler(mesh).build();
+    const uvS = new THREE.Vector2(), sample = new THREE.Vector3(), normal = new THREE.Vector3();
+    const nSamples = isMobile ? 60000 : 150000;
+    const white = new THREE.Color(0.85, 0.92, 1.0);
+    for (let i = 0; i < nSamples; i++) {
+      sampler.sample(sample, normal, undefined, uvS);
+      const cz = 1 - uvS.y;
+      const H = heights.get(key(uvS.x, cz)) ?? 5;
+      const st = Math.min(1, Math.hypot(uvS.x - boardXZ.x, cz - boardXZ.y) / (EXTENT * 1.7)) * 0.85;
+      const rec = { start: st, total: H } as B;
+      push(sample.x + normal.x * 0.03, sample.y + normal.y * 0.03, sample.z + normal.z * 0.03, rec, white, 0.8, 1.3);
+    }
+    // the screens: a banner or an ad each, cut to the next every few seconds
+    for (const g of model.screens) {
+      const geo = g.clone().translate(0, GROUND, 0);
+      geo.computeBoundingBox();
+      const c = geo.boundingBox!.getCenter(new THREE.Vector3());
+      const sm = new THREE.ShaderMaterial({
+        uniforms: { uA: { value: null }, uB: { value: null }, uMix: { value: 0 }, uGlitch: { value: 0 }, uTime: light.uTime, uDim: buildingUniforms.uDim, uOn: { value: 0 } },
+        vertexShader: `varying vec2 vUv; void main() { vUv = vec2(uv.x, 1.0 - uv.y); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: screenFragment,
+        side: THREE.DoubleSide,
+      });
+      (sm as THREE.ShaderMaterial & { userData: Record<string, number> }).userData = {
+        start: Math.min(1, Math.hypot(c.x - boardXZ.x, c.z - boardXZ.y) / (EXTENT * 1.7)) * 0.85,
+        next: Math.random() * 5, cur: 0, phase: Math.random(),
+      };
+      screenMats.push(sm);
+      const sMesh = new THREE.Mesh(geo, sm);
+      sMesh.frustumCulled = false;
+      group.add(sMesh);
+    }
+  }
+
   /* ---- the landmarks: their models' surfaces sampled into lit windows, crowns lit as they are ---- */
   const landmarkBodies: THREE.ShaderMaterial[] = [];
   const sample = new THREE.Vector3(), normal = new THREE.Vector3();
-  for (const l of landmarks) {
+  for (const l of model ? [] : landmarks) {
     const spec = LANDMARKS[l.name];
     const places = l.name === 'brownstones'
       ? Array.from({ length: isMobile ? 4 : 9 }, (_, i) => {
@@ -735,7 +858,9 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         gl_Position = projectionMatrix * mv;
         gl_PointSize = max(1.1 * aSize, (1.8 * aSize + 4.4 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
         // on its way and just landed it is bright; once the facade has come up behind it, it settles to a sparkle
-        vA = step(0.001, t);
+        // once the real facade has come up behind it, it has done its work and goes
+        float facadeAt = clamp((g - 0.22) / 0.78, 0.0, 1.0);
+        vA = step(0.001, t) * (1.0 - smoothstep(aFrac.x + 0.02, aFrac.x + 0.16, facadeAt));
         // white while it flies, its own colour once it lands
         vTint = mix(vec3(0.95, 0.95, 1.0), aTint, e);
       }`,
@@ -756,25 +881,24 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   group.add(construct);
 
   /* ---- the night sky: a clear, bright one, deep blue at the top, glowing at the horizon ---- */
-  const skyUniforms = { uTime: { value: 0 }, uDim: { value: 1 } };
+  const skyUniforms = { uTime: light.uTime, uDim: { value: 1 }, uNight: light.uNight, uSkyTop: light.uSkyTop, uSkyHorizon: light.uSkyHorizon };
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(360, 48, 24),
     new THREE.ShaderMaterial({
       uniforms: skyUniforms,
       vertexShader: /* glsl */ `varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform float uDim;
+        uniform float uDim, uNight;
+        uniform vec3 uSkyTop, uSkyHorizon;
         varying vec3 vDir;
         void main() {
           float h = vDir.y;
-          vec3 zenith = vec3(0.012, 0.02, 0.055);
-          vec3 mid = vec3(0.025, 0.045, 0.1);
-          vec3 horizon = vec3(0.06, 0.09, 0.15);
-          vec3 col = mix(horizon, mid, smoothstep(0.0, 0.25, h));
-          col = mix(col, zenith, smoothstep(0.25, 0.9, h));
+          vec3 col = mix(uSkyHorizon, uSkyTop, smoothstep(0.0, 0.55, h));
+          // a warm band where the sun has just gone, at blue hour
+          col += vec3(0.12, 0.05, 0.025) * (1.0 - uNight) * exp(-h * 12.0) * max(0.0, dot(normalize(vDir.xz), normalize(vec2(0.35, -0.9))));
           // a band of the galaxy across the sky
           float band = exp(-pow((vDir.y - 0.35 + vDir.x * 0.4) * 5.0, 2.0));
-          col += vec3(0.025, 0.035, 0.05) * band;
+          col += vec3(0.025, 0.035, 0.05) * band * uNight;
           col = mix(col, vec3(0.04, 0.05, 0.08), smoothstep(0.02, -0.2, h)); // below the horizon
           gl_FragColor = vec4(col * uDim, 1.0);
         }`,
@@ -808,12 +932,12 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         vS = aSeed;
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uDim; varying float vB; varying float vS;
+      uniform float uDim, uNight; varying float vB; varying float vS;
       void main() {
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5) discard;
         vec3 col = mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.9, 0.75), step(0.7, fract(vS * 13.0)));
-        gl_FragColor = vec4(col * uDim, smoothstep(0.5, 0.0, d) * vB);
+        gl_FragColor = vec4(col * uDim, smoothstep(0.5, 0.0, d) * vB * (0.15 + 0.85 * uNight));
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
@@ -823,6 +947,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
 
   /* ---- the ground ---- */
   const groundUniforms = {
+    uNight: light.uNight, uAmbient: light.uAmbient, uSkyHorizon: light.uSkyHorizon,
     uPitch: { value: PITCH }, uPlaza: { value: PLAZA }, uExtent: { value: EXTENT }, uBuild: { value: 1 },
     uDim: { value: 1 }, uTime: { value: 0 }, uFog: { value: FOG }, uCam: buildingUniforms.uCam,
     uBoard: { value: billboard.center.clone() },
@@ -1099,7 +1224,26 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     return { ...p, r: 30 + i * 9 + rnd() * 6, y: GROUND + TALL + 6 + i * 3.5, speed: 0.04 + rnd() * 0.03, phase: rnd() * Math.PI * 2, way: i % 2 ? 1 : -1 };
   });
 
-  function update(time: number, build: number, dim: number, cam: THREE.Vector3) {
+  function update(time: number, build: number, dim: number, cam: THREE.Vector3, night = 0) {
+    setMode(light, night);
+    light.uTime.value = time;
+    for (const sm of screenMats) {
+      const ud = (sm as THREE.ShaderMaterial & { userData: { start: number; next: number; cut: number } }).userData;
+      const g = Math.min(1, Math.max(0, (build - ud.start * 0.6) / 0.4));
+      sm.uniforms.uOn.value = g > 0.98 ? 1 : 0;
+      if (!sm.uniforms.uA.value) { sm.uniforms.uA.value = pickAd(); sm.uniforms.uB.value = pickAd(); }
+      if (time > ud.next) {
+        // cut to the next: the old picture holds, the new one tears in over it
+        sm.uniforms.uA.value = sm.uniforms.uMix.value > 0.5 ? sm.uniforms.uB.value : sm.uniforms.uA.value;
+        sm.uniforms.uB.value = pickAd();
+        sm.uniforms.uMix.value = 0;
+        ud.cut = time;
+        ud.next = time + 5 + Math.random() * 5;
+      }
+      const k = Math.min(1, (time - (ud.cut ?? -9)) / 0.35);
+      sm.uniforms.uMix.value = k;
+      sm.uniforms.uGlitch.value = k < 1 ? 1 - k : 0;
+    }
     // the sky is always round the camera, however far it goes
     sky.position.copy(cam);
     stars.position.copy(cam);

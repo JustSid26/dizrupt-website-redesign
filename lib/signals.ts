@@ -27,5 +27,6 @@ export const signals = {
   // the menu's hovered solution takes the field over
   preview: null as null | { shape: string; colors: [string, string] },
   menuOpen: false,
+  night: 0, // 0 blue hour, 1 full night (the nav's switch)
   ready: false, // the engine has built everything it needs
 };

@@ -113,7 +113,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   addEventListener('resize', resize);
 
   /* ---------- the mascot ---------- */
-  const [mascot, landmarks] = await Promise.all([
+  const [mascot, landmarks, cityModel] = await Promise.all([
     loadMascot(),
     // the NYC landmarks, modelled in Blender
     new GLTFLoader().loadAsync('/models/nyc.glb').then((g) => {
@@ -121,6 +121,20 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       g.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push({ name: o.name, geometry: (o as THREE.Mesh).geometry }); });
       return out;
     }).catch(() => []),
+    // the whole city, modelled in Blender: one mesh of buildings, and the Times Square screens
+    new GLTFLoader().loadAsync('/models/nyc-city.glb').then((g) => {
+      let city: THREE.BufferGeometry | null = null;
+      const screens: THREE.BufferGeometry[] = [];
+      g.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.updateMatrixWorld();
+        const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
+        if (o.name === 'city') city = geo;
+        else if (o.name.startsWith('screen')) screens.push(geo);
+      });
+      return city ? { city, screens } : null;
+    }).catch(() => null),
   ]);
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
@@ -143,7 +157,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const boardAt = new THREE.Vector3(10, GROUND + 9.5, 22);
   const boardFacing = new THREE.Vector3(-0.25, 0, 1).normalize();
   const billboard = createBillboard(boardAt, boardFacing);
-  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP, BUST_DROP + BUST_HEIGHT / 2, landmarks);
+  const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP, BUST_DROP + BUST_HEIGHT / 2, landmarks, cityModel);
   scene.add(city.group, billboard.group);
   // his own line, with a station for each solution
   const line = createMascotLine(pixelRatio, GROUND, PLINTH_TOP, isMobile ? 34 : 48,
@@ -241,6 +255,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let sky = 0;
   let boardMeasure = 0;
   let cityDim = 1;
+  let night = signals.night;
   const clock = new THREE.Timer();
   let raf = 0;
 
@@ -462,7 +477,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
     cityDim = damp(cityDim, (onIntro && ip < 0.5) || (section === 'solutions' && !preview) ? 1 : view ? 0.15 : 0.35, 2, dt);
-    city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position);
+    night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
+    city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     billboard.material.opacity = Math.min(1, cityDim * 1.5);
     const lineReveal = section === 'intro' ? 0 : section === 'solutions' ? Math.min(1.02, smooth(0, 0.14, s.solutions) * 1.02) : 1.02;
     line.update(time, lineReveal, cityDim, s.trainS);

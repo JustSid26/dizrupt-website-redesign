@@ -1073,3 +1073,10 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .intro-pin.sweeping .intro-inner, .intro-pin.sweeping .intro-enter, .intro-pin.sweeping .intro-tag {
   opacity: 0 !important; transition: none !important; animation: none !important;
 }
+
+/* blue hour / night */
+.mode { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+.mode button { padding: 7px 11px; border-radius: 999px; color: var(--dim); transition: background 0.3s, color 0.3s; }
+.mode button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.nav:not([data-loaded]) .mode { opacity: 0; pointer-events: none; }
+@media (max-width: 600px) { .mode button { padding: 6px 8px; } }
