@@ -114,7 +114,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   addEventListener('resize', resize);
 
   /* ---------- the mascot ---------- */
-  const [mascot, landmarks, cityModel] = await Promise.all([
+  const loadModel = (url: string) => new GLTFLoader().loadAsync(url).then((g) => g.scene).catch(() => null);
+  const [mascot, landmarks, cityModel, trainModel, stationModel] = await Promise.all([
     loadMascot(),
     // the NYC landmarks, modelled in Blender
     new GLTFLoader().loadAsync('/models/nyc.glb').then((g) => {
@@ -136,6 +137,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       });
       return city ? { city, screens } : null;
     }).catch(() => null),
+    // the bullet train and its start station, modelled in Blender
+    loadModel('/models/train.glb'),
+    loadModel('/models/station.glb'),
   ]);
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
@@ -162,14 +166,42 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   scene.add(city.group, billboard.group);
   // his own line, with a station for each solution
   const line = createMascotLine(pixelRatio, GROUND, PLINTH_TOP, isMobile ? 34 : 48,
-    SOLUTIONS.map((sol) => ({ name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors })));
+    SOLUTIONS.map((sol) => ({ name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors })),
+    stationModel ?? new THREE.Group());
   scene.add(line.group);
-  const trainLocal = trainShape();
+  const trainLocal = trainShape(trainModel);
+  /* The real train. Its particles land on it first; then it is shown solid, swept in from its
+     wheels to its roof, and they fade. It rides wherever the particles do. */
+  const trainClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4);
+  const trainSolid = new THREE.Group();
+  if (trainModel) {
+    trainModel.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = (m.material as THREE.MeshStandardMaterial).clone();
+      mat.clippingPlanes = [trainClip];
+      mat.emissiveIntensity = Math.min(mat.emissiveIntensity, 0.8);
+      m.material = mat;
+    });
+    trainSolid.add(trainModel);
+
+  }
+  trainSolid.visible = false;
+  /* One soft light for the modelled things (the station and the train), in the evening's colours:
+     a sky above and a warm low sun, dimmer at night. */
+  const skyLight = new THREE.HemisphereLight('#9fb0ff', '#1c1826', 0.55);
+  const dusk = new THREE.DirectionalLight('#ffc9a0', 0.75);
+  dusk.position.set(-20, 18, 30);
+  scene.add(skyLight, dusk);
+  trainSolid.matrixAutoUpdate = false;
+  scene.add(trainSolid);
+  let solidK = 0;
+  const pose0M = new THREE.Matrix4();
   field.register('train', new THREE.BufferAttribute(trainLocal, 3));
   // the same train, already standing at the start station, in world space: what the windows become
   {
     const pose0 = line.poseAt(0);
-    const m = new THREE.Matrix4().compose(pose0.pos, pose0.quat, new THREE.Vector3(1, 1, 1));
+    const m = pose0M.compose(pose0.pos, pose0.quat, new THREE.Vector3(1, 1, 1));
     const arr = new Float32Array(trainLocal.length);
     const v = new THREE.Vector3();
     for (let i = 0; i < trainLocal.length; i += 3) {
@@ -180,7 +212,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   const aerialPos = new THREE.Vector3(0, GROUND + 22, 54);
   const stationCamPos = line.stationAt.clone().add(new THREE.Vector3(-10.5, 5.6, 1.5));
-  const stationCamLook = line.stationAt.clone().add(new THREE.Vector3(0, 1.0, 6));
+  const stationCamLook = line.stationAt.clone().add(new THREE.Vector3(0, 2.2, 6));
   const aerialLook = new THREE.Vector3(0, GROUND + 12, 0);
   billboard.measure();
 
@@ -548,7 +580,20 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const landing = onIntro && ip < 0.015;
     const fieldTarget = landing ? 0 : view ? (isMobile ? 0.3 : 0.9) : 1;
     fieldOpacity = damp(fieldOpacity, fieldTarget, 4, dt);
-    u.uOpacity.value = fieldOpacity * mascotVisible;
+    const trainOn = key.startsWith('train') && !view && !preview && (section === 'intro' || section === 'solutions') && !!trainModel;
+    const landed = trainOn && u.uProgress.value >= 0.999;
+    solidK = landed ? Math.min(1, solidK + dt / 1.1) : trainOn ? 0 : Math.max(0, solidK - dt / 0.4);
+    trainSolid.visible = solidK > 0.001;
+    if (trainSolid.visible) {
+      trainSolid.matrix.copy(points.matrixWorld);
+      if (key === 'train:station') trainSolid.matrix.multiply(pose0M);
+      trainSolid.matrixWorldNeedsUpdate = true;
+      trainSolid.updateMatrixWorld(true);
+      // wheels to roof, in the train's own height, measured in the world
+      const baseY = new THREE.Vector3().setFromMatrixPosition(trainSolid.matrix).y;
+      trainClip.constant = solidK >= 1 ? 1e4 : baseY - 0.05 + solidK * 1.8;
+    }
+    u.uOpacity.value = fieldOpacity * mascotVisible * (1 - 0.92 * Math.max(0, (solidK - 0.3) / 0.7));
     field.update(now, time, dt);
 
     bloom.strength = onIntro && ip < 0.2 ? 0.45 * smooth(0.015, 0.12, ip) : damp(bloom.strength, 0.45, 3, dt);
@@ -613,6 +658,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     cityDim = damp(cityDim, (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
+    skyLight.intensity = 0.55 - 0.3 * night;
+    dusk.intensity = 0.75 - 0.6 * night;
     billboard.material.opacity = Math.min(1, cityDim * 1.5);
     const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
