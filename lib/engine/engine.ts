@@ -20,7 +20,6 @@ import { BANNERS } from '@/content/banners';
 import { SOCIALS } from '@/content/socials';
 import { createAiWorld, type AiWorld } from './ai/world';
 import { createTransitionPass } from './ai/transition';
-import { mascotMask } from './ai/mascotMask';
 
 /* =========================================================
    The engine: one canvas behind the whole site.
@@ -1049,8 +1048,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const ai = signals.ai;
       if (!aiWorld && (ai.warm || ai.mix > 0)) {
         aiWorld = createAiWorld(renderer, pixelRatio);
-        // his upper body, for the signal-loss storm to spell out in purple binary
-        if (mascot) aiPass.uniforms.tMascot.value = mascotMask(renderer, mascot.neutral);
         aiWorld.render(dt, time, 0, 0, 0); // compile it now, not on the first frame of the transition
       }
       const on = ai.mix > 0.0001 && !!aiWorld;
