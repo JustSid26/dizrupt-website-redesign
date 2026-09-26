@@ -52,6 +52,7 @@ export function createTransitionPass() {
       tDiffuse: { value: null },
       tAi: { value: null },
       tGlyph: { value: glyphAtlas() },
+      tMascot: { value: null },
       uMix: { value: 0 },
       uMode: { value: 0 },
       uTime: { value: 0 },
@@ -60,7 +61,7 @@ export function createTransitionPass() {
     },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform sampler2D tDiffuse, tAi, tGlyph;
+      uniform sampler2D tDiffuse, tAi, tGlyph, tMascot;
       uniform float uMix, uTime, uExposure;
       uniform int uMode;
       uniform vec2 uRes;
@@ -131,6 +132,36 @@ export function createTransitionPass() {
         bits = mix(bits, vec3(0.1, 1.0, 0.35) * (1.0 - glyph) * 0.6, full * step(0.97, bh));
 
         vec3 c = mix(src, bits, cov);
+
+        // in the storm the mascot comes through: his upper body spelled out in purple binary, rising
+        // from the bottom of the screen, flickering in and out and torn with the rest of it
+        float him = smoothstep(0.42, 0.52, t) * (1.0 - smoothstep(0.74, 0.82, t));
+        him *= step(0.18, h1(floor(uTime * 14.0) + 5.0));                 // the signal drops him now and then
+        if (him > 0.0) {
+          float aspect = uRes.x / uRes.y;
+          vec2 cc = (cell + 0.5) * cellPx / uRes;                         // read him per character, not per pixel
+          cc.x += tear * (h2(vec2(row, step20 + 9.0)) - 0.5) * 0.05;      // the tears catch him too, a little
+          vec2 m = vec2((cc.x - 0.5) * aspect / 0.95 + 0.5, cc.y / 0.95);
+          float inside = step(0.0, m.x) * step(m.x, 1.0) * step(m.y, 1.0);
+          float dens = inside * texture2D(tMascot, m).r;
+          float body = smoothstep(0.08, 0.3, dens);
+          float halo = inside * smoothstep(0.0, 0.08, texture2D(tMascot, m + vec2(0.0, -0.01)).r + dens);
+          c *= 1.0 - 0.55 * halo * him;
+          if (body > 0.0) {
+            // his own digits: they don't fall, they flicker in place
+            float fl = floor(uTime * (4.0 + h2(cell) * 12.0));
+            float dg = step(0.5, h2(cell + fl * 0.17));
+            vec2 fc = fract(gp);
+            float gl = texture2D(tGlyph, vec2((10.0 + dg + clamp(fc.x, 0.1, 0.9)) / 16.0, 1.0 - fc.y)).r;
+            // Dizrupt purple, a touch lighter where he's densest (the face, the outline); never white
+            vec3 violet = mix(vec3(0.5, 0.03, 0.82), vec3(0.72, 0.3, 1.0), smoothstep(0.3, 1.6, dens));
+            vec3 hisBits = violet * gl * min(2.2, 1.3 + dens * 0.8);
+            hisBits = mix(hisBits, violet * 0.5 * (1.0 - gl), full * step(0.975, bh)); // inverted blocks
+            // the green storm backs off round him so he reads
+            c = mix(c, hisBits + c * 0.08, body * him);
+          }
+        }
+
         // a little snow and scanlines while it's failing
         float noise = light * 0.12 + full * 0.18;
         c += (h2(uv * uRes + uTime) - 0.5) * noise;
