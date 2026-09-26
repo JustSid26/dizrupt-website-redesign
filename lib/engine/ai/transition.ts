@@ -7,9 +7,9 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
    frame, tAi the AI world. uMix runs 0 → 1 (and back, on the way
    out), uMode picks the transition:
 
-   0  Signal loss   the picture glitches, green binary bleeds through,
-                    the whole screen becomes a storm of binary, and
-                    the binary decodes into the new world
+   0  Signal loss   the picture fails: macroblocks, datamosh smear,
+                    torn scanlines, channels apart; the new world
+                    comes through the corruption block by block
    1  Neural scan   a scan front sweeps the screen; everything it
                     passes is read as edges and a lattice, and
                     resolves into the new world behind it
@@ -20,7 +20,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
                     AI world boots up out of the dark
    ========================================================= */
 export const TRANSITIONS = [
-  { id: 'signal', name: 'Signal loss', duration: 2.6 },
+  { id: 'signal', name: 'Signal loss', duration: 1.7 },
   { id: 'scan', name: 'Neural scan', duration: 2.0 },
   { id: 'ascii', name: 'ASCII decode', duration: 2.3 },
   { id: 'crt', name: 'CRT reboot', duration: 2.6 },
@@ -75,66 +75,39 @@ export function createTransitionPass() {
       float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
       vec3 pick(vec2 uv, float w) { return w > 0.5 ? B(uv) : A(uv); }
 
-      /* ---------- 0: signal loss ----------
-         The page glitches a little; green binary starts bleeding through in streams; then the whole
-         screen is binary, tearing and flickering; then the binary decodes into the new world. */
+      /* ---------- 0: signal loss ---------- */
       vec3 signalLoss(vec2 uv, float t) {
-        float step20 = floor(uTime * 20.0);
-        float light = smoothstep(0.0, 0.08, t) * (1.0 - smoothstep(0.6, 0.72, t)); // the first, small glitches
-        float bin = pow(smoothstep(0.2, 0.62, t), 1.8);                               // how much is binary: a trickle, then a flood
-        float full = smoothstep(0.5, 0.62, t) * (1.0 - smoothstep(0.84, 0.98, t));   // the whole-screen binary storm
-
-        // torn rows: a few at first, the whole picture shredding in the storm
-        float row = floor(uv.y * mix(36.0, 18.0, h1(step20)));
-        float tear = step(1.0 - (light * 0.12 + full * 0.5), h2(vec2(row, step20)));
-        uv.x += tear * (h2(vec2(row, step20 + 3.0)) - 0.5) * (0.04 + full * 0.3);
-
-        // the binary grid; each column's digits fall at their own speed
-        vec2 cellPx = vec2(11.0, 17.0);
-        vec2 gp = uv * uRes / cellPx;
-        vec2 cell = floor(gp);
-        float colH = h2(vec2(cell.x, 7.0));
-        float fall = uTime * (3.0 + colH * 9.0);
-        vec2 fcell = floor(vec2(gp.x, gp.y + fall));
-        vec2 f = fract(vec2(gp.x, gp.y + fall));
-
-        // when this cell hands its picture over to the new world
-        float sw = 0.66 + h2(cell) * 0.12 + (1.0 - uv.y) * 0.08;
-        float useB = step(sw, t);
-        float ca = 0.004 * light + 0.018 * full + tear * 0.02;
-        vec3 src;
-        src.r = pick(uv + vec2(ca, 0.0), useB).r;
-        src.g = pick(uv, useB).g;
-        src.b = pick(uv - vec2(ca, 0.0), useB).b;
-
-        // where the binary is: streams down some columns first, then everywhere
-        float stream = fract(fcell.y * 0.035 + colH * 5.0);
-        float seed = colH * 0.55 + stream * 0.35 + h2(cell) * 0.1;
-        float cov = step(seed, bin * 1.12);
-        cov *= 1.0 - smoothstep(sw, sw + 0.1, t);   // decoded cells go back to pixels
-
-        // the digit: 0 or 1, flipping now and then; brightness from the picture beneath
-        float flip = floor(uTime * (2.0 + h2(fcell) * 10.0));
-        float digit = step(0.5, h2(fcell + flip * 0.13));
-        vec2 guv = vec2((10.0 + digit + clamp(f.x, 0.1, 0.9)) / 16.0, 1.0 - f.y);
-        float glyph = texture2D(tGlyph, guv).r;
-        float l = luma(src);
-        // the leading digit of each stream burns white-green
-        float head = smoothstep(0.93, 1.0, stream);
-        vec3 green = mix(vec3(0.1, 1.0, 0.35), vec3(0.8, 1.0, 0.85), head);
-        vec3 bits = green * glyph * (0.35 + l * 2.2 + head * 1.5) + src * 0.06;
-        // the storm: whole blocks of digits flash, drop out or invert
-        vec2 blk = floor(uv * uRes / 64.0);
-        float bh = h2(blk + step20);
-        bits *= 1.0 + full * step(0.9, bh) * 1.5;
-        bits *= 1.0 - full * step(bh, 0.06);
-        bits = mix(bits, vec3(0.1, 1.0, 0.35) * (1.0 - glyph) * 0.6, full * step(0.97, bh));
-
-        vec3 c = mix(src, bits, cov);
-        // a little snow and scanlines while it's failing
-        float noise = light * 0.12 + full * 0.18;
-        c += (h2(uv * uRes + uTime) - 0.5) * noise;
-        c *= 1.0 - (light * 0.1 + full * 0.2) * step(0.5, fract(uv.y * uRes.y * 0.5));
+        float env = sin(3.14159 * t);
+        float step20 = floor(uTime * 22.0);
+        // torn rows: whole bands of the picture jump sideways
+        float row = floor(uv.y * mix(40.0, 14.0, h1(step20)));
+        float tear = step(1.0 - env * 0.45, h2(vec2(row, step20)));
+        uv.x += tear * (h2(vec2(row, step20 + 3.0)) - 0.5) * 0.35 * env;
+        // macroblocks, sized like a failing codec's
+        float bs = mix(12.0, 48.0, h1(step20 * 0.37 + 1.0));
+        vec2 cell = floor(uv * uRes / bs);
+        float r = h2(cell);
+        float rt = h2(cell + step20);
+        // which picture each block shows: the new one arrives block by block, flickering at the edge
+        float reveal = step(r, t * 1.25 - 0.12 + (rt - 0.5) * 0.25 * env);
+        // datamosh: blocks drag last frame's motion, smearing the picture along a vector
+        vec2 mv = (vec2(h2(cell + 7.0), h2(cell + 13.0)) - 0.5) * 0.12 * env * step(0.55, rt);
+        vec2 suv = uv - mv;
+        // channels apart, further in the torn bands
+        float ca = (0.006 + tear * 0.03) * env;
+        vec3 c;
+        c.r = pick(suv + vec2(ca, 0.0), reveal).r;
+        c.g = pick(suv, reveal).g;
+        c.b = pick(suv - vec2(ca, 0.0), reveal).b;
+        // stuck blocks: flat colour from the block's corner, the codec giving up
+        float stuck = step(1.0 - env * 0.18, rt);
+        c = mix(c, pick(cell * bs / uRes, reveal) * 1.3, stuck);
+        // bit rot: posterize and occasional inverted blocks at the peak
+        c = mix(c, floor(c * 5.0) / 5.0, env * 0.6);
+        c = mix(c, 1.0 - c, step(0.985 - env * 0.03, rt) * env);
+        // snow and scanlines
+        c += (h2(uv * uRes + uTime) - 0.5) * 0.25 * env;
+        c *= 1.0 - 0.18 * env * step(0.5, fract(uv.y * uRes.y * 0.5));
         return c;
       }
 
