@@ -317,7 +317,7 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
 /* Build a finished object up out of particles, bottom to top, the way the city is built: points
    sampled over every surface, in each surface's own colour, spiral in from below and land; the solid
    object shows only under the line they have reached. t: 0 nothing → 1 standing. */
-function particleBuilder(obj: THREE.Object3D, parent: THREE.Object3D, pixelRatio: number, density = 30) {
+export function particleBuilder(obj: THREE.Object3D, parent: THREE.Object3D, pixelRatio: number, density = 30) {
   const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
   obj.updateMatrixWorld(true);
   const pos: number[] = [], col: number[] = [], rnd: number[] = [];

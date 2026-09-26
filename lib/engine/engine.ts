@@ -12,7 +12,7 @@ import { createWindowField } from './windowField';
 import { createAtmosphere } from './atmosphere';
 import { createCity } from './city';
 import { BOARD_HEIGHT, createBillboard } from './billboard';
-import { createMascotLine, trainShape } from './mascotLine';
+import { createMascotLine, particleBuilder, trainShape } from './mascotLine';
 import { signals } from '@/lib/signals';
 import { clients, slugOf, type Project } from '@/content/projects';
 import { SOLUTIONS } from '@/content/solutions';
@@ -106,7 +106,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     atmosphere.resize();
     if (!built) return;
     billboard.measure();
-  built = true;
+
     const k = camKeys();
     paths = { pos: new THREE.CatmullRomCurve3(k.pos, false, 'centripetal'), look: new THREE.CatmullRomCurve3(k.look, false, 'centripetal') };
   };
@@ -369,6 +369,47 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     socialBanners.push({ mesh, clip, pts, u, bottom, h: BHt, side: sp.side, ghosts, base: mesh.position.clone(), next: 2 + Math.random() * 3, until: 0 });
   });
   billboard.measure();
+  built = true;
+
+  /* The landing board as a real billboard: a steel back, lit violet edges, lattice columns down to
+     the street, a catwalk and spotlight arms. The screen is there from the first frame (it is the
+     landing); everything holding it up is built out of particles, bottom to top, with the city. */
+  billboard.group.children.forEach((c) => { if ((c as THREE.Points).isPoints) c.visible = false; });
+  const rig = new THREE.Group();
+  {
+    const BWb = BOARD_HEIGHT * (innerWidth / innerHeight), BHb = BOARD_HEIGHT;
+    const steel = new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
+    const edge = new THREE.MeshStandardMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4, roughness: 0.4 });
+    const lamp = new THREE.MeshBasicMaterial({ color: '#fff4dc' });
+    const put = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, rz = 0) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, z);
+      mesh.rotation.set(rx, 0, rz);
+      rig.add(mesh);
+    };
+    put(new THREE.BoxGeometry(BWb + 0.35, BHb + 0.35, 0.3), steel, 0, 0, -0.2);
+    for (const [w, h, x, y] of [[BWb + 0.3, 0.07, 0, BHb / 2 + 0.1], [BWb + 0.3, 0.07, 0, -BHb / 2 - 0.1], [0.07, BHb + 0.3, BWb / 2 + 0.1, 0], [0.07, BHb + 0.3, -BWb / 2 - 0.1, 0]])
+      put(new THREE.BoxGeometry(w, h, 0.06), edge, x, y, -0.02);
+    const groundY = GROUND - boardAt.y, drop = -BHb / 2 - groundY;
+    for (const cx of [-BWb * 0.3, BWb * 0.3]) {
+      for (const [dx, dz] of [[-0.3, -0.25], [0.3, -0.25], [-0.3, -0.75], [0.3, -0.75]])
+        put(new THREE.BoxGeometry(0.08, drop, 0.08), steel, cx + dx, groundY + drop / 2, dz);
+      for (let y = groundY + 0.5; y < -BHb / 2; y += 1.0) {
+        put(new THREE.BoxGeometry(0.72, 0.04, 0.04), steel, cx, y, -0.25, 0, 0.7);
+        put(new THREE.BoxGeometry(0.72, 0.04, 0.04), steel, cx, y, -0.75, 0, -0.7);
+      }
+    }
+    put(new THREE.BoxGeometry(BWb, 0.06, 0.8), steel, 0, -BHb / 2 - 0.25, 0.35);
+    put(new THREE.BoxGeometry(BWb, 0.45, 0.03), steel, 0, -BHb / 2 - 0.02, 0.74);
+    for (let i = 0; i < 5; i++) {
+      const x = -BWb * 0.4 + (i * BWb * 0.8) / 4;
+      put(new THREE.BoxGeometry(0.05, 0.05, 1.1), steel, x, BHb / 2 + 0.3, 0.35);
+      put(new THREE.CylinderGeometry(0.1, 0.16, 0.26, 10), lamp, x, BHb / 2 + 0.22, 0.9, -0.7);
+    }
+  }
+  billboard.group.add(rig);
+  scene.updateMatrixWorld(true);
+  const buildRig = particleBuilder(rig, scene, pixelRatio, 26);
 
   /* The landing's camera move. It starts square on to the board at the distance where the board
      exactly fills the screen, so the page can hand over to it without a seam; pulls back and swings
@@ -863,6 +904,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     cityDim = damp(cityDim, (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
+    // the board's rig goes up first, as the camera pulls back from its screen
+    buildRig(onIntro ? smooth(0.02, 0.2, ip) : 1, time);
     skyLight.intensity = 0.55 - 0.3 * night;
     dusk.intensity = 0.75 - 0.6 * night;
     billboard.material.opacity = Math.min(1, cityDim * 1.5);
