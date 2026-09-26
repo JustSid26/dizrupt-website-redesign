@@ -460,6 +460,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const contactLook = new THREE.Vector3();
   let wasContact = false;
   let formedAt = -1;
+  let headSrc: Float32Array | undefined;
   let heartShow = 0; // when he stood whole at contact (the banners build from then) // and what it is scrubbing away from
 
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
@@ -638,7 +639,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       tx = turned && key !== 'train:station' ? profileShift() : 0;
       ty = key === 'stats' || key === 'train:station' ? 0 : BUST_DROP;
       sc = 1;
-      rot = turned && key !== 'train:station' ? -Math.PI / 2 : 0;
+      rot = key === 'train:station' ? 0 : turned ? -Math.PI / 2 : signals.pointer.x * 0.25;
     } else if (key === 'train') {
       rot = null;
     } else if (section === 'solutions' || section === 'projects') {
@@ -650,7 +651,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       tx = 0;
       ty = BUST_DROP;
       sc = 1;
-      rot = 0;
+      rot = signals.pointer.x * 0.25; // he turns a little towards you
     }
     const riding = key === 'train' && !view && !preview;
     /* The train drives itself: the scroll only says which stop it is heading for, and it gets there
@@ -708,7 +709,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     /* ---- light: the aurora belongs to him, not to the models ---- */
     const lit = isMascot ? Math.min(u.uProgress.value, 1) : 0;
-    const headOn = key === 'mascot:full' || scrubbing ? 0 : lit;
+    // the full figure turns its head too, with weights that leave his legs where they are
+    const headArr = field.geometry.attributes.aHead as THREE.BufferAttribute;
+    const wantHead = key === 'mascot:full' ? mascot?.fullHead : mascot?.head;
+    if (wantHead && headSrc !== wantHead) { (headArr.array as Float32Array).set(wantHead); headArr.needsUpdate = true; headSrc = wantHead; }
+    const headOn = scrubbing ? 0 : lit;
     u.uHeadOn.value = damp(u.uHeadOn.value, headOn, 4, dt);
     // coming apart into the windows, his light fades with the scroll rather than switching off
     if (fromWhole) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);

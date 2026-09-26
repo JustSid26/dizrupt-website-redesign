@@ -19,6 +19,7 @@ export type Mascot = {
   flex: MascotAttr;
   full: MascotAttr; // head to toe, in the bust's own frame: its upper particles are the bust's own
   feet: number; // where his soles are, in that frame
+  fullHead: Float32Array; // the head-turn weights for the full figure (its legs don't turn with the head)
   head: Float32Array; // per particle: how much the neck turn moves it
   pivot: THREE.Vector3; // the neck, in the figure's own space
 };
@@ -96,9 +97,11 @@ export async function loadMascot(base = ''): Promise<Mascot | null> {
     const full: MascotAttr = new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3);
     const farr = full.array as Float32Array;
     farr.set(neutral.array);
+    const fullHead = new Float32Array(head);
     if (below.length) {
       for (let i = 0; i < COUNT; i++) {
         if (noise(i * 7 + 3) < UPPER) continue;
+        fullHead[i] = 0;
         const j = below[Math.floor(noise(i * 13 + 5) * below.length)] * 4;
         farr[i * 3] = (unit(neutralRaw[j]) - acrossMid) * scale;
         farr[i * 3 + 1] = (unit(neutralRaw[j + 2]) - middle) * scale;
@@ -112,7 +115,7 @@ export async function loadMascot(base = ''): Promise<Mascot | null> {
     flex.edge = edgeField(flex.array);
     const [px, py, pz] = meta.pivot;
     const pivot = new THREE.Vector3((px - acrossMid) * scale, (pz - middle) * scale, -py * scale);
-    return { neutral, flex, full, feet, head, pivot };
+    return { neutral, flex, full, feet, head, fullHead, pivot };
   } catch (err) {
     console.warn('mascot point cloud unavailable', err);
     return null;
