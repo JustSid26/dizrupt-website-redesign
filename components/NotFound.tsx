@@ -115,6 +115,11 @@ function Glitch({ text, accentLast, className, scramble }: { text: string; accen
 
 export function NotFound() {
   const path = usePathname();
+  // the page stands on its own: no wordmark over it
+  useEffect(() => {
+    document.body.classList.add("is-404");
+    return () => document.body.classList.remove("is-404");
+  }, []);
   return (
     <section className="nf" aria-labelledby="nf-title">
       <div className="nf-scan" aria-hidden />

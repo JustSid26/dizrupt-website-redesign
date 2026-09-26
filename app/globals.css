@@ -1291,6 +1291,7 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .contact-inner { display: none !important; }
 
 /* ---------- 404: the page lost the signal ---------- */
+.is-404 .nav .logo { display: none; }
 .nf {
   position: fixed; inset: 0; z-index: 6;
   display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
