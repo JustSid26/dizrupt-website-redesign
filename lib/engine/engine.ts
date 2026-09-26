@@ -1047,7 +1047,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     {
       const ai = signals.ai;
       if (!aiWorld && (ai.warm || ai.mix > 0)) {
-        aiWorld = createAiWorld(renderer, pixelRatio);
+        aiWorld = createAiWorld(renderer, pixelRatio, mascot);
         aiWorld.render(dt, time, 0, 0, 0); // compile it now, not on the first frame of the transition
       }
       const on = ai.mix > 0.0001 && !!aiWorld;
