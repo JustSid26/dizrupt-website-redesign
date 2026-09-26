@@ -18,6 +18,8 @@ import { clients, slugOf, type Project } from '@/content/projects';
 import { SOLUTIONS } from '@/content/solutions';
 import { BANNERS } from '@/content/banners';
 import { SOCIALS } from '@/content/socials';
+import { createAiWorld, type AiWorld } from './ai/world';
+import { createTransitionPass } from './ai/transition';
 
 /* =========================================================
    The engine: one canvas behind the whole site.
@@ -92,10 +94,17 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const composer = new EffectComposer(renderer);
   composer.setPixelRatio(pixelRatio);
   composer.setSize(innerWidth, innerHeight);
-  composer.addPass(new RenderPass(scene, camera));
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
   const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 0.26);
   composer.addPass(bloom);
+  // the hand-over to the AI world: both pictures, one transition (ai/transition.ts)
+  const aiPass = createTransitionPass();
+  aiPass.enabled = false;
+  aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
+  composer.addPass(aiPass);
   composer.addPass(new OutputPass());
+  let aiWorld: AiWorld | null = null;
 
   const resize = () => {
     camera.aspect = innerWidth / innerHeight;
@@ -103,6 +112,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     renderer.setSize(innerWidth, innerHeight, false);
     composer.setSize(innerWidth, innerHeight);
     bloom.setSize(innerWidth, innerHeight);
+    aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
+    aiWorld?.resize();
     atmosphere.resize();
     if (!built) return;
     billboard.measure();
@@ -595,7 +606,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const s = signals.scroll;
     const view = signals.caseShape;
     const preview = signals.preview;
-    const section = s.section;
+    // behind the AI world the city holds the last stop, as if still in Solutions
+    const section = s.section === 'ai' ? 'solutions' : s.section;
     const ip = s.intro;
 
     /* ---- what the field should be ---- */
@@ -1030,6 +1042,25 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heartMat.opacity = heartShow * (0.55 + 0.45 * beat);
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
       (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18;
+    }
+    /* ---- AI & Automation: built ahead of time, drawn only while it is on screen ---- */
+    {
+      const ai = signals.ai;
+      if (!aiWorld && (ai.warm || ai.mix > 0)) {
+        aiWorld = createAiWorld(renderer, pixelRatio);
+        aiWorld.render(dt, time, 0, 0, 0); // compile it now, not on the first frame of the transition
+      }
+      const on = ai.mix > 0.0001 && !!aiWorld;
+      aiPass.enabled = on;
+      const full = ai.mix >= 0.9999;
+      renderPass.enabled = !full;
+      bloom.enabled = !full;
+      if (on && aiWorld) {
+        aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.p, signals.pointer.x, signals.pointer.y);
+        aiPass.uniforms.uMix.value = ai.mix;
+        aiPass.uniforms.uMode.value = ai.mode;
+        aiPass.uniforms.uTime.value = time;
+      }
     }
     composer.render();
   }

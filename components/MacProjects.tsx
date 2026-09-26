@@ -1,6 +1,6 @@
 "use client";
 
-// Clicking the MacBook at the Tech & Automation stop opens it: a macOS desktop grows out of its
+// Opening the projects from AI & Automation opens a Mac: a macOS desktop grows out of its
 // screen, Spotlight types "projects", and a Finder window of the work opens — each project a video
 // file that plays in its own window.
 import { useEffect, useRef, useState } from "react";
@@ -34,8 +34,8 @@ export function MacProjects() {
   useEffect(() => {
     const el = root.current;
     if (!el) return;
-    const r = signals.billboardHit;
     const from = () => {
+      const r = signals.macFrom ?? signals.billboardHit;
       const box = el.getBoundingClientRect();
       return {
         x: r.x + r.w / 2 - (box.left + box.width / 2),

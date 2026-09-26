@@ -16,6 +16,7 @@ const BANDS = 9;
 const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#%&";
 const NAV = [
   { id: "solutions", label: "Solutions" },
+  { id: "ai", label: "AI & Automation" },
   { id: "work", label: "Work" },
   { id: "contact", label: "Contact" },
 ] as const;

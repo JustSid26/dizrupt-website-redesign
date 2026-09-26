@@ -1,6 +1,6 @@
 // Mutable per-frame values shared between the DOM and the WebGL engine. Written by scroll triggers
 // and listeners, read by the engine every frame. Never triggers a React render.
-export type Section = 'intro' | 'solutions' | 'projects' | 'contact';
+export type Section = 'intro' | 'solutions' | 'ai' | 'projects' | 'contact';
 
 export const signals = {
   pointer: { x: 0, y: 0, px: 0, py: 0, active: false }, // ndc (-1..1) and pixels
@@ -36,5 +36,9 @@ export const signals = {
   // the social skyscrapers' logos on screen at contact (the engine writes them, SocialTowers links them)
   socials: Array.from({ length: 5 }, () => ({ x: 0, y: 0, w: 0, h: 0, on: false })),
   night: 0, // 0 blue hour, 1 full night (the nav's switch)
+  // AI & Automation: its own world, handed over to through a transition (lib/engine/ai)
+  ai: { mix: 0, p: 0, mode: 0, warm: false },
+  // where the Mac should grow from when something other than a billboard opens it
+  macFrom: null as null | { x: number; y: number; w: number; h: number },
   ready: false, // the engine has built everything it needs
 };

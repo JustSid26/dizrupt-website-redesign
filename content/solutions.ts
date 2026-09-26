@@ -11,7 +11,6 @@ const MATCH: Record<string, RegExp> = {
   'Search Engine Optimisation': /\bseo\b|search engine/i,
   'Digital Content Creation': /content/i,
   Production: /production/i,
-  'Tech & Automation': /tech|automation/i,
 };
 
 export const SOLUTIONS: Solution[] = [
@@ -21,7 +20,6 @@ export const SOLUTIONS: Solution[] = [
   { name: 'Search Engine Optimisation', line: 'Technical and content SEO that puts the business in front of the people already looking.', shape: 'windscreen', colors: ['#2ad4ff', '#dff6ff'], work: 'AVG Windscreens · KP Packaging', image: '/solutions/SEO.png' },
   { name: 'Digital Content Creation', line: 'Launch films, artist reveals and campaign content made to move as fast as the brand.', shape: 'vinyl', colors: ['#8a5bff', '#ff4fd8'], work: 'Nykonos · Samir Gems · Maverick', image: '/solutions/graphic-sol.png' },
   { name: 'Production', line: 'Shoots and production for products that have to look as good as they are.', shape: 'glasses', colors: ['#ff5b5b', '#ffc9b8'], work: 'Crossline · SlickFix', image: '/solutions/production-v2.jpg' },
-  { name: 'Tech & Automation', line: 'Custom tools, integrations and automated workflows that take the busywork out of running the business.', shape: 'gear', colors: ['#7cff6b', '#d6ffd0'], work: '', image: '/solutions/tech-sol.png' },
 ];
 
 

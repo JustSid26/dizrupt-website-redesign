@@ -36,14 +36,14 @@ export function Solutions() {
       const el = hit.current;
       const b = signals.billboardHit;
       if (!el) return;
-      el.style.visibility = b.on ? "visible" : "hidden";
-      if (!b.on && useStore.getState().macOpen) useStore.getState().set({ macOpen: false }); // leaving the stop closes the Mac
-      if (!b.on) return;
+      // not while the AI world has the screen
+      const on = b.on && signals.ai.mix < 0.02;
+      el.style.visibility = on ? "visible" : "hidden";
+      if (!on) return;
       el.style.transform = `translate3d(${b.x.toFixed(1)}px, ${b.y.toFixed(1)}px, 0)`;
       el.style.width = `${b.w.toFixed(1)}px`;
       el.style.height = `${b.h.toFixed(1)}px`;
       el.dataset.index = String(b.index);
-      el.querySelector("span")!.textContent = SOLUTIONS[b.index]?.name === "Tech & Automation" ? "Open the Mac →" : "View the work →";
     };
     gsap.ticker.add(tick);
     return () => gsap.ticker.remove(tick);
@@ -108,8 +108,6 @@ export function Solutions() {
           aria-label={`See the ${SOLUTIONS[active].name} work`}
           onClick={() => {
             const k = Number(hit.current?.dataset.index ?? active);
-            // the last stop is a MacBook: it opens, rather than going to a page
-            if (SOLUTIONS[k]?.name === "Tech & Automation") return void useStore.getState().set({ macOpen: true });
             sessionStorage.setItem("home-scroll", String(scrollY));
             router.push(`/solutions/${solutionSlug(SOLUTIONS[k] ?? SOLUTIONS[active])}`);
           }}
