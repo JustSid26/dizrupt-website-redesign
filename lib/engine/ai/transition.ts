@@ -8,8 +8,9 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
    out), uMode picks the transition:
 
    0  Signal loss   the picture fails: macroblocks, datamosh smear,
-                    torn scanlines, channels apart; the new world
-                    comes through the corruption block by block
+                    torn scanlines, channels apart; the Dizrupt mark
+                    punches through in the middle of it, and the new
+                    world comes through the corruption block by block
    1  Neural scan   a scan front sweeps the screen; everything it
                     passes is read as edges and a lattice, and
                     resolves into the new world behind it
@@ -20,7 +21,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
                     AI world boots up out of the dark
    ========================================================= */
 export const TRANSITIONS = [
-  { id: 'signal', name: 'Signal loss', duration: 1.7 },
+  { id: 'signal', name: 'Signal loss', duration: 2.0 },
   { id: 'scan', name: 'Neural scan', duration: 2.0 },
   { id: 'ascii', name: 'ASCII decode', duration: 2.3 },
   { id: 'crt', name: 'CRT reboot', duration: 2.6 },
@@ -52,6 +53,7 @@ export function createTransitionPass() {
       tDiffuse: { value: null },
       tAi: { value: null },
       tGlyph: { value: glyphAtlas() },
+      tLogo: { value: new THREE.TextureLoader().load('/heart.png') }, // the mark that beats in his chest
       uMix: { value: 0 },
       uMode: { value: 0 },
       uTime: { value: 0 },
@@ -60,7 +62,7 @@ export function createTransitionPass() {
     },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform sampler2D tDiffuse, tAi, tGlyph;
+      uniform sampler2D tDiffuse, tAi, tGlyph, tLogo;
       uniform float uMix, uTime, uExposure;
       uniform int uMode;
       uniform vec2 uRes;
@@ -77,6 +79,7 @@ export function createTransitionPass() {
 
       /* ---------- 0: signal loss ---------- */
       vec3 signalLoss(vec2 uv, float t) {
+        vec2 uv0 = uv;
         float env = sin(3.14159 * t);
         float step20 = floor(uTime * 22.0);
         // torn rows: whole bands of the picture jump sideways
@@ -105,6 +108,27 @@ export function createTransitionPass() {
         // bit rot: posterize and occasional inverted blocks at the peak
         c = mix(c, floor(c * 5.0) / 5.0, env * 0.6);
         c = mix(c, 1.0 - c, step(0.985 - env * 0.03, rt) * env);
+        // in the middle of it, the Dizrupt mark (his heart) punches through the noise, glitching
+        // with everything else: sliced, its channels apart, blocks of it eaten by the codec
+        float mark = smoothstep(0.3, 0.4, t) * (1.0 - smoothstep(0.64, 0.74, t));
+        mark *= step(0.12, h1(mod(step20, 113.0) * 1.7 + 4.0));          // the signal drops it now and then (wrapped: sin loses it on big inputs)
+        if (mark > 0.0) {
+          float aspect = uRes.x / uRes.y;
+          vec2 luv = (uv0 + (uv - uv0) * 0.25 - 0.5) * vec2(aspect, 1.0) / 0.5 + 0.5; // the tears catch it, lightly
+          float slice = floor(luv.y * 14.0);
+          luv.x += step(0.86, h2(vec2(slice, step20))) * (h2(vec2(slice, step20 + 5.0)) - 0.5) * 0.08;
+          float lca = 0.008 + tear * 0.012;
+          vec2 lin = step(vec2(0.0), luv) * step(luv, vec2(1.0));
+          float in1 = lin.x * lin.y;
+          float aR = texture2D(tLogo, luv + vec2(lca, 0.0)).a * in1;
+          float aG = texture2D(tLogo, luv).a * in1;
+          float aB = texture2D(tLogo, luv - vec2(lca, 0.0)).a * in1;
+          float halo = texture2D(tLogo, luv, 5.0).a * in1;
+          float eaten = step(0.05, rt);                                  // a few macroblocks drop it
+          c *= 1.0 - 0.6 * halo * mark;                                  // the picture backs off round it
+          vec3 logo = vec3(aR * 1.0, aG * 0.8, aB * 1.25) * 1.3;          // the heart's own lilac-white
+          c += logo * mark * eaten;
+        }
         // snow and scanlines
         c += (h2(uv * uRes + uTime) - 0.5) * 0.25 * env;
         c *= 1.0 - 0.18 * env * step(0.5, fract(uv.y * uRes.y * 0.5));
