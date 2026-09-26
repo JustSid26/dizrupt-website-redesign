@@ -1289,3 +1289,49 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 
 /* contact is the city itself: its links are the towers, no copy over it */
 .contact-inner { display: none !important; }
+
+/* ---------- 404: the page lost the signal ---------- */
+.nf {
+  position: fixed; inset: 0; z-index: 6;
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+  padding: 0 var(--gutter);
+  background: radial-gradient(120% 90% at 50% 45%, rgba(24, 10, 40, 0.9), rgba(5, 5, 7, 0.97) 70%);
+  overflow: hidden;
+}
+.nf-scan {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.35;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px);
+  animation: nf-roll 7s linear infinite;
+}
+@keyframes nf-roll { to { background-position: 0 300px; } }
+.nf-readout {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);
+  margin-bottom: clamp(12px, 2vw, 24px);
+}
+.nf-status { margin-left: 1.2em; color: var(--violet-soft); }
+.nf-title { display: flex; flex-direction: column; gap: clamp(4px, 1vw, 12px); font-weight: 500; }
+.glitch { position: relative; display: inline-block; width: max-content; will-change: transform; }
+.glitch > span { display: block; white-space: pre; }
+.glitch .g-r, .glitch .g-b, .glitch .g-band {
+  position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; will-change: transform, clip-path;
+}
+.glitch .g-r { color: #ff2d4f; mix-blend-mode: screen; }
+.glitch .g-b { color: #2f6bff; mix-blend-mode: screen; }
+.glitch .g-band { background: var(--bg); }
+.glitch .g-accent { color: var(--violet); }
+.nf-code {
+  font-family: var(--sans); font-size: clamp(120px, 30vw, 440px); line-height: 0.8; letter-spacing: -0.06em;
+}
+.nf-words {
+  font-family: var(--display); font-weight: 600; font-stretch: 82%;
+  font-size: clamp(36px, 7.5vw, 116px); line-height: 0.95; letter-spacing: -0.01em;
+}
+.nf-copy { max-width: 36ch; margin-top: clamp(20px, 3vw, 36px); color: var(--dim); font-size: 15px; line-height: 1.5; }
+.nf-home {
+  margin-top: 28px; display: inline-flex; gap: 12px; align-items: center;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 14px 20px; border: 1px solid var(--line); border-radius: 999px; color: var(--fg); text-decoration: none;
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+}
+.nf-home:hover, .nf-home:focus-visible { background: var(--violet); border-color: var(--violet); }
+@media (prefers-reduced-motion: reduce) { .nf-scan { animation: none; } }
