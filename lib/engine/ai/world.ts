@@ -226,6 +226,81 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
   heartGlow.rotation.x = -Math.PI / 2;
   chip.add(heartGlow);
 
+  // the wires: traces routed out from round the mark, across the die and the package to the frame,
+  // lit, with pulses running outward from the heart on every beat
+  const wireTex = (() => {
+    const S = 1024, SPAN = 6.6; // the texture covers the package inside the frame
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, S, S);
+    const px = (u: number) => (u / SPAN + 0.5) * S;
+    const rand = rng(33);
+    g.strokeStyle = '#fff';
+    g.fillStyle = '#fff';
+    g.lineCap = g.lineJoin = 'round';
+    for (let side = 0; side < 4; side++) {
+      const n = 16;
+      for (let i = 0; i < n; i++) {
+        const f = ((i + 0.5) / n - 0.5) * 1.5; // along the side, within the mark's reach
+        const r0 = 0.72 + rand() * 0.08; // starts at the mark's edge
+        const jog = (rand() - 0.5) * 0.9;
+        const mid = 1.15 + rand() * 0.5;
+        const r1 = 2.6 + rand() * 0.55; // ends short of the frame
+        // local frame: out along +a, across along b
+        const pts: [number, number][] = [[r0, f], [mid, f], [mid + Math.abs(jog), f + jog], [r1, f + jog]];
+        const toXY = ([a, b]: [number, number]) => {
+          const [x, y] = side === 0 ? [b, -a] : side === 1 ? [b, a] : side === 2 ? [-a, b] : [a, b];
+          return [px(x), px(y)] as const;
+        };
+        g.lineWidth = i % 4 === 0 ? 4.5 : 2.6;
+        g.beginPath();
+        pts.forEach((pt, k) => {
+          const [x, y] = toXY(pt);
+          if (k) g.lineTo(x, y);
+          else g.moveTo(x, y);
+        });
+        g.stroke();
+        // a pad at each end
+        for (const pt of [pts[0], pts[3]]) {
+          const [x, y] = toXY(pt);
+          g.beginPath();
+          g.arc(x, y, 5, 0, 7);
+          g.fill();
+        }
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.anisotropy = 8;
+    return t;
+  })();
+  const wireMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+    uniforms: { uTime, tWire: { value: wireTex } },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uTime; uniform sampler2D tWire; varying vec2 vUv;
+      ${BEAT_GLSL}
+      void main(){
+        float m = texture2D(tWire, vUv).r;
+        if (m < 0.01) discard;
+        vec2 q = vUv - 0.5;
+        float d = length(q);
+        float lane = floor((atan(q.y, q.x) + 3.14159) * 10.0);
+        float h = fract(sin(lane * 12.9898) * 43758.5453);
+        // a pulse leaves the heart on each beat and runs out to the frame
+        float beat = beatAt(fract(uTime - d * 1.6));
+        float run = pow(fract(d * 3.0 - uTime * (0.35 + h * 0.3) - h), 6.0);
+        vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.7, 0.35, 1.0), step(0.55, h));
+        gl_FragColor = vec4(c * m * (0.35 + beat * 1.4 + run * 1.2), m);
+      }`,
+  });
+  const wires = new THREE.Mesh(new THREE.PlaneGeometry(6.6, 6.6), wireMat);
+  wires.position.y = 0.3125; // on the die with the mark; the HBM stacks stand over it
+  wires.rotation.x = -Math.PI / 2;
+  chip.add(wires);
+
   /* ================= him: the nerves and the particles ================= */
   let figure: THREE.Group | null = null;
   let maxL = 1;
@@ -495,6 +570,8 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
 
       // the chip floats, turning to show itself, until he's round it; then it's his heart, still
       const free = 1 - smooth(0.0, 0.35, build);
+      // in his chest it's a compact heart, not the showpiece it was floating on its own
+      chipRoot.scale.setScalar(1 - 0.58 * smooth(0.08, 0.5, build));
       chipRoot.position.set(0, Math.sin(time * 0.9) * 0.06 * free, 0);
       chipRoot.rotation.set(Math.sin(time * 0.5) * 0.35 * free - 0.25 * free, Math.sin(time * 0.37) * 0.5 * free + 0.35 * free, Math.sin(time * 0.29) * 0.08 * free);
       // it beats: the mark, its glow, and the light it throws
