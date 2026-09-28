@@ -42,18 +42,6 @@ const CHAPTERS: Chapter[] = [
   })),
 ];
 
-const LOG = [
-  "agent:leads    scored 142 new leads → 38 hot → pushed to CRM",
-  "flow:invoice   12 invoices reconciled · ₹4,82,300 matched",
-  "agent:support  resolved 64 / 71 tickets without a human",
-  "sync           shopify ⇄ sheets · 1,204 rows · 0 conflicts",
-  "whatsapp       311 follow-ups sent · 27 replies routed to sales",
-  "report         weekly deck generated → founders@",
-  "model:dz-a1    eval 0.931 ↑ · latency 212ms",
-  "flow:onboard   new client workspace provisioned in 41s",
-  "agent:research competitor pricing refreshed · 9 changes",
-  "cron           03:00 IST backups verified ✓",
-];
 const BOOT = [
   "DZ-OS 4.2 · neural accelerator DZ-A1",
   "POST ........................ ok",
@@ -71,8 +59,6 @@ export function AiAutomation() {
   const [mode, setMode] = useState(0);
   const [chapter, setChapter] = useState(0);
   const [on, setOn] = useState(false);
-  const [lines, setLines] = useState<{ id: number; text: string }[]>([]);
-  const [metrics, setMetrics] = useState({ tps: 18420, tasks: 12840, hours: 3120 });
   const reduce = useStore((s) => s.reducedMotion);
   const set = useStore((s) => s.set);
   const boot = useRef<HTMLDivElement>(null);
@@ -167,30 +153,6 @@ export function AiAutomation() {
     };
   }, []);
 
-  // the live log and the counters
-  useEffect(() => {
-    if (!on) return;
-    let i = 0;
-    const stamp = () => new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false });
-    setLines(LOG.slice(0, 5).map((l, k) => ({ id: k, text: `${stamp()}  ${l}` })));
-    i = 5;
-    const a = setInterval(() => {
-      const k = i++;
-      setLines((ls) => [...ls.slice(-7), { id: k, text: `${stamp()}  ${LOG[k % LOG.length]}` }]);
-    }, 1400);
-    const b = setInterval(() => {
-      setMetrics((mm) => ({
-        tps: 17000 + Math.round(Math.random() * 3400),
-        tasks: mm.tasks + Math.round(Math.random() * 4),
-        hours: mm.hours + (Math.random() < 0.2 ? 1 : 0),
-      }));
-    }, 450);
-    return () => {
-      clearInterval(a);
-      clearInterval(b);
-    };
-  }, [on]);
-
   const pick = (m: number) => {
     signals.ai.mode = m;
     setMode(m);
@@ -227,7 +189,7 @@ export function AiAutomation() {
   }, []);
 
   return (
-    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} data-project={chapter >= 2 || undefined} aria-labelledby="ai-title" style={{ height: "560svh" }}>
+    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} aria-labelledby="ai-title" style={{ height: "560svh" }}>
       <div className="ai-pin">
         <div ref={boot} className="ai-boot" aria-hidden>
           {BOOT.map((l, i) => (
@@ -291,36 +253,6 @@ export function AiAutomation() {
               </article>
             ))}
           </div>
-
-          <aside className="ai-term" aria-label="Live activity">
-            <p className="ai-term-head">
-              <span>~/dizrupt/agents</span> <span>tail -f activity.log</span>
-            </p>
-            <ol>
-              {lines.map((l) => (
-                <li key={l.id}>{l.text}</li>
-              ))}
-            </ol>
-          </aside>
-
-          <dl className="ai-metrics">
-            <div>
-              <dt>Tokens / s</dt>
-              <dd>{metrics.tps.toLocaleString("en-IN")}</dd>
-            </div>
-            <div>
-              <dt>Tasks automated</dt>
-              <dd>{metrics.tasks.toLocaleString("en-IN")}</dd>
-            </div>
-            <div>
-              <dt>Hours saved</dt>
-              <dd>{metrics.hours.toLocaleString("en-IN")}</dd>
-            </div>
-            <div>
-              <dt>Uptime</dt>
-              <dd>99.98%</dd>
-            </div>
-          </dl>
 
           <ol className="ai-steps" aria-hidden>
             {CHAPTERS.map((c, i) => (
