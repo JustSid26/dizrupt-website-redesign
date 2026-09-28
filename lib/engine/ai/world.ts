@@ -14,8 +14,8 @@ import type { Mascot } from '../mascot';
    The chip is his heart. Out of the hand-over comes an AI
    accelerator, floating on its own in the dark: a silicon die
    with its interference sheen ringed by HBM stacks on the
-   interposer, the package on its steel stiffener, solder balls
-   underneath — and on the die, the Dizrupt mark, beating.
+   interposer... now an arc reactor: coils, a light ring, and in
+   its hub the Dizrupt mark, beating.
 
    Then the scroll builds him round it. Signals leave the chip
    along a branching tree of nerves that runs through his whole
@@ -32,74 +32,6 @@ const CHIP = 0.3; // the package is ~7 across in its own units; this makes it th
 function rng(seed: number) {
   let s = seed;
   return () => ((s = (s * 16807) % 2147483647) / 2147483647);
-}
-
-/** The die, seen through its passivation: tensor-core arrays, caches, the I/O ring. */
-function dieTexture() {
-  const S = 1024;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const g = c.getContext('2d')!;
-  const rand = rng(3);
-  g.fillStyle = '#10121a';
-  g.fillRect(0, 0, S, S);
-  // I/O ring
-  g.fillStyle = '#20243a';
-  for (let i = 0; i < 96; i++) {
-    const f = (i / 96) * S;
-    g.fillRect(f, 6, 6, 18);
-    g.fillRect(f, S - 24, 6, 18);
-    g.fillRect(6, f, 18, 6);
-    g.fillRect(S - 24, f, 18, 6);
-  }
-  // the compute tiles: 8 x 8 blocks, each a fine array of cells
-  const M = 60, T = (S - 2 * M) / 8;
-  for (let by = 0; by < 8; by++)
-    for (let bx = 0; bx < 8; bx++) {
-      const x = M + bx * T, y = M + by * T;
-      const cache = (bx + by) % 5 === 0;
-      g.fillStyle = cache ? '#1b2035' : '#161a2a';
-      g.fillRect(x + 4, y + 4, T - 8, T - 8);
-      g.fillStyle = cache ? '#2a3150' : '#232a44';
-      const n = cache ? 18 : 10;
-      for (let i = 0; i < n; i++)
-        for (let j = 0; j < n; j++) if (rand() < 0.92) g.fillRect(x + 8 + (i * (T - 16)) / n, y + 8 + (j * (T - 16)) / n, (T - 16) / n - 2, (T - 16) / n - 2);
-    }
-  // routing channels between tiles
-  g.strokeStyle = '#2f3656';
-  g.lineWidth = 2;
-  for (let i = 0; i <= 8; i++) {
-    g.beginPath();
-    g.moveTo(M + i * T, M);
-    g.lineTo(M + i * T, S - M);
-    g.moveTo(M, M + i * T);
-    g.lineTo(S - M, M + i * T);
-    g.stroke();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
-}
-
-/** Marking on the package substrate and the cap tops. */
-function markTexture(lines: [string, number][], w = 512, h = 128, bg = '#16191a', fg = '#e8e6df') {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d')!;
-  g.fillStyle = bg;
-  g.fillRect(0, 0, w, h);
-  g.fillStyle = fg;
-  let y = 0;
-  for (const [s, px] of lines) {
-    g.font = `600 ${px}px "JetBrains Mono", Menlo, monospace`;
-    y += px * 1.15;
-    g.fillText(s, 14, y);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
 }
 
 export type AiWorld = ReturnType<typeof createAiWorld>;
@@ -141,170 +73,193 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
     return m;
   };
 
-  // the stiffener frame and its screws
-  const steel = new THREE.MeshPhysicalMaterial({ color: '#9ea3ab', metalness: 1, roughness: 0.42 });
-  const FR = 3.35, FW = 0.42, FH = 0.16;
-  add(new RoundedBoxGeometry(FR * 2 + FW, FH, FW, 2, 0.03), steel, 0, FH / 2, -FR);
-  add(new RoundedBoxGeometry(FR * 2 + FW, FH, FW, 2, 0.03), steel, 0, FH / 2, FR);
-  add(new RoundedBoxGeometry(FR * 2 - FW, FH, FW, 2, 0.03), steel, -FR, FH / 2, 0).rotation.y = Math.PI / 2;
-  add(new RoundedBoxGeometry(FR * 2 - FW, FH, FW, 2, 0.03), steel, FR, FH / 2, 0).rotation.y = Math.PI / 2;
-  const screw = new THREE.MeshPhysicalMaterial({ color: '#8d9198', metalness: 1, roughness: 0.45 });
-  for (const [x, z] of [[-FR, -FR], [FR, -FR], [-FR, FR], [FR, FR]]) {
-    add(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 24), screw, x, FH + 0.04, z);
-    add(new THREE.BoxGeometry(0.2, 0.02, 0.04), new THREE.MeshStandardMaterial({ color: '#111' }), x, FH + 0.085, z);
-  }
-  // the substrate: the frame's floor, the whole package's base, with the solder balls under it
-  const subPlain = new THREE.MeshPhysicalMaterial({ color: '#1a201c', roughness: 0.55, clearcoat: 0.3, clearcoatRoughness: 0.4 });
-  add(new RoundedBoxGeometry(7.2, 0.14, 7.2, 3, 0.04), subPlain, 0, 0.0, 0);
-  add(new RoundedBoxGeometry(5.6, 0.1, 5.6, 3, 0.03), subPlain, 0, 0.1, 0);
-  const subMat = new THREE.MeshPhysicalMaterial({
-    map: markTexture([['DIZRUPT', 40], ['DZ-A1 · HEART · 2026', 26], ['MADE FOR WHAT’S NEXT', 20]], 512, 160, '#1a201c'),
-    roughness: 0.55, clearcoat: 0.3, clearcoatRoughness: 0.4,
-  });
-  const mark = add(new THREE.PlaneGeometry(1.6, 0.5), subMat, -1.75, 0.1505, 2.4);
-  mark.rotation.x = -Math.PI / 2;
-  {
-    const ball = new THREE.MeshPhysicalMaterial({ color: '#c8cace', metalness: 1, roughness: 0.5 });
-    const n = 26, pitch = 0.26;
-    const balls = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075, 10, 8), ball, n * n);
-    const m4 = new THREE.Matrix4();
-    let k = 0;
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) balls.setMatrixAt(k++, m4.makeTranslation((i - (n - 1) / 2) * pitch, -0.09, (j - (n - 1) / 2) * pitch));
-    chip.add(balls);
-  }
-  // land-side caps round the interposer
-  {
-    const body = new THREE.MeshStandardMaterial({ color: '#b39a72', roughness: 0.6 });
-    const ends = new THREE.MeshStandardMaterial({ color: '#d7d9dc', roughness: 0.45, metalness: 1 });
-    const spots: [number, number, number][] = [];
-    for (let i = 0; i < 26; i++) {
-      const f = -2.3 + (i / 25) * 4.6;
-      spots.push([f, -2.55, 0], [f, 2.55, 0], [-2.55, f, 1], [2.55, f, 1]);
-    }
-    const bi = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.05, 0.05), body, spots.length);
-    const ei = new THREE.InstancedMesh(new THREE.BoxGeometry(0.03, 0.055, 0.055), ends, spots.length * 2);
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), e = new THREE.Euler();
-    spots.forEach(([a, b, rot], i) => {
-      q.setFromEuler(e.set(0, rot ? Math.PI / 2 : 0, 0));
-      p.set(a, 0.175, b);
-      bi.setMatrixAt(i, m4.compose(p, q, sc));
-      const dx = rot ? 0 : 0.05, dz = rot ? 0.05 : 0;
-      ei.setMatrixAt(i * 2, m4.compose(p.clone().add(new THREE.Vector3(dx, 0, dz)), q, sc));
-      ei.setMatrixAt(i * 2 + 1, m4.compose(p.clone().add(new THREE.Vector3(-dx, 0, -dz)), q, sc));
-    });
-    chip.add(bi, ei);
-  }
-  // the interposer, the dies on it in their underfill
-  add(new RoundedBoxGeometry(4.4, 0.06, 4.4, 2, 0.015), new THREE.MeshPhysicalMaterial({ color: '#3a3d46', metalness: 0.6, roughness: 0.35, clearcoat: 0.6 }), 0, 0.18, 0);
-  const underfill = new THREE.MeshPhysicalMaterial({ color: '#2a2418', roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.1 });
-  const dieMat = new THREE.MeshPhysicalMaterial({
-    map: dieTexture(), color: '#8c8ca0', metalness: 0.85, roughness: 0.22,
-    iridescence: 1, iridescenceIOR: 1.9, iridescenceThicknessRange: [180, 620],
-    clearcoat: 1, clearcoatRoughness: 0.14, emissive: '#5a3cff', emissiveIntensity: 0,
-  });
-  add(new RoundedBoxGeometry(2.3, 0.05, 2.3, 2, 0.01), underfill, 0, 0.215, 0);
-  add(new RoundedBoxGeometry(2.2, 0.1, 2.2, 2, 0.008), dieMat, 0, 0.26, 0);
-  const hbmMat = new THREE.MeshPhysicalMaterial({
-    color: '#23252c', metalness: 0.8, roughness: 0.18, iridescence: 0.6, iridescenceIOR: 1.6, iridescenceThicknessRange: [300, 500], clearcoat: 1, clearcoatRoughness: 0.16,
-  });
-  for (const sx of [-1, 1])
-    for (const z of [-1.3, 0, 1.3]) {
-      add(new RoundedBoxGeometry(0.72, 0.05, 1.12, 2, 0.01), underfill, sx * 1.72, 0.215, z);
-      add(new RoundedBoxGeometry(0.66, 0.14, 1.06, 2, 0.008), hbmMat, sx * 1.72, 0.285, z);
-    }
-  // the mark on the die: his heart, lit from inside the silicon and beating
-  const heartTex = new THREE.TextureLoader().load('/heart.png');
-  heartTex.colorSpace = THREE.SRGBColorSpace;
-  const heartMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color(0.95, 0.8, 1.15), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const heart = new THREE.Mesh(new THREE.PlaneGeometry(1.75, 1.75), heartMat);
-  heart.position.y = 0.312;
-  heart.rotation.x = -Math.PI / 2;
-  chip.add(heart);
-  const heartGlowMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color('#b46bff'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), heartGlowMat);
-  heartGlow.position.y = 0.318;
-  heartGlow.rotation.x = -Math.PI / 2;
-  chip.add(heartGlow);
-
-  // the wires: traces routed out from round the mark, across the die and the package to the frame,
-  // lit, with pulses running outward from the heart on every beat
-  const wireTex = (() => {
-    const S = 1024, SPAN = 6.6; // the texture covers the package inside the frame
-    const c = document.createElement('canvas');
+  /* An arc reactor, built like a machined part: a steel housing turned on a lathe, bolts round its
+     rim, a ring of copper coils wound on their cores and clamped in steel, a light ring glowing
+     inside them, struts to a centre hub, insulated leads with bare copper ends running from the
+     coils to the hub, and under a glass lens in the hub the Dizrupt mark, beating. Local frame:
+     it lies in x–z, its face towards +y (the group turns that out of his chest). */
+  const steel = new THREE.MeshPhysicalMaterial({ color: '#8f949c', metalness: 1, roughness: 0.34, clearcoat: 0.3, clearcoatRoughness: 0.4 });
+  const steelDark = new THREE.MeshPhysicalMaterial({ color: '#2c2f35', metalness: 1, roughness: 0.42 });
+  // machining: fine concentric rings in the roughness, the way a turned face catches the light
+  const turned = (() => {
+    const S = 512, c = document.createElement('canvas');
     c.width = c.height = S;
     const g = c.getContext('2d')!;
-    g.fillStyle = '#000';
+    g.fillStyle = 'rgb(0,110,0)';
     g.fillRect(0, 0, S, S);
-    const px = (u: number) => (u / SPAN + 0.5) * S;
-    const rand = rng(33);
-    g.strokeStyle = '#fff';
-    g.fillStyle = '#fff';
-    g.lineCap = g.lineJoin = 'round';
-    for (let side = 0; side < 4; side++) {
-      const n = 16;
-      for (let i = 0; i < n; i++) {
-        const f = ((i + 0.5) / n - 0.5) * 1.5; // along the side, within the mark's reach
-        const r0 = 0.72 + rand() * 0.08; // starts at the mark's edge
-        const jog = (rand() - 0.5) * 0.9;
-        const mid = 1.15 + rand() * 0.5;
-        const r1 = 2.6 + rand() * 0.55; // ends short of the frame
-        // local frame: out along +a, across along b
-        const pts: [number, number][] = [[r0, f], [mid, f], [mid + Math.abs(jog), f + jog], [r1, f + jog]];
-        const toXY = ([a, b]: [number, number]) => {
-          const [x, y] = side === 0 ? [b, -a] : side === 1 ? [b, a] : side === 2 ? [-a, b] : [a, b];
-          return [px(x), px(y)] as const;
-        };
-        g.lineWidth = i % 4 === 0 ? 4.5 : 2.6;
-        g.beginPath();
-        pts.forEach((pt, k) => {
-          const [x, y] = toXY(pt);
-          if (k) g.lineTo(x, y);
-          else g.moveTo(x, y);
-        });
-        g.stroke();
-        // a pad at each end
-        for (const pt of [pts[0], pts[3]]) {
-          const [x, y] = toXY(pt);
-          g.beginPath();
-          g.arc(x, y, 5, 0, 7);
-          g.fill();
+    for (let r = 4; r < S / 2; r += 2.2) {
+      g.strokeStyle = `rgb(0,${90 + ((r * 37) % 60)},0)`;
+      g.lineWidth = 1.2;
+      g.beginPath();
+      g.arc(S / 2, S / 2, r, 0, 7);
+      g.stroke();
+    }
+    return new THREE.CanvasTexture(c);
+  })();
+  const face = new THREE.MeshPhysicalMaterial({ color: '#3d424a', metalness: 1, roughness: 1, roughnessMap: turned, clearcoat: 0.15 });
+
+  // the housing: a lathe profile — back plate, raised outer rim with a chamfer, a recessed well
+  {
+    const prof: [number, number][] = [
+      [0.0, -0.32], [3.3, -0.32], [3.46, -0.24], [3.5, 0.18], [3.42, 0.34], [3.12, 0.36], [3.05, 0.2],
+      [2.95, 0.02], [0.0, 0.02],
+    ];
+    const lathe = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 128);
+    add(lathe, steel, 0, 0, 0);
+    // the well's floor, turned
+    const well = add(new THREE.CircleGeometry(2.95, 128), face, 0, 0.021, 0);
+    well.rotation.x = -Math.PI / 2;
+    // bolts round the rim: hex heads with a washer
+    const hexMat = new THREE.MeshPhysicalMaterial({ color: '#6f747c', metalness: 1, roughness: 0.4 });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
+      const x = Math.cos(a) * 3.26, z = Math.sin(a) * 3.26;
+      add(new THREE.CylinderGeometry(0.13, 0.13, 0.03, 24), steelDark, x, 0.365, z);
+      const hex = add(new THREE.CylinderGeometry(0.09, 0.09, 0.08, 6), hexMat, x, 0.41, z);
+      hex.rotation.y = a;
+    }
+  }
+
+  // the coils: ten copper windings on dark cores, each a short arc of the ring, clamped at both ends
+  const N_COIL = 10, R_COIL = 2.28;
+  const copperTex = (() => {
+    // windings: tight parallel turns across the coil, each catching the light a little differently
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 16;
+    const g = c.getContext('2d')!;
+    for (let x = 0; x < 512; x++) {
+      const k = (x % 14) / 14;
+      const v = 0.45 + 0.55 * Math.sin(k * Math.PI);
+      g.fillStyle = `rgb(${Math.round(255 * v)},${Math.round(255 * v)},${Math.round(255 * v)})`;
+      g.fillRect(x, 0, 1, 16);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  })();
+  const copper = new THREE.MeshPhysicalMaterial({
+    color: '#c7783f', metalness: 1, roughness: 0.32, bumpMap: copperTex, bumpScale: 4,
+    emissive: '#3aa8ff', emissiveIntensity: 0, clearcoat: 0.5, clearcoatRoughness: 0.3,
+  });
+  const coreMat = new THREE.MeshPhysicalMaterial({ color: '#15161a', metalness: 0.4, roughness: 0.6 });
+  const span = (Math.PI * 2) / N_COIL;
+  const arc = span * 0.74;
+  for (let i = 0; i < N_COIL; i++) {
+    const a0 = i * span + (span - arc) / 2;
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(R_COIL, 0.27, 20, 40, arc), copper);
+    coil.rotation.x = -Math.PI / 2;
+    coil.rotation.z = a0; // after the x turn, z spins it round the reactor's axis
+    coil.position.y = 0.33;
+    coil.castShadow = coil.receiveShadow = true;
+    chip.add(coil);
+    // the core it's wound on, seen at its ends, and the steel clamps holding it
+    for (const e of [a0, a0 + arc]) {
+      const x = Math.cos(e) * R_COIL, z = -Math.sin(e) * R_COIL;
+      const cap = add(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 20), coreMat, x, 0.33, z);
+      cap.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-Math.sin(e), 0, -Math.cos(e)));
+      const clamp = add(new RoundedBoxGeometry(0.2, 0.46, 0.7, 2, 0.04), steel, Math.cos(e) * R_COIL, 0.3, -Math.sin(e) * R_COIL);
+      clamp.rotation.y = e;
+    }
+  }
+  // copper's texture runs round each coil: repeat it so the turns are tight
+  copperTex.repeat.set(1, 1); // ~36 turns a coil: fine, but each one still reads
+
+  // the light ring inside the coils: the reactor's glow, and a softer halo on the floor round it
+  const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.9, 1.0), toneMapped: false });
+  const lightRing = new THREE.Mesh(new THREE.TorusGeometry(1.52, 0.09, 16, 160), ringMat);
+  lightRing.rotation.x = -Math.PI / 2;
+  lightRing.position.y = 0.2;
+  chip.add(lightRing);
+  const haloTex = (() => {
+    const S = 256, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d')!;
+    const grd = g.createRadialGradient(S / 2, S / 2, S * 0.16, S / 2, S / 2, S / 2);
+    grd.addColorStop(0, 'rgba(255,255,255,0)');
+    grd.addColorStop(0.35, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.62, 'rgba(255,255,255,0.18)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, S, S);
+    return new THREE.CanvasTexture(c);
+  })();
+  const haloMat = new THREE.MeshBasicMaterial({ map: haloTex, color: new THREE.Color(0.25, 0.7, 1.0), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), haloMat);
+  halo.rotation.x = -Math.PI / 2;
+  halo.position.y = 0.03;
+  chip.add(halo);
+
+  // struts from the housing's well in to the hub, in the gaps between the coils
+  for (let i = 0; i < N_COIL; i++) {
+    const a = i * span;
+    const s = add(new RoundedBoxGeometry(0.9, 0.08, 0.12, 2, 0.02), steelDark, Math.cos(a) * 1.62, 0.1, -Math.sin(a) * 1.62);
+    s.rotation.y = a;
+  }
+
+  // the hub: a steel collar, the lens over the mark
+  {
+    const collar = new THREE.LatheGeometry(
+      [[0, 0.02], [1.18, 0.02], [1.22, 0.1], [1.2, 0.46], [1.1, 0.5], [1.02, 0.44], [0.98, 0.3], [0, 0.3]].map(([r, y]) => new THREE.Vector2(r, y)),
+      96,
+    );
+    add(collar, steel, 0, 0, 0);
+    // a dark glass lens, domed, with the mark glowing beneath it
+    const lens = new THREE.Mesh(
+      new THREE.SphereGeometry(1.35, 64, 24, 0, Math.PI * 2, 0, 0.8),
+      new THREE.MeshPhysicalMaterial({ color: '#9fd9ff', metalness: 0, roughness: 0.04, transparent: true, opacity: 0.18, clearcoat: 1, clearcoatRoughness: 0.02, depthWrite: false }),
+    );
+    lens.position.y = 0.3 - Math.cos(0.8) * 1.35;
+    lens.scale.y = 0.55;
+    chip.add(lens);
+    const under = add(new THREE.CircleGeometry(0.98, 96), new THREE.MeshPhysicalMaterial({ color: '#0a0e16', metalness: 0.6, roughness: 0.3 }), 0, 0.301, 0);
+    under.rotation.x = -Math.PI / 2;
+  }
+
+  // the leads: insulated wire from each coil in to the hub, arching over the struts, copper at the ends
+  {
+    const insulation = new THREE.MeshPhysicalMaterial({ color: '#1b1c20', roughness: 0.55, clearcoat: 0.4, clearcoatRoughness: 0.5 });
+    const insulationRed = new THREE.MeshPhysicalMaterial({ color: '#5a1418', roughness: 0.5, clearcoat: 0.4, clearcoatRoughness: 0.5 });
+    const bare = new THREE.MeshPhysicalMaterial({ color: '#d48a4e', metalness: 1, roughness: 0.3 });
+    for (let i = 0; i < N_COIL; i++) {
+      const a = i * span + span / 2; // from the middle of each coil
+      for (const off of [-0.09, 0.09]) {
+        const aa = a + off * 0.4;
+        const from = new THREE.Vector3(Math.cos(aa) * (R_COIL - 0.26), 0.38, -Math.sin(aa) * (R_COIL - 0.26));
+        const to = new THREE.Vector3(Math.cos(aa) * 1.2, 0.44, -Math.sin(aa) * 1.2);
+        const mid = from.clone().lerp(to, 0.5).setY(0.62);
+        const curve = new THREE.QuadraticBezierCurve3(from, mid, to);
+        const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.035, 10, false), off < 0 ? insulation : insulationRed);
+        wire.castShadow = true;
+        chip.add(wire);
+        for (const [p, t] of [[from, curve.getTangent(0)], [to, curve.getTangent(1)]] as const) {
+          const end = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.09, 10), bare);
+          end.position.copy(p);
+          end.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), t.clone().normalize());
+          chip.add(end);
         }
       }
     }
-    const t = new THREE.CanvasTexture(c);
-    t.anisotropy = 8;
-    return t;
-  })();
-  const wireMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-    uniforms: { uTime, tWire: { value: wireTex } },
-    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */ `
-      uniform float uTime; uniform sampler2D tWire; varying vec2 vUv;
-      ${BEAT_GLSL}
-      void main(){
-        float m = texture2D(tWire, vUv).r;
-        if (m < 0.01) discard;
-        vec2 q = vUv - 0.5;
-        float d = length(q);
-        float lane = floor((atan(q.y, q.x) + 3.14159) * 10.0);
-        float h = fract(sin(lane * 12.9898) * 43758.5453);
-        // a pulse leaves the heart on each beat and runs out to the frame
-        float beat = beatAt(fract(uTime - d * 1.6));
-        float run = pow(fract(d * 3.0 - uTime * (0.35 + h * 0.3) - h), 6.0);
-        vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.7, 0.35, 1.0), step(0.55, h));
-        gl_FragColor = vec4(c * m * (0.35 + beat * 1.4 + run * 1.2), m);
-      }`,
-  });
-  const wires = new THREE.Mesh(new THREE.PlaneGeometry(6.6, 6.6), wireMat);
-  wires.position.y = 0.3125; // on the die with the mark; the HBM stacks stand over it
-  wires.rotation.x = -Math.PI / 2;
-  chip.add(wires);
+  }
+
+  // the mark in the hub: his heart, lit from inside and beating
+  const heartTex = new THREE.TextureLoader().load('/heart.png');
+  heartTex.colorSpace = THREE.SRGBColorSpace;
+  const heartMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color(0.95, 0.8, 1.15), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const heart = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), heartMat);
+  heart.position.y = 0.305;
+  heart.rotation.x = -Math.PI / 2;
+  chip.add(heart);
+  const heartGlowMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color('#b46bff'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.9), heartGlowMat);
+  heartGlow.position.y = 0.31;
+  heartGlow.rotation.x = -Math.PI / 2;
+  chip.add(heartGlow);
 
   /* ================= him: the nerves and the particles ================= */
   let figure: THREE.Group | null = null;
   let maxL = 1;
-  let center = new THREE.Vector3(0, -2.5, 0);
+  const center = new THREE.Vector3(0, -2.5, 0);
   let height = 9;
   if (mascot) {
     const full = mascot.full.array as Float32Array;
@@ -579,7 +534,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
       heartMat.color.setRGB(0.95, 0.8, 1.15).multiplyScalar(1.0 + bt * 0.9);
       heartGlowMat.opacity = 0.15 + bt * 0.35;
       heartGlow.scale.setScalar(1 + bt * 0.12);
-      dieMat.emissiveIntensity = 0.02 + bt * 0.06;
+      // the reactor's light swells with each beat and the coils catch it
+      ringMat.color.setRGB(0.35, 0.85, 1.0).multiplyScalar(2.4 + bt * 1.2);
+      haloMat.opacity = 0.6 + bt * 0.4;
+      copper.emissiveIntensity = 0.04 + bt * 0.08;
       dust.rotation.y = time * 0.01;
 
       composer.render(dt);
