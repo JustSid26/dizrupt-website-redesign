@@ -4,7 +4,6 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Mascot } from '../mascot';
 
 /* =========================================================
@@ -14,8 +13,8 @@ import type { Mascot } from '../mascot';
    The chip is his heart. Out of the hand-over comes an AI
    accelerator, floating on its own in the dark: a silicon die
    with its interference sheen ringed by HBM stacks on the
-   interposer... now a heart-shaped arc reactor, the Endgame kind,
-   the Dizrupt mark beating in its core.
+   interposer... now a round, flat nano-tech arc reactor, the
+   Dizrupt mark beating in its core.
 
    Then the scroll builds him round it. Signals leave the chip
    along a branching tree of nerves that runs through his whole
@@ -67,37 +66,22 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
   chipRoot.add(chip);
 
 
-  /* The reactor, the Endgame kind: heart-shaped. A housing of dark nanotech titanium — a rounded
-     heart with a bevelled rim and a fine hex grain — and set in it, under a heart of glass, the
-     light: a bright heart-shaped ring, a fill of softer light behind dark ribs radiating from the
-     core, an inner heart outline, and the core, where the Dizrupt mark beats. Local frame: it lies
-     in x–z, its face towards +y (the group turns that out of his chest). Built as flat hearts in
-     x–y and extruded, then laid down: the sub-group below turns shape-up (+y) to chip −z, which
-     the chip's own turn puts up, so the heart stands upright in his chest. */
-  const heartShape = (() => {
-    // the classic heart curve, blunted towards a circle: the suit's reactor is round-shouldered
-    const raw: THREE.Vector2[] = [];
-    for (let i = 0; i < 160; i++) {
-      const t = (i / 160) * Math.PI * 2;
-      const hx = 16 * Math.pow(Math.sin(t), 3);
-      const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-      raw.push(new THREE.Vector2(hx, hy));
-    }
-    const box = new THREE.Box2().setFromPoints(raw);
-    const c = box.getCenter(new THREE.Vector2());
-    const half = Math.max(box.max.x - c.x, box.max.y - c.y);
-    return raw.map((p) => {
-      const q = p.clone().sub(c).divideScalar(half); // −1..1
-      const circ = q.clone().normalize().multiplyScalar(0.92);
-      return q.lerp(circ, 0.28);
-    });
-  })();
-  const R = 3.3; // half-width of the housing
-  const heartAt = (s: number) => heartShape.map((p) => p.clone().multiplyScalar(R * s));
+  /* The reactor, the nano-tech kind: round and flat, set flush in a plate of dark nano-tech
+     titanium (hex grain, engraved panel seams, a bevelled edge). In it, under flush glass, the
+     light: a white-hot ring cut into segments, fine concentric rings inside it over a deep fill,
+     and the core, where the Dizrupt mark beats. Local frame: it lies in x–z, its face towards +y
+     (the group turns that out of his chest). Built as flat shapes in x–y and extruded, then laid
+     down by the sub-group below. */
+  const outline = Array.from({ length: 160 }, (_, i) => {
+    const t = (i / 160) * Math.PI * 2;
+    return new THREE.Vector2(Math.cos(t), Math.sin(t));
+  });
+  const R = 2.7; // the reactor's radius; the plate runs out to 1.25 R
+  const ringAt = (s: number) => outline.map((p) => p.clone().multiplyScalar(R * s));
   const toShape = (pts: THREE.Vector2[]) => new THREE.Shape(pts);
   const ring = (outer: number, inner: number) => {
-    const sh = toShape(heartAt(outer));
-    sh.holes.push(new THREE.Path(heartAt(inner).reverse()));
+    const sh = toShape(ringAt(outer));
+    sh.holes.push(new THREE.Path(ringAt(inner).reverse()));
     return sh;
   };
   const face = new THREE.Group();
@@ -140,17 +124,26 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
     return t;
   })();
   const titanium = new THREE.MeshPhysicalMaterial({
-    color: '#3b3f47', metalness: 1, roughness: 0.38, bumpMap: hexTex, bumpScale: 0.6,
+    color: '#2a2d33', metalness: 1, roughness: 0.38, bumpMap: hexTex, bumpScale: 0.6,
     clearcoat: 0.45, clearcoatRoughness: 0.3,
   });
   const titaniumLight = new THREE.MeshPhysicalMaterial({ color: '#8b9098', metalness: 1, roughness: 0.28 });
   const dark = new THREE.MeshPhysicalMaterial({ color: '#0c0f15', metalness: 0.7, roughness: 0.35 });
 
-  // the housing: a heart with a heart cut from it, bevelled; a bright lip inside its edge
-  layer(ring(1.0, 0.8), 0.42, 0, titanium, 0.07);
+  // the plate: a disc with the reactor's well cut from it, bevelled; a bright lip round the well
+  layer(ring(1.25, 0.8), 0.36, 0, titanium, 0.06);
+  // engraved panel seams across the plate, the way the nano suit's plates meet
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.42 * R, 0.025, 0.02), dark);
+    seam.position.set(Math.cos(a) * 1.03 * R, Math.sin(a) * 1.03 * R, 0.415);
+    seam.rotation.z = a;
+    face.add(seam);
+  }
+  layer(ring(1.03, 1.015), 0.012, 0.41, dark); // and one round it
   layer(ring(0.81, 0.775), 0.46, 0, titaniumLight);
   // behind the light, the back of the well
-  layer(toShape(heartAt(0.8)), 0.06, 0, dark);
+  layer(toShape(ringAt(0.8)), 0.06, 0, dark);
 
   // the light: a bright ring, a softer fill, an inner outline and the core
   const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.9, 1.0), toneMapped: false });
@@ -178,7 +171,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
   layer(ring(0.775, 0.66), 0.02, 0.1, ringMat);
   layer(ring(0.66, 0.34), 0.02, 0.095, fillMat);
   layer(ring(0.36, 0.31), 0.02, 0.1, ringMat);
-  layer(toShape(heartAt(0.31)), 0.02, 0.095, coreMat);
+  layer(toShape(ringAt(0.31)), 0.02, 0.095, coreMat);
 
   // the rings' light, drawn as neon: a soft cyan spill round each, a white-hot line down its middle
   const neonTex = (() => {
@@ -187,7 +180,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
     const g = c.getContext('2d')!;
     const path = (sc: number) => {
       g.beginPath();
-      heartAt(sc).forEach((p, i) => {
+      ringAt(sc).forEach((p, i) => {
         const x = (p.x / (2 * R) + 0.5) * S, y = (0.5 - p.y / (2 * R)) * S;
         if (i) g.lineTo(x, y);
         else g.moveTo(x, y);
@@ -195,7 +188,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
       g.closePath();
     };
     const u = S / (2 * R); // pixels per unit
-    for (const [sc, w] of [[0.718, 0.115 * R], [0.335, 0.05 * R]] as const) {
+    for (const [sc, w] of [[0.718, 0.115 * R], [0.5, 0.018 * R], [0.42, 0.012 * R], [0.335, 0.05 * R]] as const) {
       g.lineJoin = 'round';
       for (const [blur, alpha, width] of [[70, 0.5, 2.2], [28, 0.8, 1.2], [8, 1, 0.8]] as const) {
         g.shadowColor = `rgba(80,200,255,${alpha})`;
@@ -221,39 +214,25 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
   neon.position.y = 0.125;
   chip.add(neon);
 
-  // ribs: dark struts from the inner outline out to the ring, the light showing between them
-  {
-    const n = 20;
-    const inner = heartAt(0.36), outer = heartAt(0.67);
-    // evenly round by angle, not along the curve, and none into the notch or the point
-    const byAngle = (ang: number) => {
-      let best = 0, bd = Infinity;
-      heartShape.forEach((p, i) => {
-        const d = Math.abs(Math.atan2(Math.sin(Math.atan2(p.y, p.x) - ang), Math.cos(Math.atan2(p.y, p.x) - ang)));
-        if (d < bd) {
-          bd = d;
-          best = i;
-        }
-      });
-      return best;
-    };
-    for (let k = 0; k < n; k++) {
-      const ang = (k / n) * Math.PI * 2 + Math.PI / n;
-      const off = Math.abs(Math.atan2(Math.sin(ang - Math.PI / 2), Math.cos(ang - Math.PI / 2)));
-      if (off < 0.3 || off > Math.PI - 0.3) continue;
-      const i = byAngle(ang);
-      const a = inner[i], b = outer[i];
-      const len = a.distanceTo(b);
-      const rib = new THREE.Mesh(new RoundedBoxGeometry(len, 0.07, 0.1, 2, 0.02), titanium);
-      rib.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, 0.16);
-      rib.rotation.z = Math.atan2(b.y - a.y, b.x - a.x);
-      rib.castShadow = true;
-      face.add(rib);
-    }
+  // the ring is cut into segments: thin dark gaps across it, flush with the light
+  for (let k = 0; k < 24; k++) {
+    const a = (k / 24) * Math.PI * 2;
+    const cut = new THREE.Mesh(new THREE.BoxGeometry(0.13 * R, 0.022, 0.03), dark);
+    cut.position.set(Math.cos(a) * 0.718 * R, Math.sin(a) * 0.718 * R, 0.135);
+    cut.rotation.z = a;
+    face.add(cut);
+  }
+  // and finer ticks round the core, like a lens barrel
+  for (let k = 0; k < 60; k++) {
+    const a = (k / 60) * Math.PI * 2;
+    const tick = new THREE.Mesh(new THREE.BoxGeometry((k % 5 ? 0.03 : 0.06) * R, 0.008, 0.02), titaniumLight);
+    tick.position.set(Math.cos(a) * 0.59 * R, Math.sin(a) * 0.59 * R, 0.13);
+    tick.rotation.z = a;
+    face.add(tick);
   }
 
   // the glass over it all: a thin heart, clear, catching the room
-  layer(toShape(heartAt(0.8)), 0.02, 0.4, new THREE.MeshPhysicalMaterial({
+  layer(toShape(ringAt(0.8)), 0.02, 0.33, new THREE.MeshPhysicalMaterial({
     color: '#cfefff', roughness: 0.03, metalness: 0, transparent: true, opacity: 0.12, clearcoat: 1, clearcoatRoughness: 0.02, depthWrite: false,
   }));
 
