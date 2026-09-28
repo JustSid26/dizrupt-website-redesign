@@ -6,13 +6,16 @@ import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { useSection } from "@/components/home/useSection";
 import { TRANSITIONS } from "@/lib/engine/ai/transition";
+import { AI_STOPS } from "@/lib/engine/ai/world";
+import { TECH_PROJECTS } from "@/content/techProjects";
 
 /* AI & Automation: not a seventh solution but its own world. Past the last billboard the page loses
-   its signal and hands over — on the real pixels, in the engine (lib/engine/ai) — to an AI
-   accelerator on its board, data pulsing out of the die along the traces. The scroll then flies the
-   camera over it chapter by chapter while the HUD reads out what it's doing. Leaving hands back.
-   Four hand-overs to choose from; the picker remembers yours. */
-const CHAPTERS = [
+   its signal and hands over — on the real pixels, in the engine (lib/engine/ai) — to a
+   microcontroller floating in the dark, the Dizrupt mark glowing on it. The scroll wires it into the
+   work: traces run from its pins out to a screen per project, and the camera visits each; a screen
+   opens its film. Leaving hands back. Four hand-overs to choose from; the picker remembers yours. */
+type Chapter = { no: string; kicker: string; title: string; line: string; chips: string[]; cta?: boolean; project?: string };
+const CHAPTERS: Chapter[] = [
   {
     no: "00",
     kicker: "Exclusive",
@@ -22,33 +25,21 @@ const CHAPTERS = [
   },
   {
     no: "01",
-    kicker: "Agents",
-    title: "AI that does the work",
-    line: "Agents that qualify leads, answer customers and research the market, around the clock and on brand.",
-    chips: ["Lead scoring", "Support", "Research", "Sales follow-up"],
-  },
-  {
-    no: "02",
-    kicker: "Automation",
-    title: "Workflows that never sleep",
-    line: "The busywork between your tools — invoices, reports, reminders, hand-offs — done the moment it's due.",
-    chips: ["Invoicing", "Reporting", "Onboarding", "Scheduling"],
-  },
-  {
-    no: "03",
-    kicker: "Integrations",
-    title: "One brain across your stack",
-    line: "WhatsApp to CRM, Shopify to Sheets, inbox to ERP: your systems talking to each other, with AI in between.",
-    chips: ["WhatsApp", "Shopify", "HubSpot", "Google Workspace"],
-  },
-  {
-    no: "04",
-    kicker: "Build",
-    title: "Custom AI, built for you",
-    line: "Internal tools and AI products designed, built and shipped by the team that runs your brand.",
+    kicker: "Wired in",
+    title: "One chip, everything connected",
+    line: "Every system we build runs on the same idea: one brain, wired into the tools you already use. Here's what it powers.",
     chips: [],
     cta: true,
   },
+  // PLACEHOLDER lines — one sentence each on what the project does and what it changed
+  ...TECH_PROJECTS.slice(0, 4).map((pj, i) => ({
+    no: String(i + 2).padStart(2, "0"),
+    kicker: pj.about,
+    title: pj.name,
+    line: "PLACEHOLDER — one line on what it does, and what it changed for the business.",
+    chips: [],
+    project: pj.name,
+  })),
 ];
 
 const LOG = [
@@ -134,7 +125,11 @@ export function AiAutomation() {
         end: "bottom bottom",
         onUpdate: (self) => {
           signals.ai.p = self.progress;
-          setChapter(Math.min(CHAPTERS.length - 1, Math.round(self.progress * (CHAPTERS.length - 1))));
+          // the chapter whose stop is nearest (the camera holds at each one)
+          const p = self.progress;
+          let best = 0;
+          AI_STOPS.forEach((s, i) => Math.abs(s - p) < Math.abs(AI_STOPS[best] - p) && (best = i));
+          setChapter(Math.min(CHAPTERS.length - 1, best));
         },
       }),
     ];
@@ -208,14 +203,31 @@ export function AiAutomation() {
     play(1);
   };
 
-  const openProjects = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const openProjects = (e: React.MouseEvent<HTMLButtonElement>, project: string | null = null) => {
     const r = e.currentTarget.getBoundingClientRect();
     signals.macFrom = { x: r.left, y: r.top, w: r.width, h: r.height };
-    set({ macOpen: true });
+    set({ macOpen: true, macProject: project });
   };
+  // a click target riding on the project screen the camera is at
+  const screenHit = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const tick = () => {
+      const el = screenHit.current, b = signals.aiPanel;
+      if (!el) return;
+      const on = b.on && signals.ai.mix > 0.98;
+      el.style.visibility = on ? "visible" : "hidden";
+      if (!on) return;
+      el.style.transform = `translate3d(${b.x.toFixed(1)}px, ${b.y.toFixed(1)}px, 0)`;
+      el.style.width = `${b.w.toFixed(1)}px`;
+      el.style.height = `${b.h.toFixed(1)}px`;
+      el.dataset.index = String(b.index);
+    };
+    gsap.ticker.add(tick);
+    return () => gsap.ticker.remove(tick);
+  }, []);
 
   return (
-    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} aria-labelledby="ai-title" style={{ height: "560svh" }}>
+    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} data-project={chapter >= 2 || undefined} aria-labelledby="ai-title" style={{ height: "560svh" }}>
       <div className="ai-pin">
         <div ref={boot} className="ai-boot" aria-hidden>
           {BOOT.map((l, i) => (
@@ -224,6 +236,16 @@ export function AiAutomation() {
             </p>
           ))}
         </div>
+
+        <button
+          ref={screenHit}
+          type="button"
+          className="ai-screen-hit"
+          aria-label="Play this project's film"
+          onClick={(e) => openProjects(e, TECH_PROJECTS[Number(screenHit.current?.dataset.index ?? 0)]?.name ?? null)}
+        >
+          <span>Play the film →</span>
+        </button>
 
         <div className="ai-hud">
           <p className="ai-tag">
@@ -254,9 +276,15 @@ export function AiAutomation() {
                     ))}
                   </ul>
                 )}
+                {c.project && (
+                  <button type="button" className="ai-cta" onClick={(e) => openProjects(e, c.project)} tabIndex={i === chapter ? 0 : -1}>
+                    <span>Play the film</span>
+                    <span aria-hidden>▶</span>
+                  </button>
+                )}
                 {c.cta && (
-                  <button type="button" className="ai-cta" onClick={openProjects} tabIndex={i === chapter ? 0 : -1}>
-                    <span>Open the projects</span>
+                  <button type="button" className="ai-cta" onClick={(e) => openProjects(e)} tabIndex={i === chapter ? 0 : -1}>
+                    <span>Open all the projects</span>
                     <span aria-hidden>→</span>
                   </button>
                 )}

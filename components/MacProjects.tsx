@@ -20,7 +20,8 @@ export function MacProjects() {
   const [query, setQuery] = useState("");
   const [playing, setPlaying] = useState<TechProject | null>(null);
   const [time, setTime] = useState("");
-  const close = () => set({ macOpen: false });
+  const direct = useStore((s) => s.macProject);
+  const close = () => set({ macOpen: false, macProject: null });
 
   useEffect(() => {
     const f = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", hour: "2-digit", minute: "2-digit" });
@@ -65,7 +66,12 @@ export function MacProjects() {
       setQuery("");
       return;
     }
-    if (reduce) return void setStage("window");
+    // opened from a project's screen: straight to its film, no Spotlight
+    if (reduce || direct) {
+      setStage("window");
+      if (direct) setPlaying(TECH_PROJECTS.find((p) => p.name === direct) ?? null);
+      return;
+    }
     const timers: ReturnType<typeof setTimeout>[] = [];
     const at = (ms: number, fn: () => void) => timers.push(setTimeout(fn, ms));
     setStage("desktop");
@@ -74,7 +80,7 @@ export function MacProjects() {
     at(2350, () => setStage("result"));
     at(2950, () => setStage("window"));
     return () => timers.forEach(clearTimeout);
-  }, [open, reduce]);
+  }, [open, reduce, direct]);
 
   useEffect(() => {
     if (stage !== "window" || !win.current || reduce) return;

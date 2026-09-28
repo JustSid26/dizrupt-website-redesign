@@ -4,458 +4,339 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import type { Mascot } from '../mascot';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { TECH_PROJECTS } from '@/content/techProjects';
+import { signals } from '@/lib/signals';
 
 /* =========================================================
    AI & Automation: its own world, drawn by the same renderer
    into its own buffers and handed to the transition pass.
 
-   The chip is his heart. Out of the hand-over comes an AI
-   accelerator, floating on its own in the dark: a silicon die
-   with its interference sheen ringed by HBM stacks on the
-   interposer... now a round, flat nano-tech arc reactor, the
-   Dizrupt mark beating in its core.
+   Out of the hand-over comes a microcontroller, floating on its
+   own in the dark: a black LQFP package, gull-wing leads down
+   every side, laser marking on the epoxy and the Dizrupt mark
+   glowing in it, beating. Then the scroll wires it into the
+   work: buses of traces leave its pins and run out through the
+   dark to the projects, one screen each, and every screen
+   powers on as its signal arrives. The camera visits them in
+   turn; a screen can be opened to play its film.
 
-   Then the scroll builds him round it. Signals leave the chip
-   along a branching tree of nerves that runs through his whole
-   figure, head to toe; each particle of him lights where its
-   nerve arrives, and the chip settles into his chest as the
-   heart. Built, the heart keeps beating and every beat sends
-   a pulse out along the nerves.
-
-   World frame: the chip (the heart) is the origin; he stands
-   round it at his own scale (the landing's mascot units).
+   World frame: the chip at the origin, its face towards +z.
    ========================================================= */
-const CHIP = 0.3; // the package is ~7 across in its own units; this makes it the size of his heart
+
+/** Where the scroll (0..1 through the section) holds: the chip, the whole board, each project. */
+export const AI_STOPS = [0, 0.17, 0.36, 0.54, 0.72, 0.9];
 
 function rng(seed: number) {
   let s = seed;
   return () => ((s = (s * 16807) % 2147483647) / 2147483647);
 }
 
-export type AiWorld = ReturnType<typeof createAiWorld>;
-
 // lub-dub: two beats close together, then a rest (the landing's heart, the same shape)
-const BEAT_GLSL = /* glsl */ `float beatAt(float ph) { return exp(-pow((ph - 0.05) / 0.06, 2.0)) + 0.65 * exp(-pow((ph - 0.3) / 0.07, 2.0)); }`;
 const beatAt = (ph: number) => Math.exp(-Math.pow((ph - 0.05) / 0.06, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.3) / 0.07, 2));
 
-export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number, mascot: Mascot | null) {
+/** The package's top: black epoxy, laser marking, the pin-1 dimple and the mould's ejector marks. */
+function packageTop() {
+  const S = 1024;
+  const col = document.createElement('canvas');
+  col.width = col.height = S;
+  const g = col.getContext('2d')!;
+  const rgh = document.createElement('canvas');
+  rgh.width = rgh.height = S;
+  const r = rgh.getContext('2d')!;
+  g.fillStyle = '#141416';
+  g.fillRect(0, 0, S, S);
+  r.fillStyle = 'rgb(0,190,0)'; // matte epoxy
+  r.fillRect(0, 0, S, S);
+  // the laser marking: lighter and rougher than the epoxy round it
+  g.fillStyle = '#6b6c70';
+  r.fillStyle = 'rgb(0,235,0)';
+  const text = (s: string, px: number, x: number, y: number) => {
+    for (const ctx of [g, r]) {
+      ctx.font = `600 ${px}px "JetBrains Mono", Menlo, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(s, x, y);
+    }
+  };
+  text('DIZRUPT', 70, S / 2, S * 0.74);
+  text('DZ-M1 · 32-BIT MCU', 38, S / 2, S * 0.81);
+  text('2026 · MUMBAI · 4K9X', 30, S / 2, S * 0.87);
+  // pin 1: a moulded dimple, glossier than the rest; the two ejector-pin marks, glossy too
+  r.fillStyle = 'rgb(0,90,0)';
+  g.fillStyle = '#0d0d0f';
+  for (const [x, y, rad] of [[S * 0.12, S * 0.12, 26], [S * 0.2, S * 0.9, 40], [S * 0.8, S * 0.9, 40]] as const) {
+    g.beginPath();
+    g.arc(x, y, rad, 0, 7);
+    g.fill();
+    r.beginPath();
+    r.arc(x, y, rad, 0, 7);
+    r.fill();
+  }
+  const map = new THREE.CanvasTexture(col);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 8;
+  const rough = new THREE.CanvasTexture(rgh);
+  return { map, rough };
+}
+
+/** A project's screen: its name and kind, a mock of the work, a play button. */
+function screenTexture(name: string, about: string, k: number) {
+  const W = 1024, H = 576;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  const grd = g.createLinearGradient(0, 0, W, H);
+  grd.addColorStop(0, '#07121c');
+  grd.addColorStop(1, '#130a24');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, W, H);
+  // a faint grid, the way a dashboard sits on one
+  g.strokeStyle = 'rgba(90,200,255,0.07)';
+  g.lineWidth = 1;
+  for (let x = 0; x < W; x += 32) {
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.lineTo(x, H);
+    g.stroke();
+  }
+  for (let y = 0; y < H; y += 32) {
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(W, y);
+    g.stroke();
+  }
+  // a mock of the work: panels, a chart line, a list
+  const rand = rng(17 + k * 31);
+  g.fillStyle = 'rgba(120,220,255,0.08)';
+  g.strokeStyle = 'rgba(120,220,255,0.35)';
+  g.lineWidth = 2;
+  for (const [x, y, w, h] of [[56, 170, 420, 250], [500, 170, 468, 120], [500, 310, 225, 110], [743, 310, 225, 110]]) {
+    g.fillRect(x, y, w, h);
+    g.strokeRect(x, y, w, h);
+  }
+  g.strokeStyle = '#4fd8ff';
+  g.lineWidth = 4;
+  g.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const x = 76 + i * 19, y = 390 - (i * 7 + rand() * 60);
+    if (i) g.lineTo(x, y);
+    else g.moveTo(x, y);
+  }
+  g.stroke();
+  g.fillStyle = 'rgba(200,170,255,0.5)';
+  for (let i = 0; i < 4; i++) g.fillRect(520, 192 + i * 22, 180 + rand() * 240, 8);
+  // the name and kind
+  g.fillStyle = '#eafcff';
+  g.font = '700 60px "Bricolage Grotesque", "Inter Tight", system-ui, sans-serif';
+  g.fillText(name.toUpperCase(), 56, 100);
+  g.fillStyle = '#7cf2ff';
+  g.font = '500 24px "JetBrains Mono", Menlo, monospace';
+  g.fillText(`${String(k + 1).padStart(2, '0')} · ${about.toUpperCase()}`, 58, 138);
+  // play
+  g.fillStyle = 'rgba(60,240,255,0.9)';
+  g.beginPath();
+  g.arc(W - 100, H - 80, 44, 0, 7);
+  g.fill();
+  g.fillStyle = '#041016';
+  g.beginPath();
+  g.moveTo(W - 114, H - 103);
+  g.lineTo(W - 114, H - 57);
+  g.lineTo(W - 76, H - 80);
+  g.closePath();
+  g.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+export type AiWorld = ReturnType<typeof createAiWorld>;
+
+export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#040509');
-  scene.fog = new THREE.FogExp2('#040509', 0.018);
+  scene.fog = new THREE.FogExp2('#040509', 0.022);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.32;
+  scene.environmentIntensity = 0.35;
   pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.02, 300);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
-
   const uTime = { value: 0 };
-  const uFront = { value: 0 }; // how far along the nerves the build has come (path length)
-  const uBuilt = { value: 0 };
-  const uViewH = { value: innerHeight * pixelRatio };
 
-  /* ================= the chip ================= */
-  const chipRoot = new THREE.Group(); // floats, turns, then settles facing out of his chest
+  /* ================= the microcontroller ================= */
+  const BODY = 2.4, H = 0.28, N_PIN = 16, PITCH = BODY / (N_PIN + 1);
+  const chipRoot = new THREE.Group(); // floats and turns until it's wired in, then holds still
   scene.add(chipRoot);
-  const chip = new THREE.Group(); // the package, in its own units, lying on its back
-  chip.scale.setScalar(CHIP);
-  chip.rotation.x = Math.PI / 2; // its top faces +z: out of his chest, towards us
+  const chip = new THREE.Group(); // lying on its back in its own frame: face up (+y)
+  chip.rotation.x = Math.PI / 2; // … which turns its face to +z, towards us (local z becomes world −y)
   chipRoot.add(chip);
 
-
-  /* The reactor, the nano-tech kind: round and flat, set flush in a plate of dark nano-tech
-     titanium (hex grain, engraved panel seams, a bevelled edge). In it, under flush glass, the
-     light: a white-hot ring cut into segments, fine concentric rings inside it over a deep fill,
-     and the core, where the Dizrupt mark beats. Local frame: it lies in x–z, its face towards +y
-     (the group turns that out of his chest). Built as flat shapes in x–y and extruded, then laid
-     down by the sub-group below. */
-  const outline = Array.from({ length: 160 }, (_, i) => {
-    const t = (i / 160) * Math.PI * 2;
-    return new THREE.Vector2(Math.cos(t), Math.sin(t));
-  });
-  const R = 2.7; // the reactor's radius; the plate runs out to 1.25 R
-  const ringAt = (s: number) => outline.map((p) => p.clone().multiplyScalar(R * s));
-  const toShape = (pts: THREE.Vector2[]) => new THREE.Shape(pts);
-  const ring = (outer: number, inner: number) => {
-    const sh = toShape(ringAt(outer));
-    sh.holes.push(new THREE.Path(ringAt(inner).reverse()));
-    return sh;
-  };
-  const face = new THREE.Group();
+  const top = packageTop();
+  const epoxy = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map: top.map, roughnessMap: top.rough, roughness: 1, metalness: 0, clearcoat: 0.12, clearcoatRoughness: 0.6 });
+  const epoxySide = new THREE.MeshPhysicalMaterial({ color: '#141416', roughness: 0.72, clearcoat: 0.1, clearcoatRoughness: 0.6 });
+  // the body: a moulded block with the radius a real package has; its top face carries the marking
+  const body = new THREE.Mesh(new RoundedBoxGeometry(BODY, H, BODY, 3, 0.03), epoxySide);
+  body.castShadow = body.receiveShadow = true;
+  chip.add(body);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(BODY - 0.06, BODY - 0.06), epoxy);
   face.rotation.x = -Math.PI / 2;
+  face.position.y = H / 2 + 0.001;
   chip.add(face);
-  const layer = (shape: THREE.Shape, depth: number, z: number, mat: THREE.Material, bevel = 0) => {
-    const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 4, curveSegments: 4 });
-    const m = new THREE.Mesh(geo, mat);
-    m.position.z = z;
-    m.castShadow = m.receiveShadow = true;
-    face.add(m);
-    return m;
-  };
-
-  // nanotech grain: a fine hex grid in the housing's bump and roughness
-  const hexTex = (() => {
-    const S = 512, c = document.createElement('canvas');
-    c.width = c.height = S;
-    const g = c.getContext('2d')!;
-    g.fillStyle = '#888';
-    g.fillRect(0, 0, S, S);
-    g.strokeStyle = '#333';
-    g.lineWidth = 2;
-    const r = 11, w = Math.sqrt(3) * r;
-    for (let row = -1; row * r * 1.5 < S + r; row++)
-      for (let col = -1; col * w < S + w; col++) {
-        const cx = col * w + (row % 2 ? w / 2 : 0), cy = row * r * 1.5;
-        g.beginPath();
-        for (let k = 0; k < 6; k++) {
-          const a = Math.PI / 6 + (k * Math.PI) / 3;
-          if (k) g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-          else g.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  // the exposed pad underneath
+  const tin = new THREE.MeshPhysicalMaterial({ color: '#c9ccd1', metalness: 1, roughness: 0.34 });
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(BODY * 0.55, 0.01, BODY * 0.55), tin);
+  pad.position.y = -H / 2 - 0.004;
+  chip.add(pad);
+  // the leads: gull-wing — out of the body, down, and a foot — tin-plated, sixteen a side
+  {
+    const segs = [
+      { g: new THREE.BoxGeometry(0.14, 0.03, 0.07), o: [BODY / 2 + 0.07, 0.0] },
+      { g: new THREE.BoxGeometry(0.03, 0.2, 0.07), o: [BODY / 2 + 0.14, -0.1] },
+      { g: new THREE.BoxGeometry(0.16, 0.03, 0.07), o: [BODY / 2 + 0.21, -0.2] },
+    ];
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    for (const s of segs) {
+      const im = new THREE.InstancedMesh(s.g, tin, N_PIN * 4);
+      let k = 0;
+      for (let side = 0; side < 4; side++) {
+        q.setFromAxisAngle(up, (side * Math.PI) / 2);
+        for (let i = 0; i < N_PIN; i++) {
+          p.set(s.o[0], s.o[1], (i - (N_PIN - 1) / 2) * PITCH).applyQuaternion(q);
+          im.setMatrixAt(k++, m4.compose(p, q, sc));
         }
-        g.closePath();
-        g.stroke();
       }
-    const t = new THREE.CanvasTexture(c);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(0.35, 0.35); // extrude UVs are in shape units
-    return t;
-  })();
-  const titanium = new THREE.MeshPhysicalMaterial({
-    color: '#2a2d33', metalness: 1, roughness: 0.38, bumpMap: hexTex, bumpScale: 0.6,
-    clearcoat: 0.45, clearcoatRoughness: 0.3,
+      im.castShadow = true;
+      chip.add(im);
+    }
+  }
+  // the mark, lasered into the epoxy and lit from within, beating
+  const markTex = new THREE.TextureLoader().load('/heart.png');
+  markTex.colorSpace = THREE.SRGBColorSpace;
+  const markMat = new THREE.MeshBasicMaterial({ map: markTex, color: new THREE.Color(0.85, 0.6, 1.2), transparent: true, depthWrite: false, toneMapped: false });
+  const mark = new THREE.Mesh(new THREE.PlaneGeometry(BODY * 0.42, BODY * 0.42), markMat);
+  mark.rotation.x = -Math.PI / 2;
+  mark.position.set(0, H / 2 + 0.003, -BODY * 0.1);
+  chip.add(mark);
+  const markGlowMat = new THREE.MeshBasicMaterial({ map: markTex, color: new THREE.Color('#b46bff'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const markGlow = new THREE.Mesh(new THREE.PlaneGeometry(BODY * 0.52, BODY * 0.52), markGlowMat);
+  markGlow.rotation.x = -Math.PI / 2;
+  markGlow.position.set(0, H / 2 + 0.005, -BODY * 0.1);
+  chip.add(markGlow);
+
+  /* ================= the projects: a screen each, round the chip ================= */
+  const projects = TECH_PROJECTS.slice(0, 4);
+  const PW = 4.2, PH = PW * 0.5625;
+  const slots = [new THREE.Vector3(-7.2, 3.3, -3), new THREE.Vector3(7.2, 3.3, -3), new THREE.Vector3(-7.2, -3.3, -3), new THREE.Vector3(7.2, -3.3, -3)];
+  const bezel = new THREE.MeshPhysicalMaterial({ color: '#1a1c21', metalness: 0.7, roughness: 0.35, clearcoat: 0.4 });
+  const panels = projects.map((pj, k) => {
+    const at = slots[k];
+    const group = new THREE.Group();
+    group.position.copy(at);
+    group.rotation.y = -Math.sign(at.x) * 0.22; // turned a little in, towards the chip
+    scene.add(group);
+    const frame = new THREE.Mesh(new RoundedBoxGeometry(PW + 0.16, PH + 0.16, 0.1, 3, 0.04), bezel);
+    frame.position.z = -0.06;
+    frame.castShadow = true;
+    group.add(frame);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: screenTexture(pj.name, pj.about, k) as THREE.Texture }, uOn: { value: 0 }, uTime, uFocus: { value: 0 } },
+      vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D map; uniform float uOn, uTime, uFocus; varying vec2 vUv;
+        float h(float n) { return fract(sin(mod(n, 97.0) * 91.3) * 47453.5); }
+        void main(){
+          // powering on: a line opens across the middle, then the picture, flickering until it holds
+          float band = abs(vUv.y - 0.5) * 2.0;
+          float open = step(band, uOn * 1.15 - 0.1);
+          float flick = mix(0.55 + 0.45 * h(floor(uTime * 24.0)), 1.0, smoothstep(0.75, 1.0, uOn));
+          vec3 c = texture2D(map, vUv).rgb;
+          c *= 0.9 + 0.1 * sin(vUv.y * 600.0);                     // scanlines
+          float line = (1.0 - smoothstep(0.0, 0.03, band)) * step(0.02, uOn) * (1.0 - uOn);
+          c = c * open * flick + vec3(0.3, 0.8, 1.0) * line * 2.0;
+          c *= 0.8 + uFocus * 0.35;
+          gl_FragColor = vec4(c, 1.0);
+        }`,
+    });
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat);
+    screen.position.z = 0.002;
+    group.add(screen);
+    // a poster, if the project has one, replaces the mock
+    if (pj.poster) new THREE.TextureLoader().load(pj.poster, (t) => ((t.colorSpace = THREE.SRGBColorSpace), (mat.uniforms.map.value = t)));
+    return { group, mat };
   });
-  const titaniumLight = new THREE.MeshPhysicalMaterial({ color: '#8b9098', metalness: 1, roughness: 0.28 });
-  const dark = new THREE.MeshPhysicalMaterial({ color: '#0c0f15', metalness: 0.7, roughness: 0.35 });
 
-  // the plate: a disc with the reactor's well cut from it, bevelled; a bright lip round the well
-  layer(ring(1.25, 0.8), 0.36, 0, titanium, 0.06);
-  // engraved panel seams across the plate, the way the nano suit's plates meet
-  for (let k = 0; k < 8; k++) {
-    const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.42 * R, 0.025, 0.02), dark);
-    seam.position.set(Math.cos(a) * 1.03 * R, Math.sin(a) * 1.03 * R, 0.415);
-    seam.rotation.z = a;
-    face.add(seam);
-  }
-  layer(ring(1.03, 1.015), 0.012, 0.41, dark); // and one round it
-  layer(ring(0.81, 0.775), 0.46, 0, titaniumLight);
-  // behind the light, the back of the well
-  layer(toShape(ringAt(0.8)), 0.06, 0, dark);
-
-  // the light: a bright ring, a softer fill, an inner outline and the core
-  const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.9, 1.0), toneMapped: false });
-  // the fill between the rings is deep, brightening out towards the ring and in towards the core
-  const fillTex = (() => {
-    const S = 256, c = document.createElement('canvas');
-    c.width = c.height = S;
-    const g = c.getContext('2d')!;
-    const grd = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-    grd.addColorStop(0.0, '#9fe6ff');
-    grd.addColorStop(0.42, '#1d5f9a');
-    grd.addColorStop(0.62, '#0b2a52');
-    grd.addColorStop(0.86, '#2c86c8');
-    grd.addColorStop(1.0, '#bff1ff');
-    g.fillStyle = grd;
-    g.fillRect(0, 0, S, S);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.repeat.set(1 / (2 * R * 0.7), 1 / (2 * R * 0.7)); // extrude UVs are shape units: fit the fill
-    t.offset.set(0.5, 0.5);
-    return t;
-  })();
-  const fillMat = new THREE.MeshBasicMaterial({ map: fillTex, color: new THREE.Color(1, 1, 1), toneMapped: false });
-  const coreMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.7, 0.95, 1.0), toneMapped: false });
-  layer(ring(0.775, 0.66), 0.02, 0.1, ringMat);
-  layer(ring(0.66, 0.34), 0.02, 0.095, fillMat);
-  layer(ring(0.36, 0.31), 0.02, 0.1, ringMat);
-  layer(toShape(ringAt(0.31)), 0.02, 0.095, coreMat);
-
-  // the rings' light, drawn as neon: a soft cyan spill round each, a white-hot line down its middle
-  const neonTex = (() => {
-    const S = 1024, c = document.createElement('canvas');
-    c.width = c.height = S;
-    const g = c.getContext('2d')!;
-    const path = (sc: number) => {
-      g.beginPath();
-      ringAt(sc).forEach((p, i) => {
-        const x = (p.x / (2 * R) + 0.5) * S, y = (0.5 - p.y / (2 * R)) * S;
-        if (i) g.lineTo(x, y);
-        else g.moveTo(x, y);
+  /* ================= the traces: a bus of four from the chip's pins to each screen ================= */
+  const traces: { mat: THREE.ShaderMaterial; delay: number }[] = [];
+  {
+    const traceMat = (len: number, violet: boolean) =>
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        uniforms: { uTime, uReveal: { value: 0 }, uLen: { value: len }, uHue: { value: violet ? 1 : 0 } },
+        vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: /* glsl */ `
+          uniform float uTime, uReveal, uLen, uHue; varying vec2 vUv;
+          void main(){
+            float s = vUv.x;
+            if (s > uReveal) discard;
+            // the signal's leading edge, then data running along it for good
+            float lead = exp(-(uReveal - s) * uLen * 2.0) * step(uReveal, 0.999);
+            float data = pow(fract(s * uLen / 1.4 - uTime * 1.1), 10.0);
+            vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.72, 0.4, 1.0), uHue);
+            gl_FragColor = vec4(c * (0.5 + data * 2.2 + lead * 2.6), 1.0);
+          }`,
       });
-      g.closePath();
-    };
-    const u = S / (2 * R); // pixels per unit
-    for (const [sc, w] of [[0.718, 0.115 * R], [0.5, 0.018 * R], [0.42, 0.012 * R], [0.335, 0.05 * R]] as const) {
-      g.lineJoin = 'round';
-      for (const [blur, alpha, width] of [[70, 0.5, 2.2], [28, 0.8, 1.2], [8, 1, 0.8]] as const) {
-        g.shadowColor = `rgba(80,200,255,${alpha})`;
-        g.shadowBlur = blur;
-        g.strokeStyle = `rgba(90,205,255,${alpha})`;
-        g.lineWidth = w * u * width;
-        path(sc);
-        g.stroke();
+    projects.forEach((_, k) => {
+      const at = slots[k];
+      const sx = Math.sign(at.x), sy = Math.sign(at.y);
+      for (let j = 0; j < 4; j++) {
+        // four pins on the side facing the screen, in the half nearest it; a foot's world y is −(its place along the side)
+        const pinIndex = sy > 0 ? 1 + j * 2 : N_PIN - 2 - j * 2;
+        const along = (pinIndex - (N_PIN - 1) / 2) * PITCH;
+        const tip = new THREE.Vector3(sx * (BODY / 2 + 0.3), -along, -0.2);
+        const xa = sx * (2.0 + j * 0.16); // the bus fans out, each line its own lane
+        const yb = at.y - sy * 0.45 - (j - 1.5) * 0.22 * sy;
+        // out along the chip's plane, then back to the screen's depth, then in to its side from behind
+        const zb = at.z - 0.25;
+        const edge = new THREE.Vector3(at.x - sx * (PW / 2) * Math.cos(0.22), yb, zb);
+        const pts = [tip, new THREE.Vector3(xa, tip.y, -0.2), new THREE.Vector3(xa, yb, -0.2), new THREE.Vector3(xa, yb, zb), edge];
+        const path = new THREE.CurvePath<THREE.Vector3>();
+        for (let i = 0; i < pts.length - 1; i++) path.add(new THREE.LineCurve3(pts[i], pts[i + 1]));
+        const len = path.getLength();
+        const mat = traceMat(len, (k + j) % 3 === 0);
+        scene.add(new THREE.Mesh(new THREE.TubeGeometry(path as unknown as THREE.Curve<THREE.Vector3>, Math.ceil(len * 14), 0.022, 6, false), mat));
+        traces.push({ mat, delay: k * 0.07 + j * 0.02 });
       }
-      g.shadowBlur = 0;
-      g.strokeStyle = 'rgba(235,252,255,1)';
-      g.lineWidth = w * u * 0.35;
-      path(sc);
-      g.stroke();
-    }
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  })();
-  const neonMat = new THREE.MeshBasicMaterial({ map: neonTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const neon = new THREE.Mesh(new THREE.PlaneGeometry(2 * R, 2 * R), neonMat);
-  neon.rotation.x = -Math.PI / 2;
-  neon.position.y = 0.125;
-  chip.add(neon);
-
-  // the ring is cut into segments: thin dark gaps across it, flush with the light
-  for (let k = 0; k < 24; k++) {
-    const a = (k / 24) * Math.PI * 2;
-    const cut = new THREE.Mesh(new THREE.BoxGeometry(0.13 * R, 0.022, 0.03), dark);
-    cut.position.set(Math.cos(a) * 0.718 * R, Math.sin(a) * 0.718 * R, 0.135);
-    cut.rotation.z = a;
-    face.add(cut);
-  }
-  // and finer ticks round the core, like a lens barrel
-  for (let k = 0; k < 60; k++) {
-    const a = (k / 60) * Math.PI * 2;
-    const tick = new THREE.Mesh(new THREE.BoxGeometry((k % 5 ? 0.03 : 0.06) * R, 0.008, 0.02), titaniumLight);
-    tick.position.set(Math.cos(a) * 0.59 * R, Math.sin(a) * 0.59 * R, 0.13);
-    tick.rotation.z = a;
-    face.add(tick);
-  }
-
-  // the glass over it all: a thin heart, clear, catching the room
-  layer(toShape(ringAt(0.8)), 0.02, 0.33, new THREE.MeshPhysicalMaterial({
-    color: '#cfefff', roughness: 0.03, metalness: 0, transparent: true, opacity: 0.12, clearcoat: 1, clearcoatRoughness: 0.02, depthWrite: false,
-  }));
-
-  // a soft halo of its light round it
-  const haloTex = (() => {
-    const S = 256, c = document.createElement('canvas');
-    c.width = c.height = S;
-    const g = c.getContext('2d')!;
-    const grd = g.createRadialGradient(S / 2, S / 2, S * 0.1, S / 2, S / 2, S / 2);
-    grd.addColorStop(0, 'rgba(255,255,255,1)');
-    grd.addColorStop(0.45, 'rgba(255,255,255,0.35)');
-    grd.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grd;
-    g.fillRect(0, 0, S, S);
-    return new THREE.CanvasTexture(c);
-  })();
-  const haloMat = new THREE.MeshBasicMaterial({ map: haloTex, color: new THREE.Color(0.2, 0.55, 1.0), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 8.5), haloMat);
-  halo.rotation.x = -Math.PI / 2;
-  halo.position.y = -0.36; // behind the housing: it glows out round the edges, not over the face
-  chip.add(halo);
-
-  // the mark in the core: his heart, beating
-  const heartTex = new THREE.TextureLoader().load('/heart.png');
-  heartTex.colorSpace = THREE.SRGBColorSpace;
-  const heartMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color(0.95, 0.8, 1.15), transparent: true, depthWrite: false, toneMapped: false });
-  const heart = new THREE.Mesh(new THREE.PlaneGeometry(1.35, 1.35), heartMat);
-  heart.position.set(0, 0.125, 0.05);
-  heart.rotation.x = -Math.PI / 2;
-  chip.add(heart);
-  const heartGlowMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color('#b46bff'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), heartGlowMat);
-  heartGlow.position.set(0, 0.13, 0.05);
-  heartGlow.rotation.x = -Math.PI / 2;
-  chip.add(heartGlow);
-
-  /* ================= him: the nerves and the particles ================= */
-  let figure: THREE.Group | null = null;
-  let maxL = 1;
-  const center = new THREE.Vector3(0, -2.5, 0);
-  let height = 9;
-  if (mascot) {
-    const full = mascot.full.array as Float32Array;
-    // where his heart is in his own frame: the landing puts it here (engine.ts)
-    const neutral = mascot.neutral.array as Float32Array;
-    const hy = mascot.pivot.y - 1.85, hx = 1.0;
-    let hz = 0;
-    for (let i = 0; i < neutral.length; i += 3) if (Math.abs(neutral[i + 1] - hy) < 0.2 && Math.abs(neutral[i] - hx) < 0.2) hz = Math.max(hz, neutral[i + 2]);
-    const H = new THREE.Vector3(hx, hy, hz - 0.15); // just inside his chest
-    figure = new THREE.Group();
-    figure.position.copy(H).negate();
-    scene.add(figure);
-    const count = full.length / 3;
-    const box = new THREE.Box3().setFromBufferAttribute(mascot.full);
-    box.getCenter(center).sub(H);
-    height = box.max.y - box.min.y;
-
-    // the nerves: a tree grown out from the heart through a sample of his points, each joining
-    // the nearest one already reached, so the branches follow his body out to the fingertips
-    const N = 2200;
-    const nodes = new Float32Array((N + 1) * 3);
-    nodes.set([H.x, H.y, H.z], 0);
-    const rand = rng(21);
-    for (let k = 1; k <= N; k++) {
-      const i = Math.floor(rand() * count);
-      nodes[k * 3] = full[i * 3];
-      nodes[k * 3 + 1] = full[i * 3 + 1];
-      nodes[k * 3 + 2] = full[i * 3 + 2];
-    }
-    const d0 = (k: number) => Math.hypot(nodes[k * 3] - H.x, nodes[k * 3 + 1] - H.y, nodes[k * 3 + 2] - H.z);
-    const order = Array.from({ length: N }, (_, k) => k + 1).sort((a, b) => d0(a) - d0(b));
-    const L = new Float32Array(N + 1);
-    const parent = new Int32Array(N + 1).fill(-1);
-    const reached = [0];
-    for (const k of order) {
-      let best = 0, bd = Infinity;
-      const x = nodes[k * 3], y = nodes[k * 3 + 1], z = nodes[k * 3 + 2];
-      for (const j of reached) {
-        const dx = nodes[j * 3] - x, dy = nodes[j * 3 + 1] - y, dz = nodes[j * 3 + 2] - z;
-        // a slight pull towards joining nearer the heart, so trunks form rather than a web
-        const d = Math.hypot(dx, dy, dz) + L[j] * 0.04;
-        if (d < bd) {
-          bd = d;
-          best = j;
-        }
-      }
-      parent[k] = best;
-      L[k] = L[best] + Math.hypot(nodes[best * 3] - x, nodes[best * 3 + 1] - y, nodes[best * 3 + 2] - z);
-      reached.push(k);
-    }
-    maxL = Math.max(...L);
-    const lp: number[] = [], ll: number[] = [];
-    for (let k = 1; k <= N; k++) {
-      const j = parent[k];
-      lp.push(nodes[j * 3], nodes[j * 3 + 1], nodes[j * 3 + 2], nodes[k * 3], nodes[k * 3 + 1], nodes[k * 3 + 2]);
-      ll.push(L[j], L[k]);
-    }
-    const nerveGeo = new THREE.BufferGeometry();
-    nerveGeo.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
-    nerveGeo.setAttribute('aL', new THREE.Float32BufferAttribute(ll, 1));
-    const nerves = new THREE.LineSegments(nerveGeo, new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      uniforms: { uTime, uFront, uBuilt },
-      vertexShader: /* glsl */ `attribute float aL; varying float vL; void main(){ vL = aL; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: /* glsl */ `
-        uniform float uTime, uFront, uBuilt; varying float vL;
-        ${BEAT_GLSL}
-        void main(){
-          if (vL > uFront) discard;
-          // the build's leading edge burns bright; behind it the nerve settles to a faint glow
-          float lead = exp(-(uFront - vL) * 3.0) * (1.0 - uBuilt);
-          // every heartbeat sends a pulse out along the nerves
-          float beat = beatAt(fract(uTime - vL / 5.0)) * uBuilt;
-          vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.72, 0.4, 1.0), smoothstep(0.0, 6.0, vL));
-          // every trunk starts at the heart: fade them there, or they pile up into one white blot
-          float root = smoothstep(0.15, 1.6, vL);
-          float a = (0.07 + lead * 0.9 + beat * 0.45) * root;
-          gl_FragColor = vec4(c * (1.0 + lead * 1.2 + beat * 1.0), a);
-        }`,
-    }));
-    figure.add(nerves);
-
-    // each particle of him lights when its nerve gets there: the reach of its nearest node
-    const cell = 0.45;
-    const grid = new Map<string, number[]>();
-    const keyOf = (x: number, y: number, z: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
-    for (let k = 0; k <= N; k++) {
-      const kk = keyOf(nodes[k * 3], nodes[k * 3 + 1], nodes[k * 3 + 2]);
-      (grid.get(kk) ?? grid.set(kk, []).get(kk)!).push(k);
-    }
-    const reach = new Float32Array(count);
-    const seed = new Float32Array(count);
-    const ratio = maxL / Math.max(...order.map(d0));
-    for (let i = 0; i < count; i++) {
-      const x = full[i * 3], y = full[i * 3 + 1], z = full[i * 3 + 2];
-      const cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell);
-      let best = -1, bd = Infinity;
-      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
-        const list = grid.get(`${cx + a},${cy + b},${cz + c}`);
-        if (!list) continue;
-        for (const k of list) {
-          const d = Math.hypot(nodes[k * 3] - x, nodes[k * 3 + 1] - y, nodes[k * 3 + 2] - z);
-          if (d < bd) {
-            bd = d;
-            best = k;
-          }
-        }
-      }
-      reach[i] = best >= 0 ? L[best] + bd : Math.hypot(x - H.x, y - H.y, z - H.z) * ratio;
-      seed[i] = rand();
-    }
-    const bodyGeo = new THREE.BufferGeometry();
-    bodyGeo.setAttribute('position', new THREE.BufferAttribute(full, 3));
-    bodyGeo.setAttribute('aReach', new THREE.BufferAttribute(reach, 1));
-    bodyGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-    const body = new THREE.Points(bodyGeo, new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      uniforms: { uTime, uFront, uBuilt, uViewH, uHeart: { value: H } },
-      vertexShader: /* glsl */ `
-        attribute float aReach, aSeed; uniform float uTime, uFront, uBuilt, uViewH; uniform vec3 uHeart;
-        varying float vOn; varying float vFlash; varying float vSeed; varying float vBeat;
-        ${BEAT_GLSL}
-        void main(){
-          float since = uFront - aReach;
-          vOn = step(0.0, since);
-          vFlash = exp(-max(since, 0.0) * 5.0) * vOn * (1.0 - uBuilt);
-          vSeed = aSeed;
-          vBeat = beatAt(fract(uTime - aReach / 5.0)) * uBuilt;
-          // they pop into place: a little outward of where they land, settling as they arrive
-          vec3 p = position + normalize(position - uHeart + 1e-4) * 0.25 * vFlash;
-          vec4 mv = modelViewMatrix * vec4(p, 1.0);
-          gl_Position = projectionMatrix * mv;
-          gl_PointSize = vOn * (0.028 + vFlash * 0.02) * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z;
-        }`,
-      fragmentShader: /* glsl */ `
-        varying float vOn; varying float vFlash; varying float vSeed; varying float vBeat;
-        void main(){
-          if (vOn < 0.5) discard;
-          float d = length(gl_PointCoord - 0.5);
-          float a = smoothstep(0.5, 0.1, d);
-          // his own violets (the landing's), a cyan flash where the signal has just arrived
-          vec3 base = mix(vec3(0.79, 0.72, 1.0), vec3(0.44, 0.3, 1.0), vSeed);
-          vec3 c = mix(base, vec3(0.5, 0.95, 1.0), vFlash * 0.8) * (0.9 + vFlash * 0.5 + vBeat * 0.5);
-          gl_FragColor = vec4(c, a * (0.75 + vFlash * 0.25));
-        }`,
-    }));
-    figure.add(body);
-
-    // a dark mirror floor under his feet, catching him and the heart
-    const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(14, 64),
-      new THREE.MeshPhysicalMaterial({ color: '#07080d', roughness: 0.28, metalness: 0.6, clearcoat: 1, clearcoatRoughness: 0.2 }),
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = box.min.y - 0.02;
-    floor.receiveShadow = true;
-    figure.add(floor);
+    });
   }
 
   // dust in the light
   const dust = (() => {
     const n = 700, p: number[] = [];
     const r2 = rng(5);
-    for (let i = 0; i < n; i++) p.push((r2() - 0.5) * 18, center.y + (r2() - 0.5) * height * 1.2, (r2() - 0.5) * 12);
+    for (let i = 0; i < n; i++) p.push((r2() - 0.5) * 24, (r2() - 0.5) * 14, (r2() - 0.5) * 12 - 2);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
-    return new THREE.Points(geo, new THREE.PointsMaterial({ color: '#9aa6c8', size: 0.02, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    return new THREE.Points(geo, new THREE.PointsMaterial({ color: '#9aa6c8', size: 0.025, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
   })();
   scene.add(dust);
 
   /* ================= light ================= */
-  const key = new THREE.DirectionalLight('#fff4e8', 1.4);
-  key.position.set(2.5, 4, 5);
+  const key = new THREE.DirectionalLight('#fff4e8', 1.6);
+  key.position.set(3, 4, 6);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.left = key.shadow.camera.bottom = -2;
-  key.shadow.camera.right = key.shadow.camera.top = 2;
+  key.shadow.camera.left = key.shadow.camera.bottom = -2.5;
+  key.shadow.camera.right = key.shadow.camera.top = 2.5;
   key.shadow.bias = -0.0004;
   scene.add(key);
-  const rimC = new THREE.PointLight('#35d8ff', 3, 12, 1.6);
-  rimC.position.set(-3, 1.5, -3.5); // behind: a rim, never a glint straight back at the camera
-  const rimV = new THREE.PointLight('#a310e7', 4, 12, 1.6);
-  rimV.position.set(3, -1, -3);
+  const rimC = new THREE.PointLight('#35d8ff', 3, 14, 1.6);
+  rimC.position.set(-3, 2, -3.5);
+  const rimV = new THREE.PointLight('#a310e7', 3, 14, 1.6);
+  rimV.position.set(3, -1.5, -3.5);
   scene.add(rimC, rimV);
 
   /* ================= its own buffers and bloom ================= */
@@ -465,42 +346,32 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
   composer.setPixelRatio(pixelRatio);
   composer.setSize(innerWidth, innerHeight);
   composer.addPass(new RenderPass(scene, camera));
-  // no single glint may outshine the heart: a pinpoint specular off a metal edge is thousands of
-  // times brighter than anything else, and the bloom would smear it into a halo across the screen
+  // no single glint may outshine the rest: a pinpoint specular would bloom into a halo
   composer.addPass(new ShaderPass({
     uniforms: { tDiffuse: { value: null } },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `uniform sampler2D tDiffuse; varying vec2 vUv;
       void main(){ vec4 c = texture2D(tDiffuse, vUv); float m = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c.rgb * min(1.0, 3.0 / max(m, 1e-4)), c.a); }`,
   }));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.12, 1.6);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.2, 1.4);
   composer.addPass(bloom);
 
-  /* ================= the camera: the chip close, pulling back as he's built round it ================= */
-  const C = center;
-  const far = height * 1.95;
-  const keys = {
-    pos: [
-      new THREE.Vector3(0.7, 0.45, 5.2),
-      new THREE.Vector3(1.6, 0.9, 8.0),
-      new THREE.Vector3(C.x + 3.5, C.y + 2.2, far * 0.62),
-      new THREE.Vector3(C.x + 0.5, C.y + 0.6, far),
-      new THREE.Vector3(C.x - 4.5, C.y - 0.2, far * 0.95),
-    ],
-    look: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.3, -0.3, 0), new THREE.Vector3(C.x, C.y + 1.5, 0), new THREE.Vector3(C.x, C.y, 0), new THREE.Vector3(C.x, C.y + 0.4, 0)],
-  };
-  const posC = new THREE.CatmullRomCurve3(keys.pos, false, 'centripetal');
-  const lookC = new THREE.CatmullRomCurve3(keys.look, false, 'centripetal');
+  /* ================= the camera: a pose per stop ================= */
+  const poses = [
+    { pos: new THREE.Vector3(0.9, 0.6, 5.2), look: new THREE.Vector3(0, 0, 0) },
+    { pos: new THREE.Vector3(0, 0.4, 22), look: new THREE.Vector3(0, 0, -1.5) },
+    // each screen framed right of centre, a little low, clear of the copy on the left
+    ...slots.map((s) => ({ pos: new THREE.Vector3(s.x * 0.8 - 2.2, s.y * 0.85 + 0.3, s.z + 10.5), look: new THREE.Vector3(s.x - 2.5, s.y + 0.55, s.z) })),
+  ];
   const pos = new THREE.Vector3(), look = new THREE.Vector3(), tgtPos = new THREE.Vector3(), tgtLook = new THREE.Vector3();
   let first = true;
 
   const resize = () => {
     camera.aspect = innerWidth / innerHeight;
-    camera.fov = camera.aspect < 1 ? 52 : 32; // a phone needs the wider lens
+    camera.fov = camera.aspect < 1 ? 58 : 32; // a phone needs the wider lens
     camera.updateProjectionMatrix();
     composer.setSize(innerWidth, innerHeight);
     bloom.setSize(innerWidth, innerHeight);
-    uViewH.value = innerHeight * pixelRatio;
   };
   resize();
 
@@ -508,7 +379,8 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
     const x = Math.min(1, Math.max(0, (t - a) / (b - a)));
     return x * x * (3 - 2 * x);
   };
-  let build = 0;
+  let wired = 0;
+  const corner = new THREE.Vector3();
 
   return {
     scene,
@@ -518,10 +390,15 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
     render(dt: number, time: number, p: number, px: number, py: number) {
       uTime.value = time;
       const q = Math.min(1, Math.max(0, p));
-      posC.getPointAt(q, tgtPos);
-      lookC.getPointAt(q, tgtLook);
-      const reach = tgtPos.length() * 0.06; // the cursor leans the view more the further out we are
-      tgtPos.x += Math.sin(time * 0.15) * reach * 0.5 + px * (0.2 + reach);
+      // which two stops we're between, eased so the camera holds at each
+      let i = 0;
+      while (i < AI_STOPS.length - 1 && q > AI_STOPS[i + 1]) i++;
+      const j = Math.min(AI_STOPS.length - 1, i + 1);
+      const f = j === i ? 0 : smooth(0.25, 0.75, (q - AI_STOPS[i]) / (AI_STOPS[j] - AI_STOPS[i]));
+      tgtPos.lerpVectors(poses[i].pos, poses[j].pos, f);
+      tgtLook.lerpVectors(poses[i].look, poses[j].look, f);
+      const reach = tgtPos.length() * 0.05;
+      tgtPos.x += Math.sin(time * 0.15) * reach * 0.4 + px * (0.2 + reach);
       tgtPos.y += py * (0.1 + reach * 0.5);
       const k = first ? 1 : 1 - Math.exp(-3.2 * dt);
       first = false;
@@ -530,30 +407,43 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number,
       camera.position.copy(pos);
       camera.lookAt(look);
 
-      // the build follows the scroll, eased so the signals travel rather than jump
-      const want = smooth(0.1, 0.72, q);
-      build += (want - build) * (1 - Math.exp(-2.5 * dt));
-      uFront.value = build * maxL * 1.04;
-      uBuilt.value = smooth(0.92, 1.0, build);
+      // wiring it in: the traces run out from the pins, then each screen powers on
+      const want = smooth(0.04, 0.17, q);
+      wired += (want - wired) * (1 - Math.exp(-2.2 * dt));
+      traces.forEach((t) => (t.mat.uniforms.uReveal.value = Math.min(1, Math.max(0, (wired - t.delay) / 0.62))));
+      const focus = f < 0.5 ? i - 2 : j - 2; // the screen being visited, if any
+      panels.forEach((pn, k2) => {
+        pn.mat.uniforms.uOn.value = Math.min(1, Math.max(0, (wired - 0.7 - k2 * 0.04) / 0.12)); // the last is on by wired = 0.94
+        pn.mat.uniforms.uFocus.value += ((k2 === focus ? 1 : 0) - pn.mat.uniforms.uFocus.value) * Math.min(1, dt * 4);
+      });
 
-      // the chip floats, turning to show itself, until he's round it; then it's his heart, still
-      const free = 1 - smooth(0.0, 0.35, build);
-      // in his chest it's a compact heart, not the showpiece it was floating on its own
-      chipRoot.scale.setScalar(1 - 0.58 * smooth(0.08, 0.5, build));
+      // the chip floats and turns on its own, then holds still once it's wired in
+      const free = 1 - smooth(0.0, 0.25, wired);
       chipRoot.position.set(0, Math.sin(time * 0.9) * 0.06 * free, 0);
-      chipRoot.rotation.set(Math.sin(time * 0.5) * 0.35 * free - 0.25 * free, Math.sin(time * 0.37) * 0.5 * free + 0.35 * free, Math.sin(time * 0.29) * 0.08 * free);
-      // it beats: the mark, its glow, and the light it throws
+      chipRoot.rotation.set(Math.sin(time * 0.5) * 0.35 * free - 0.3 * free, Math.sin(time * 0.37) * 0.5 * free + 0.4 * free, Math.sin(time * 0.29) * 0.08 * free);
       const bt = beatAt(time % 1);
-      heartMat.color.setRGB(0.85, 0.6, 1.2).multiplyScalar(1.4 + bt * 1.0);
-      heartGlowMat.opacity = 0.15 + bt * 0.35;
-      heartGlow.scale.setScalar(1 + bt * 0.12);
-      // the reactor's light swells with each beat and the coils catch it
-      ringMat.color.setRGB(0.35, 0.82, 1.0).multiplyScalar(1.2 + bt * 0.4);
-      neonMat.color.setScalar(1.1 + bt * 0.9);
-      fillMat.color.setScalar(0.55 + bt * 0.3);
-      coreMat.color.setRGB(0.1, 0.35, 0.6).multiplyScalar(0.8 + bt * 0.5);
-      haloMat.opacity = 0.3 + bt * 0.25;
+      markMat.color.setRGB(0.85, 0.6, 1.2).multiplyScalar(1.3 + bt * 1.0);
+      markGlowMat.opacity = 0.2 + bt * 0.4;
       dust.rotation.y = time * 0.01;
+
+      // the screen being visited: where it is on screen, for its click target
+      const out = signals.aiPanel;
+      out.on = focus >= 0 && focus < panels.length && Math.abs(f - 0.5) > 0.35 && panels[focus].mat.uniforms.uOn.value > 0.95;
+      out.index = focus;
+      if (out.on) {
+        const g = panels[focus].group;
+        g.updateMatrixWorld();
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          corner.set((cx * PW) / 2, (cy * PH) / 2, 0).applyMatrix4(g.matrixWorld).project(camera);
+          const sx = (corner.x * 0.5 + 0.5) * innerWidth, sy = (-corner.y * 0.5 + 0.5) * innerHeight;
+          x0 = Math.min(x0, sx);
+          x1 = Math.max(x1, sx);
+          y0 = Math.min(y0, sy);
+          y1 = Math.max(y1, sy);
+        }
+        Object.assign(out, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+      }
 
       composer.render(dt);
       return composer.readBuffer.texture;

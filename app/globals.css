@@ -1453,3 +1453,18 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 @media (prefers-reduced-motion: reduce) {
   .ai-shifting .nav, .ai-shifting .sol-copy, .ai-shifting .rail { transform: none; clip-path: none; filter: none; }
 }
+/* the project screen the AI world's camera is at: clickable, with a label that shows on hover */
+.ai-screen-hit {
+  position: fixed; left: 0; top: 0; z-index: 7; visibility: hidden; transform-origin: 0 0;
+  background: transparent; border: 1px solid transparent; border-radius: 4px; cursor: pointer; pointer-events: auto;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.ai-screen-hit span {
+  position: absolute; right: 12px; bottom: 12px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #041016; background: #3cf0ff; padding: 7px 10px; border-radius: 3px;
+  opacity: 0; transform: translateY(6px); transition: opacity 0.3s, transform 0.3s;
+}
+.ai-screen-hit:hover, .ai-screen-hit:focus-visible { border-color: rgba(60, 240, 255, 0.6); box-shadow: 0 0 40px rgba(60, 240, 255, 0.25); }
+.ai-screen-hit:hover span, .ai-screen-hit:focus-visible span { opacity: 1; transform: none; }
+/* at a project's screen the log steps aside so the screen has the right of the frame */
+.ai[data-project] .ai-term, .ai[data-project] .ai-metrics { opacity: 0; transform: translateY(-10px); }
