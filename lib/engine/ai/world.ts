@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TECH_PROJECTS } from '@/content/techProjects';
 import { signals } from '@/lib/signals';
 
@@ -16,9 +17,9 @@ import { signals } from '@/lib/signals';
    own in the dark: a black LQFP package, gull-wing leads down
    every side, laser marking on the epoxy and the Dizrupt mark
    glowing in it, beating. Then the scroll wires it into the
-   work: buses of traces leave its pins and run out through the
-   dark to the projects, one screen each, and every screen
-   powers on as its signal arrives. The camera visits them in
+   work: from its pins a neural network runs out to each project,
+   layer by layer, and each project's screen is built by it —
+   neurons firing in, linking up, and merging into the picture. The camera visits them in
    turn; a screen can be opened to play its film.
 
    World frame: the chip at the origin, its face towards +z.
@@ -338,26 +339,44 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     frame.castShadow = true;
     group.add(frame);
     const mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: screenTexture(pj.name, pj.about, pj.flow, k) as THREE.Texture }, uOn: { value: 0 }, uTime, uFocus: { value: 0 } },
+      uniforms: {
+        map: { value: screenTexture(pj.name, pj.about, pj.flow, k) as THREE.Texture }, uOn: { value: 0 }, uTime, uFocus: { value: 0 },
+        uSide: { value: at.x < 0 ? 1 : 0 }, // the network plugs into the edge nearest the chip: build from there
+      },
       vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D map; uniform float uOn, uTime, uFocus; varying vec2 vUv;
-        float h(float n) { return fract(sin(mod(n, 97.0) * 91.3) * 47453.5); }
+        uniform sampler2D map; uniform float uOn, uTime, uFocus, uSide; varying vec2 vUv;
+        float h2(vec2 p) { return fract(sin(dot(mod(p, 97.0), vec2(127.1, 311.7))) * 43758.5453); }
         void main(){
-          // powering on: a line opens across the middle, then the picture, flickering until it holds
-          float band = abs(vUv.y - 0.5) * 2.0;
-          float open = step(band, uOn * 1.15 - 0.1);
-          float flick = mix(0.55 + 0.45 * h(floor(uTime * 24.0)), 1.0, smoothstep(0.75, 1.0, uOn));
+          /* built by a neural network: a grid of neurons fires in from the edge the network plugs
+             into, a lattice of connections links them, and then they swell until they merge into
+             the picture */
+          vec2 grid = vec2(32.0, 18.0);
+          vec2 gp = vUv * grid;
+          vec2 id = floor(gp);
+          vec2 f = fract(gp) - 0.5;
+          float order = mix(vUv.x, 1.0 - vUv.x, uSide) * 0.65 + h2(id) * 0.35;
+          float fire = smoothstep(order * 0.55, order * 0.55 + 0.06, uOn);
+          float grow = smoothstep(0.58, 1.0, uOn);
+          float r = mix(0.1, 0.78, grow);
+          float node = 1.0 - smoothstep(r - 0.04, r, max(abs(f.x), abs(f.y)) * (1.0 - grow) + length(f) * grow * 0.9);
+          node = mix(node, 1.0, smoothstep(0.92, 1.0, uOn));
+          // the lattice: each neuron wired to its right and upper neighbours while it builds
+          float lat = (1.0 - smoothstep(0.0, 0.035, abs(f.y))) * step(0.0, f.x) + (1.0 - smoothstep(0.0, 0.035, abs(f.x))) * step(0.0, f.y);
+          lat *= fire * (1.0 - grow);
+          // a signal runs along the lattice as it fires
+          float spark = pow(fract(order * 3.0 - uTime * 1.5), 12.0) * (1.0 - grow);
           vec3 c = texture2D(map, vUv).rgb;
           c *= 0.9 + 0.1 * sin(vUv.y * 600.0);                     // scanlines
-          // a bright line scanning down it, and a faint roll of refresh
           float scan = 1.0 - smoothstep(0.0, 0.012, abs(vUv.y - (1.0 - fract(uTime * 0.25))));
-          c += vec3(0.2, 0.8, 1.0) * scan * 0.25;
+          c += vec3(0.2, 0.8, 1.0) * scan * 0.25 * grow;
           c *= 0.97 + 0.03 * sin(vUv.y * 8.0 - uTime * 3.0);
-          float line = (1.0 - smoothstep(0.0, 0.03, band)) * step(0.02, uOn) * (1.0 - uOn);
-          c = c * open * flick + vec3(0.3, 0.8, 1.0) * line * 2.0;
-          c *= 0.8 + uFocus * 0.35;
-          gl_FragColor = vec4(c, 1.0);
+          vec3 neuron = vec3(0.35, 0.9, 1.0);
+          vec3 outc = c * node * fire * (0.35 + 0.65 * grow)
+                    + neuron * node * fire * (1.0 - grow) * (0.7 + spark * 2.0)
+                    + neuron * lat * (0.3 + spark * 1.5);
+          outc *= 0.8 + uFocus * 0.35;
+          gl_FragColor = vec4(outc, 1.0);
         }`,
     });
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat);
@@ -382,47 +401,95 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     return { group, mat };
   });
 
-  /* ================= the traces: a bus of four from the chip's pins to each screen ================= */
-  const traces: { mat: THREE.ShaderMaterial; delay: number }[] = [];
+  /* ================= the networks: chip → neurons → screen, one per project =================
+     Layers of neurons between the chip and each screen — four at the chip's pins, then five, six,
+     and four along the screen's edge — every one wired to every one in the next layer. The signal
+     fires forward a layer at a time; after that, pulses keep running through the weights. */
+  const nets: { edgeMat: THREE.ShaderMaterial; nodeMat: THREE.ShaderMaterial; delay: number }[] = [];
   {
-    const traceMat = (len: number, violet: boolean) =>
+    const edgeMatFor = () =>
       new THREE.ShaderMaterial({
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        uniforms: { uTime, uReveal: { value: 0 }, uLen: { value: len }, uHue: { value: violet ? 1 : 0 } },
-        vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        uniforms: { uTime, uReveal: { value: 0 } },
+        vertexShader: /* glsl */ `
+          attribute float aLayer; attribute float aSeed; varying float vT; varying float vLayer; varying float vSeed;
+          void main(){ vT = uv.x; vLayer = aLayer; vSeed = aSeed; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: /* glsl */ `
-          uniform float uTime, uReveal, uLen, uHue; varying vec2 vUv;
+          uniform float uTime, uReveal; varying float vT; varying float vLayer; varying float vSeed;
           void main(){
-            float s = vUv.x;
-            if (s > uReveal) discard;
-            // the signal's leading edge, then data running along it for good
-            float lead = exp(-(uReveal - s) * uLen * 2.0) * step(uReveal, 0.999);
-            float data = pow(fract(s * uLen / 1.4 - uTime * 1.1), 10.0);
-            vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.72, 0.4, 1.0), uHue);
-            gl_FragColor = vec4(c * (0.5 + data * 2.2 + lead * 2.6), 1.0);
+            // this layer's connections draw out as the signal crosses it
+            float front = uReveal * 3.0 - vLayer;
+            if (vT > front) discard;
+            float lead = exp(-(front - vT) * 6.0) * step(front, 1.0);
+            float pulse = pow(fract(vT - uTime * (0.5 + vSeed * 0.7) + vSeed * 5.0), 14.0);
+            vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.72, 0.4, 1.0), step(0.62, vSeed));
+            float a = 0.14 + pulse * 1.3 + lead * 1.6;
+            gl_FragColor = vec4(c * a, a);
+          }`,
+      });
+    const nodeMatFor = () =>
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        uniforms: { uTime, uReveal: { value: 0 }, uSize: { value: 0.22 }, uViewH: { value: innerHeight * pixelRatio } },
+        vertexShader: /* glsl */ `
+          attribute float aLayer; uniform float uReveal, uSize, uViewH, uTime; varying float vOn; varying float vFire;
+          void main(){
+            float front = uReveal * 3.0 - aLayer;
+            vOn = step(0.0, front);
+            vFire = exp(-max(front, 0.0) * 4.0) * vOn + 0.25 * (0.5 + 0.5 * sin(uTime * 3.0 + aLayer * 1.7 + position.y));
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mv;
+            gl_PointSize = vOn * uSize * (1.0 + vFire) * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z;
+          }`,
+        fragmentShader: /* glsl */ `
+          varying float vOn; varying float vFire;
+          void main(){
+            if (vOn < 0.5) discard;
+            float d = length(gl_PointCoord - 0.5);
+            float core = smoothstep(0.22, 0.12, d), ring = smoothstep(0.5, 0.3, d) * smoothstep(0.26, 0.34, d);
+            vec3 c = vec3(0.45, 0.92, 1.0);
+            gl_FragColor = vec4(c * (core * (1.2 + vFire * 2.0) + ring * 0.6), max(core, ring * 0.7));
           }`,
       });
     projects.forEach((_, k) => {
       const at = slots[k];
       const sx = Math.sign(at.x), sy = Math.sign(at.y);
-      for (let j = 0; j < 4; j++) {
-        // four pins on the side facing the screen, in the half nearest it; a foot's world y is −(its place along the side)
-        const pinIndex = sy > 0 ? 1 + j * 2 : N_PIN - 2 - j * 2;
-        const along = (pinIndex - (N_PIN - 1) / 2) * PITCH;
-        const tip = new THREE.Vector3(sx * (BODY / 2 + 0.3), -along, -0.2);
-        const xa = sx * (2.0 + j * 0.16); // the bus fans out, each line its own lane
-        const yb = at.y - sy * 0.45 - (j - 1.5) * 0.22 * sy;
-        // out along the chip's plane, then back to the screen's depth, then in to its side from behind
-        const zb = at.z - 0.25;
-        const edge = new THREE.Vector3(at.x - sx * (PW / 2) * Math.cos(0.22), yb, zb);
-        const pts = [tip, new THREE.Vector3(xa, tip.y, -0.2), new THREE.Vector3(xa, yb, -0.2), new THREE.Vector3(xa, yb, zb), edge];
-        const path = new THREE.CurvePath<THREE.Vector3>();
-        for (let i = 0; i < pts.length - 1; i++) path.add(new THREE.LineCurve3(pts[i], pts[i + 1]));
-        const len = path.getLength();
-        const mat = traceMat(len, (k + j) % 3 === 0);
-        scene.add(new THREE.Mesh(new THREE.TubeGeometry(path as unknown as THREE.Curve<THREE.Vector3>, Math.ceil(len * 14), 0.022, 6, false), mat));
-        traces.push({ mat, delay: k * 0.07 + j * 0.02 });
-      }
+      const layers: THREE.Vector3[][] = [];
+      // the input layer: four of the chip's pins on the side facing the screen
+      layers.push(
+        Array.from({ length: 4 }, (_, j) => {
+          const pinIndex = sy > 0 ? 1 + j * 2 : N_PIN - 2 - j * 2;
+          return new THREE.Vector3(sx * (BODY / 2 + 0.3), -(pinIndex - (N_PIN - 1) / 2) * PITCH, -0.2);
+        }),
+      );
+      // hidden layers, stepping out towards the screen
+      const hidden = (n: number, f: number, spread: number, z: number) =>
+        Array.from({ length: n }, (_, j) => new THREE.Vector3(sx * (1.6 + f * (Math.abs(at.x) - 1.6 - PW / 2)), at.y * f + (j - (n - 1) / 2) * spread, z));
+      layers.push(hidden(5, 0.33, 0.55, -0.9), hidden(6, 0.66, 0.5, -1.9));
+      // the output layer: along the screen's near edge
+      const ex = at.x - sx * (PW / 2) * Math.cos(0.22);
+      layers.push(Array.from({ length: 4 }, (_, j) => new THREE.Vector3(ex, at.y + (j - 1.5) * (PH / 4.5), at.z - 0.05)));
+
+      const geos: THREE.BufferGeometry[] = [];
+      const rand = rng(90 + k);
+      for (let l = 0; l < layers.length - 1; l++)
+        for (const a of layers[l])
+          for (const b of layers[l + 1]) {
+            const g = new THREE.TubeGeometry(new THREE.LineCurve3(a, b), 8, 0.012, 5, false);
+            const n = g.attributes.position.count, seed = rand();
+            g.setAttribute('aLayer', new THREE.Float32BufferAttribute(new Array(n).fill(l), 1));
+            g.setAttribute('aSeed', new THREE.Float32BufferAttribute(new Array(n).fill(seed), 1));
+            geos.push(g);
+          }
+      const edgeMat = edgeMatFor();
+      scene.add(new THREE.Mesh(mergeGeometries(geos), edgeMat));
+      geos.forEach((g) => g.dispose());
+      const nodeGeo = new THREE.BufferGeometry();
+      nodeGeo.setAttribute('position', new THREE.Float32BufferAttribute(layers.flat().flatMap((v) => [v.x, v.y, v.z]), 3));
+      nodeGeo.setAttribute('aLayer', new THREE.Float32BufferAttribute(layers.flatMap((ly, l) => ly.map(() => l)), 1));
+      const nodeMat = nodeMatFor();
+      scene.add(new THREE.Points(nodeGeo, nodeMat));
+      nets.push({ edgeMat, nodeMat, delay: k * 0.06 });
     });
   }
 
@@ -485,6 +552,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     camera.updateProjectionMatrix();
     composer.setSize(innerWidth, innerHeight);
     bloom.setSize(innerWidth, innerHeight);
+    nets?.forEach((n) => (n.nodeMat.uniforms.uViewH.value = innerHeight * pixelRatio));
   };
   resize();
 
@@ -521,12 +589,17 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       camera.lookAt(look);
 
       // wiring it in: the traces run out from the pins, then each screen powers on
-      const want = smooth(0.04, 0.17, q);
+      const want = smooth(0.03, 0.2, q);
       wired += (want - wired) * (1 - Math.exp(-2.2 * dt));
-      traces.forEach((t) => (t.mat.uniforms.uReveal.value = Math.min(1, Math.max(0, (wired - t.delay) / 0.62))));
+      nets.forEach((n) => {
+        const r = Math.min(1, Math.max(0, (wired - n.delay) / 0.5));
+        n.edgeMat.uniforms.uReveal.value = r;
+        n.nodeMat.uniforms.uReveal.value = r;
+      });
       const focus = f < 0.5 ? i - 2 : j - 2; // the screen being visited, if any
       panels.forEach((pn, k2) => {
-        pn.mat.uniforms.uOn.value = Math.min(1, Math.max(0, (wired - 0.7 - k2 * 0.04) / 0.12)); // the last is on by wired = 0.94
+        // each screen builds from its network once the signal reaches its edge; the last is whole by wired = 0.93
+        pn.mat.uniforms.uOn.value = Math.min(1, Math.max(0, (wired - nets[k2].delay - 0.45) / 0.3));
         pn.mat.uniforms.uFocus.value += ((k2 === focus ? 1 : 0) - pn.mat.uniforms.uFocus.value) * Math.min(1, dt * 4);
       });
 
