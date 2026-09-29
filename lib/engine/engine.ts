@@ -646,6 +646,22 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       if (want === 'train:station') { points.position.set(0, 0, 0); points.quaternion.identity(); }
       else { const p0 = line.poseAt(ride.s); points.position.copy(p0.pos); points.quaternion.copy(p0.quat); }
     }
+    // the bridge: the train flows back into him as a wave across the city. He is set where he will
+    // stand at once, and his particles are carried over from the train, so they travel the whole way
+    if (want !== key && section === 'bridge' && key.startsWith('train') && want === 'mascot:full') {
+      points.updateMatrix();
+      const oldM = points.matrix.clone();
+      points.position.set(0, BUST_DROP, 0);
+      points.quaternion.identity();
+      points.scale.setScalar(1);
+      points.updateMatrix();
+      field.morphTo(field.shape(want), 3400, 0.6);
+      field.rebase(points.matrix.clone().invert().multiply(oldM));
+      u.uWave.value = 1;
+      scrubFrom = key;
+      scrubbing = false;
+      key = want;
+    }
     if (want !== key) {
       scrubFrom = key;
       const bothMascot = want.startsWith('mascot:') && key.startsWith('mascot:');
@@ -873,11 +889,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       }
       wasBridge = true;
       const bp = s.section === 'ai' ? 1 : s.bridge;
-      const k1 = smooth(0.0, 0.3, bp), k2 = smooth(0.42, 0.92, bp);
+      const k1 = smooth(0.0, 0.3, bp), k2 = smooth(0.45, 0.92, bp);
       heart.getWorldPosition(heartWorld);
       // facing him across the city, the way he was first seen whole: head to toe, over the rooftops
-      tmpA.copy(bridgeFrom).lerp(tmpUp.set(p.x * 2, GROUND + 27 + p.y * 1.5, 50), k1);
-      tmpB.copy(bridgeFromLook).lerp(tmpOut.set(0, GROUND + 10, 0), k1);
+      // the shot he was first seen whole from: head to toe on his plinth, over the city
+      tmpA.copy(bridgeFrom).lerp(tmpUp.set(p.x * 2, GROUND + 22 + p.y * 1.5, 54), k1);
+      tmpB.copy(bridgeFromLook).lerp(tmpOut.set(0, GROUND + 12, 0), k1);
       // then in: over the rooftops first, coming down level with the heart only at the end, where the
       // plaza round him is clear, and square on to it
       const fy = tmpA.y, dz = heartWorld.z + 2.4;
@@ -1066,7 +1083,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       // lub-dub: two beats close together, then a rest
       const P = 1.0, ph = time % P; // one beat a second
       const beat = Math.exp(-Math.pow((ph - 0.05) / 0.06, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.3) / 0.07, 2));
-      const show = key.startsWith('mascot:') && !scrubbing && u.uAurora.value > 0.5 && (!onIntro || reveal > 0.95) ? fieldOpacity * mascotVisible : 0;
+      const show = key.startsWith('mascot:') && !scrubbing && u.uProgress.value > 0.9 && u.uAurora.value > 0.5 && (!onIntro || reveal > 0.95) ? fieldOpacity * mascotVisible : 0;
       heartShow = damp(heartShow, show, 4, dt);
       heart.visible = heartShow > 0.01;
       heart.scale.setScalar(1 + beat * 0.22);

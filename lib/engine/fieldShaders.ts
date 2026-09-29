@@ -50,6 +50,7 @@ export const vertexShader = /* glsl */ `
 uniform float uTime;
 uniform float uProgress;
 uniform float uArcStrength;
+uniform float uWave; // the train back into him: the stream ripples as it flows across the city
 uniform float uCoil;
 uniform float uHeadOn;    // 1 while the mascot is the shape on screen
 uniform float uAurora;    // and 1 while he is to be drawn as light rather than as points
@@ -95,6 +96,13 @@ void main() {
   // On the way, each particle bows out along its own direction and the cloud swirls a little.
   float arc = sin(p * 3.14159265);
   pos += (vec3(fract(aRandom * 12.9898), fract(aRandom * 78.233), fract(aRandom * 37.719)) - 0.5) * arc * 1.6 * uArcStrength;
+  // a travelling wave through the stream: it rises and falls as it flows, each particle a little
+  // behind the last, so the whole flight reads as one ribbon rolling in
+  if (uWave > 0.0) {
+    float ph = p * 9.0 - uTime * 2.6 + aRandom * 1.5;
+    pos.y += arc * uWave * 3.2 * sin(ph);
+    pos.x += arc * uWave * 1.2 * cos(ph * 0.7);
+  }
   float sw = arc * 0.6 * uArcStrength, c = cos(sw), sn = sin(sw);
   pos.xz = vec2(c * pos.x - sn * pos.z, sn * pos.x + c * pos.z);
 

@@ -41,6 +41,7 @@ export class ParticleField {
       uTime: { value: 0 },
       uProgress: { value: 1 },
       uArcStrength: { value: 1 },
+      uWave: { value: 0 },
       uDisperse: { value: 0 },
       uCoil: { value: 0 },
       uHeadOn: { value: 0 },
@@ -152,9 +153,24 @@ export class ParticleField {
     this.setTarget(attr);
     this.uniforms.uProgress.value = 0;
     this.uniforms.uArcStrength.value = arc;
+    this.uniforms.uWave.value = 0;
     this.tween.t0 = performance.now();
     this.tween.ms = ms ?? 0;
     this.tween.on = ms !== null;
+  }
+
+  /** Carry where the morph starts from into another frame: `m` takes the old frame's points into the
+      new one. Used when the figure jumps to where it will stand, so the particles travel the distance. */
+  rebase(m: THREE.Matrix4) {
+    const from = this.from.array as Float32Array;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < from.length; i += 3) {
+      v.set(from[i], from[i + 1], from[i + 2]).applyMatrix4(m);
+      from[i] = v.x;
+      from[i + 1] = v.y;
+      from[i + 2] = v.z;
+    }
+    this.from.needsUpdate = true;
   }
 
   get morphing() {
