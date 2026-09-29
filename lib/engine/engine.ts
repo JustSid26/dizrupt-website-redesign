@@ -589,6 +589,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   addEventListener('resize', () => { if (key !== 'stats') buildStatWindows(); });
   const corner = new THREE.Vector3();
   let wasCase = false;
+  let wasBridge = false;
+  let bridgeZoom = 0;
+  const bridgeLook = new THREE.Vector3(), bridgeFrom = new THREE.Vector3(), bridgeFromLook = new THREE.Vector3(), heartWorld = new THREE.Vector3();
   let sky = 0;
   let boardMeasure = 0;
   let cityDim = 1;
@@ -606,8 +609,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const s = signals.scroll;
     const view = signals.caseShape;
     const preview = signals.preview;
-    // behind the AI world the city holds the last stop, as if still in Solutions
-    const section = s.section === 'ai' ? 'solutions' : s.section;
+    // behind the AI world the city holds where the bridge left it: in his heart
+    const section = s.section === 'ai' ? 'bridge' : s.section;
     const ip = s.intro;
 
     /* ---- what the field should be ---- */
@@ -663,6 +666,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     /* ---- the landing: a beam runs down him and leaves him lit ---- */
     const onIntro = section === 'intro' && !view && !preview;
     if (section !== 'contact') wasContact = false;
+    if (section !== 'bridge') { wasBridge = false; bridgeZoom = 0; }
     const reveal = onIntro ? smooth(0.22, 0.4, ip) : 1;
     u.uBeamOn.value = onIntro && ip < 0.44 ? 1 : 0;
     // from below his feet up past his crown: he is built foot to head
@@ -859,6 +863,33 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.position.x += p.x * 0.35 * lean;
       camera.position.y += p.y * 0.2 * lean;
       camera.lookAt(camLook);
+    } else if (section === 'bridge' && !view && !preview) {
+      /* The bridge: from wherever the train left the camera, round to face him as he forms again,
+         then in, into the heart beating in his chest. The glitch into the AI world takes it from there. */
+      if (!wasBridge) {
+        bridgeLook.copy(camera.position).add(camera.getWorldDirection(tmpV).multiplyScalar(12));
+        bridgeFrom.copy(camera.position);
+        bridgeFromLook.copy(bridgeLook);
+      }
+      wasBridge = true;
+      const bp = s.section === 'ai' ? 1 : s.bridge;
+      const k1 = smooth(0.0, 0.3, bp), k2 = smooth(0.42, 0.92, bp);
+      heart.getWorldPosition(heartWorld);
+      // facing him across the city, the way he was first seen whole: head to toe, over the rooftops
+      tmpA.copy(bridgeFrom).lerp(tmpUp.set(p.x * 2, GROUND + 27 + p.y * 1.5, 50), k1);
+      tmpB.copy(bridgeFromLook).lerp(tmpOut.set(0, GROUND + 10, 0), k1);
+      // then in: over the rooftops first, coming down level with the heart only at the end, where the
+      // plaza round him is clear, and square on to it
+      const fy = tmpA.y, dz = heartWorld.z + 2.4;
+      tmpA.x += (heartWorld.x - tmpA.x) * k2;
+      tmpA.z += (dz - tmpA.z) * k2;
+      tmpA.y = fy + (heartWorld.y - fy) * smooth(0.55, 1, k2);
+      tmpB.lerp(heartWorld, k2);
+      bridgeZoom = k2;
+      const k = 1 - Math.exp(-3.2 * dt);
+      camera.position.lerp(tmpA, k);
+      bridgeLook.lerp(tmpB, k);
+      camera.lookAt(bridgeLook);
     } else if (section === 'contact' && !view && !preview) {
       // back to the view the city was first seen from: a slow rise from wherever the camera was
       if (!wasContact) contactLook.copy(camera.position).add(camera.getWorldDirection(tmpV).multiplyScalar(camera.position.length() || 7));
@@ -913,7 +944,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    cityDim = damp(cityDim, (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
+    cityDim = damp(cityDim, section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     // the board's rig goes up first, as the camera pulls back from its screen
@@ -1039,9 +1070,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heartShow = damp(heartShow, show, 4, dt);
       heart.visible = heartShow > 0.01;
       heart.scale.setScalar(1 + beat * 0.22);
-      heartMat.opacity = heartShow * (0.55 + 0.45 * beat);
+      // up close it would fill the screen with white: held down as the camera comes in
+      const close = 1 - 0.55 * bridgeZoom;
+      heartMat.opacity = heartShow * (0.55 + 0.45 * beat) * close;
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
-      (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18;
+      (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18 * close;
     }
     /* ---- AI & Automation: built ahead of time, drawn only while it is on screen ---- */
     {

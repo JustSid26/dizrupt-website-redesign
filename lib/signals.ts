@@ -1,6 +1,6 @@
 // Mutable per-frame values shared between the DOM and the WebGL engine. Written by scroll triggers
 // and listeners, read by the engine every frame. Never triggers a React render.
-export type Section = 'intro' | 'solutions' | 'ai' | 'projects' | 'contact';
+export type Section = 'intro' | 'solutions' | 'bridge' | 'ai' | 'projects' | 'contact';
 
 export const signals = {
   pointer: { x: 0, y: 0, px: 0, py: 0, active: false }, // ndc (-1..1) and pixels
@@ -15,6 +15,7 @@ export const signals = {
     projectIndex: 0, // float index of the front card
     projectsIn: 0, // 0..1 how much the work section holds the screen
     contact: 0, // 0..1 how far the contact hand-over has come
+    bridge: 0, // 0..1 through the bridge: the train back into him, then into his heart
   },
   // where the mascot looks while the count is being read, or null to follow the cursor
   glance: null as [number, number] | null,
