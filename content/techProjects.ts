@@ -19,13 +19,13 @@ export type TechProject = {
 export const TECH_PROJECTS: TechProject[] = [
   {
     slug: "lead-gen",
-    name: "Diamond Lead",
+    name: "Lead Engine",
     about: "Lead generation",
     video: null,
-    summary: "An AI lead engine for the diamond trade: it finds diamond businesses worldwide, enriches and scores them, and runs the outreach from one CRM.",
+    summary: "An AI lead generation engine: it finds businesses in any industry worldwide, enriches and scores them, and runs the outreach from one CRM.",
     stack: ["Node.js", "React", "TypeScript", "Playwright", "OpenAI", "Google Maps", "Hunter.io", "WhatsApp Cloud API", "Gmail API", "Twilio"],
     year: "2026",
-    problem: "Finding the right diamond buyers meant searching country by country, copying contacts by hand and chasing replies across inboxes and phones.",
+    problem: "Finding the right buyers meant searching country by country, copying contacts by hand and chasing replies across inboxes and phones.",
     system: "It searches Google Maps by continent, country or city, reads each business's website, uses AI to pull out the right contacts and scores every lead. Outreach goes out by email and WhatsApp in the lead's own language, with follow-ups, reminders, meetings and invoices in the same CRM.",
     result: "A ranked list of the best leads every day, and outreach that follows itself up, so the team spends its time on conversations instead of research.",
     flow: ["Maps search", "AI enrich", "Score", "Outreach"],
