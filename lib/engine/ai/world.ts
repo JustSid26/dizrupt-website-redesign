@@ -79,75 +79,170 @@ function packageTop() {
   return { map, rough };
 }
 
-/** A project's screen: its name and kind, a mock of the work, a play button. */
-function screenTexture(name: string, about: string, k: number) {
-  const W = 1024, H = 576;
+/** A project's screen: a system console — title bar, the project in big mono type, a node graph of
+    the system, a pane of code, an oscilloscope trace and a hex dump, all in corner brackets. */
+function screenTexture(name: string, about: string, flow: string[], k: number) {
+  const W = 1280, H = 720;
   const c = document.createElement('canvas');
   c.width = W;
   c.height = H;
   const g = c.getContext('2d')!;
-  const grd = g.createLinearGradient(0, 0, W, H);
-  grd.addColorStop(0, '#07121c');
-  grd.addColorStop(1, '#130a24');
-  g.fillStyle = grd;
+  const rand = rng(17 + k * 31);
+  const mono = (px: number, w = 500) => `${w} ${px}px "JetBrains Mono", Menlo, monospace`;
+  g.fillStyle = '#02060c';
   g.fillRect(0, 0, W, H);
-  // a faint grid, the way a dashboard sits on one
-  g.strokeStyle = 'rgba(90,200,255,0.07)';
+  // fine grid
+  g.strokeStyle = 'rgba(60,240,255,0.05)';
   g.lineWidth = 1;
-  for (let x = 0; x < W; x += 32) {
-    g.beginPath();
+  g.beginPath();
+  for (let x = 0; x < W; x += 24) {
     g.moveTo(x, 0);
     g.lineTo(x, H);
-    g.stroke();
   }
-  for (let y = 0; y < H; y += 32) {
-    g.beginPath();
+  for (let y = 0; y < H; y += 24) {
     g.moveTo(0, y);
     g.lineTo(W, y);
-    g.stroke();
-  }
-  // a mock of the work: panels, a chart line, a list
-  const rand = rng(17 + k * 31);
-  g.fillStyle = 'rgba(120,220,255,0.08)';
-  g.strokeStyle = 'rgba(120,220,255,0.35)';
-  g.lineWidth = 2;
-  for (const [x, y, w, h] of [[56, 170, 420, 250], [500, 170, 468, 120], [500, 310, 225, 110], [743, 310, 225, 110]]) {
-    g.fillRect(x, y, w, h);
-    g.strokeRect(x, y, w, h);
-  }
-  g.strokeStyle = '#4fd8ff';
-  g.lineWidth = 4;
-  g.beginPath();
-  for (let i = 0; i <= 20; i++) {
-    const x = 76 + i * 19, y = 390 - (i * 7 + rand() * 60);
-    if (i) g.lineTo(x, y);
-    else g.moveTo(x, y);
   }
   g.stroke();
-  g.fillStyle = 'rgba(200,170,255,0.5)';
-  for (let i = 0; i < 4; i++) g.fillRect(520, 192 + i * 22, 180 + rand() * 240, 8);
-  // the name and kind
+  // title bar
+  g.fillStyle = 'rgba(60,240,255,0.08)';
+  g.fillRect(0, 0, W, 44);
+  g.fillStyle = 'rgba(60,240,255,0.35)';
+  g.fillRect(0, 44, W, 1);
+  ['#ff5f57', '#febc2e', '#28c840'].forEach((col, i) => {
+    g.fillStyle = col;
+    g.beginPath();
+    g.arc(26 + i * 20, 22, 6, 0, 7);
+    g.fill();
+  });
+  g.font = mono(16);
+  g.fillStyle = 'rgba(189,246,255,0.75)';
+  g.fillText(`node_${String(k + 1).padStart(2, '0')}.sys — ${about.toLowerCase()}`, 96, 28);
+  g.textAlign = 'right';
+  g.fillStyle = '#3cf0ff';
+  g.fillText('● LINK ACTIVE', W - 24, 28);
+  g.textAlign = 'left';
+  // the name
   g.fillStyle = '#eafcff';
-  g.font = '700 60px "Bricolage Grotesque", "Inter Tight", system-ui, sans-serif';
-  g.fillText(name.toUpperCase(), 56, 100);
-  g.fillStyle = '#7cf2ff';
-  g.font = '500 24px "JetBrains Mono", Menlo, monospace';
-  g.fillText(`${String(k + 1).padStart(2, '0')} · ${about.toUpperCase()}`, 58, 138);
-  // play
-  g.fillStyle = 'rgba(60,240,255,0.9)';
+  g.font = mono(78, 600);
+  g.fillText(name.toUpperCase(), 40, 136);
+  g.fillStyle = '#a58bff';
+  g.font = mono(20);
+  g.fillText(`[${String(k + 1).padStart(2, '0')}] ${about.toUpperCase()}  //  OPEN ↗`, 42, 172);
+  // node graph: the system's four steps, wired left to right
+  const gx = 40, gy = 212, gw = 560, gh = 250;
+  g.strokeStyle = 'rgba(60,240,255,0.25)';
+  g.strokeRect(gx, gy, gw, gh);
+  g.font = mono(13);
+  g.fillStyle = 'rgba(189,246,255,0.5)';
+  g.fillText('SYSTEM MAP', gx + 12, gy + 22);
+  const pts = flow.map((_, i) => [gx + 70 + i * ((gw - 140) / (flow.length - 1)), gy + 140 + (i % 2 ? -40 : 30)] as const);
+  g.strokeStyle = 'rgba(60,240,255,0.7)';
+  g.lineWidth = 2;
   g.beginPath();
-  g.arc(W - 100, H - 80, 44, 0, 7);
-  g.fill();
-  g.fillStyle = '#041016';
+  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  g.stroke();
+  pts.forEach(([x, y], i) => {
+    g.fillStyle = '#02060c';
+    g.strokeStyle = i % 2 ? '#a58bff' : '#3cf0ff';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.arc(x, y, 16, 0, 7);
+    g.fill();
+    g.stroke();
+    g.fillStyle = i % 2 ? '#a58bff' : '#3cf0ff';
+    g.beginPath();
+    g.arc(x, y, 5, 0, 7);
+    g.fill();
+    g.fillStyle = 'rgba(234,252,255,0.85)';
+    g.font = mono(14);
+    g.textAlign = 'center';
+    g.fillText(flow[i].toUpperCase(), x, y + (i % 2 ? -28 : 40));
+    g.textAlign = 'left';
+  });
+  // code pane
+  const cx = 630, cy = 212, cw = 610;
+  g.strokeStyle = 'rgba(60,240,255,0.25)';
+  g.strokeRect(cx, cy, cw, gh);
+  const code: [string, string][][] = [
+    [['const ', '#a58bff'], ['pipeline', '#eafcff'], [' = ', '#7a8aa0'], ['connect', '#3cf0ff'], ['({', '#7a8aa0']],
+    [['  in: ', '#7a8aa0'], [`"${flow[0].toLowerCase()}"`, '#ffd28a'], [',', '#7a8aa0']],
+    [['  brain: ', '#7a8aa0'], [`"${flow[1].toLowerCase()}"`, '#ffd28a'], [',', '#7a8aa0']],
+    [['  hands: ', '#7a8aa0'], [`["${flow[2].toLowerCase()}"]`, '#ffd28a'], [',', '#7a8aa0']],
+    [['  out: ', '#7a8aa0'], [`"${flow[3].toLowerCase()}"`, '#ffd28a'], [',', '#7a8aa0']],
+    [['});', '#7a8aa0']],
+    [['await ', '#a58bff'], ['pipeline', '#eafcff'], ['.', '#7a8aa0'], ['run', '#3cf0ff'], ['({ every: ', '#7a8aa0'], ['"event"', '#ffd28a'], [' });', '#7a8aa0']],
+  ];
+  g.font = mono(17);
+  code.forEach((line, i) => {
+    let x = cx + 50;
+    g.fillStyle = 'rgba(122,138,160,0.5)';
+    g.fillText(String(i + 1).padStart(2, ' '), cx + 14, cy + 36 + i * 29);
+    for (const [t, col] of line) {
+      g.fillStyle = col;
+      g.fillText(t, x, cy + 36 + i * 29);
+      x += g.measureText(t).width;
+    }
+  });
+  // oscilloscope
+  const oy = 490, oh = 110;
+  g.strokeStyle = 'rgba(60,240,255,0.25)';
+  g.strokeRect(40, oy, 820, oh);
+  g.strokeStyle = '#3cf0ff';
+  g.lineWidth = 2;
   g.beginPath();
-  g.moveTo(W - 114, H - 103);
-  g.lineTo(W - 114, H - 57);
-  g.lineTo(W - 76, H - 80);
-  g.closePath();
-  g.fill();
+  for (let x = 0; x <= 800; x += 4) {
+    const y = oy + oh / 2 + Math.sin(x * 0.045 + k) * 22 * Math.sin(x * 0.006 + k * 2) + (rand() - 0.5) * 8;
+    if (x) g.lineTo(50 + x, y);
+    else g.moveTo(50 + x, y);
+  }
+  g.stroke();
+  // hex dump
+  g.strokeStyle = 'rgba(60,240,255,0.25)';
+  g.strokeRect(880, oy, 360, oh);
+  g.font = mono(14);
+  for (let r = 0; r < 5; r++) {
+    g.fillStyle = 'rgba(165,139,255,0.7)';
+    g.fillText((0x4a0 + r * 16 + k * 256).toString(16).padStart(4, '0'), 894, oy + 24 + r * 19);
+    g.fillStyle = 'rgba(189,246,255,0.6)';
+    g.fillText(Array.from({ length: 6 }, () => ((rand() * 256) | 0).toString(16).padStart(2, '0')).join(' '), 950, oy + 24 + r * 19);
+  }
+  // footer: status line and the way in
+  g.fillStyle = 'rgba(189,246,255,0.55)';
+  g.font = mono(14);
+  g.fillText(`> node_${String(k + 1).padStart(2, '0')} ready · 16/16 lanes · awaiting input_`, 42, 660);
+  g.fillStyle = '#3cf0ff';
+  g.fillRect(W - 250, 628, 210, 48);
+  g.fillStyle = '#021016';
+  g.font = mono(18, 700);
+  g.fillText('OPEN PROJECT →', W - 232, 659);
+  // corner brackets
+  g.strokeStyle = '#3cf0ff';
+  g.lineWidth = 4;
+  for (const [x, y, dx, dy] of [[8, 52, 1, 1], [W - 8, 52, -1, 1], [8, H - 8, 1, -1], [W - 8, H - 8, -1, -1]] as const) {
+    g.beginPath();
+    g.moveTo(x, y + dy * 28);
+    g.lineTo(x, y);
+    g.lineTo(x + dx * 28, y);
+    g.stroke();
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
+  return t;
+}
+
+/** The plate under a screen: its node number and kind. */
+function plateTexture(text: string) {
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = 64;
+  const g = c.getContext('2d')!;
+  g.font = '500 30px "JetBrains Mono", Menlo, monospace';
+  g.fillStyle = '#7cf2ff';
+  g.fillText(text, 4, 42);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -243,7 +338,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     frame.castShadow = true;
     group.add(frame);
     const mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: screenTexture(pj.name, pj.about, k) as THREE.Texture }, uOn: { value: 0 }, uTime, uFocus: { value: 0 } },
+      uniforms: { map: { value: screenTexture(pj.name, pj.about, pj.flow, k) as THREE.Texture }, uOn: { value: 0 }, uTime, uFocus: { value: 0 } },
       vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D map; uniform float uOn, uTime, uFocus; varying vec2 vUv;
@@ -255,6 +350,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
           float flick = mix(0.55 + 0.45 * h(floor(uTime * 24.0)), 1.0, smoothstep(0.75, 1.0, uOn));
           vec3 c = texture2D(map, vUv).rgb;
           c *= 0.9 + 0.1 * sin(vUv.y * 600.0);                     // scanlines
+          // a bright line scanning down it, and a faint roll of refresh
+          float scan = 1.0 - smoothstep(0.0, 0.012, abs(vUv.y - (1.0 - fract(uTime * 0.25))));
+          c += vec3(0.2, 0.8, 1.0) * scan * 0.25;
+          c *= 0.97 + 0.03 * sin(vUv.y * 8.0 - uTime * 3.0);
           float line = (1.0 - smoothstep(0.0, 0.03, band)) * step(0.02, uOn) * (1.0 - uOn);
           c = c * open * flick + vec3(0.3, 0.8, 1.0) * line * 2.0;
           c *= 0.8 + uFocus * 0.35;
@@ -264,6 +363,20 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat);
     screen.position.z = 0.002;
     group.add(screen);
+    // a lit edge round the bezel, like a hologram's frame
+    const edgeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.85, 1.0).multiplyScalar(1.6), toneMapped: false });
+    for (const [w, h, x, y] of [[PW + 0.2, 0.018, 0, PH / 2 + 0.1], [PW + 0.2, 0.018, 0, -PH / 2 - 0.1], [0.018, PH + 0.2, PW / 2 + 0.1, 0], [0.018, PH + 0.2, -PW / 2 - 0.1, 0]] as const) {
+      const e = new THREE.Mesh(new THREE.PlaneGeometry(w, h), edgeMat);
+      e.position.set(x, y, 0.005);
+      group.add(e);
+    }
+    // and its plate, under it
+    const plate = new THREE.Mesh(
+      new THREE.PlaneGeometry(PW * 0.62, (PW * 0.62) / 16),
+      new THREE.MeshBasicMaterial({ map: plateTexture(`NODE ${String(k + 1).padStart(2, '0')} // ${pj.about.toUpperCase()} // ${pj.slug}`), transparent: true, toneMapped: false }),
+    );
+    plate.position.set(-PW * 0.19, -PH / 2 - 0.26, 0);
+    group.add(plate);
     // a poster, if the project has one, replaces the mock
     if (pj.poster) new THREE.TextureLoader().load(pj.poster, (t) => ((t.colorSpace = THREE.SRGBColorSpace), (mat.uniforms.map.value = t)));
     return { group, mat };
@@ -361,7 +474,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     { pos: new THREE.Vector3(0.9, 0.6, 5.2), look: new THREE.Vector3(0, 0, 0) },
     { pos: new THREE.Vector3(0, 0.4, 22), look: new THREE.Vector3(0, 0, -1.5) },
     // each screen framed right of centre, a little low, clear of the copy on the left
-    ...slots.map((s) => ({ pos: new THREE.Vector3(s.x * 0.8 - 2.2, s.y * 0.85 + 0.3, s.z + 10.5), look: new THREE.Vector3(s.x - 2.5, s.y + 0.55, s.z) })),
+    ...slots.map((s) => ({ pos: new THREE.Vector3(s.x * 0.8 - 2.2, s.y * 0.85 + 0.3, s.z + 10.5), look: new THREE.Vector3(s.x - 2.5, s.y + 0.05, s.z) })),
   ];
   const pos = new THREE.Vector3(), look = new THREE.Vector3(), tgtPos = new THREE.Vector3(), tgtLook = new THREE.Vector3();
   let first = true;

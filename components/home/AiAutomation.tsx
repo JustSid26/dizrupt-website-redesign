@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
@@ -13,8 +14,8 @@ import { TECH_PROJECTS } from "@/content/techProjects";
    its signal and hands over — on the real pixels, in the engine (lib/engine/ai) — to a
    microcontroller floating in the dark, the Dizrupt mark glowing on it. The scroll wires it into the
    work: traces run from its pins out to a screen per project, and the camera visits each; a screen
-   opens its film. Leaving hands back. Four hand-overs to choose from; the picker remembers yours. */
-type Chapter = { no: string; kicker: string; title: string; line: string; chips: string[]; cta?: boolean; project?: string };
+   opens its project's page. Leaving hands back. Four hand-overs to choose from; the picker remembers yours. */
+type Chapter = { no: string; kicker: string; title: string; line: string; chips: string[]; project?: string };
 const CHAPTERS: Chapter[] = [
   {
     no: "00",
@@ -29,7 +30,6 @@ const CHAPTERS: Chapter[] = [
     title: "One chip, everything connected",
     line: "Every system we build runs on the same idea: one brain, wired into the tools you already use. Here's what it powers.",
     chips: [],
-    cta: true,
   },
   // PLACEHOLDER lines — one sentence each on what the project does and what it changed
   ...TECH_PROJECTS.slice(0, 4).map((pj, i) => ({
@@ -38,7 +38,7 @@ const CHAPTERS: Chapter[] = [
     title: pj.name,
     line: "PLACEHOLDER — one line on what it does, and what it changed for the business.",
     chips: [],
-    project: pj.name,
+    project: pj.slug,
   })),
 ];
 
@@ -51,6 +51,28 @@ const BOOT = [
   "handing over ▌",
 ];
 const pad = (n: number) => String(n).padStart(2, "0");
+const NOISE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#%&$@";
+
+/** A title that decodes out of noise whenever it comes on. */
+function Decode({ text, on, reduce }: { text: string; on: boolean; reduce: boolean }) {
+  const [out, setOut] = useState(text);
+  useEffect(() => {
+    if (!on || reduce) return void setOut(text);
+    let raf = 0;
+    const start = performance.now() + 120;
+    const dur = 380 + text.length * 30;
+    const step = (now: number) => {
+      const t = (now - start) / dur;
+      if (t >= 1) return void setOut(text);
+      const lock = Math.max(0, Math.floor(t * text.length));
+      setOut([...text].map((c, i) => (c === " " ? " " : i < lock ? c : NOISE[(Math.random() * NOISE.length) | 0])).join(""));
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [text, on, reduce]);
+  return <span aria-hidden>{out}</span>;
+}
 const KEY = "dz-ai-transition";
 
 export function AiAutomation() {
@@ -58,9 +80,19 @@ export function AiAutomation() {
   const tween = useRef<gsap.core.Tween | null>(null);
   const [mode, setMode] = useState(0);
   const [chapter, setChapter] = useState(0);
+  const readout = useRef<HTMLParagraphElement>(null);
+  const depth = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    const f = (v: number) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(3)}`;
+    const tick = () => {
+      if (readout.current) readout.current.textContent = `X ${f(signals.pointer.x)}  Y ${f(signals.pointer.y)}`;
+      if (depth.current) depth.current.textContent = `Z ${signals.ai.p.toFixed(3)}`;
+    };
+    gsap.ticker.add(tick);
+    return () => gsap.ticker.remove(tick);
+  }, []);
   const [on, setOn] = useState(false);
   const reduce = useStore((s) => s.reducedMotion);
-  const set = useStore((s) => s.set);
   const boot = useRef<HTMLDivElement>(null);
   useSection(section, "ai");
 
@@ -165,10 +197,12 @@ export function AiAutomation() {
     play(1);
   };
 
-  const openProjects = (e: React.MouseEvent<HTMLButtonElement>, project: string | null = null) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    signals.macFrom = { x: r.left, y: r.top, w: r.width, h: r.height };
-    set({ macOpen: true, macProject: project });
+  // a project opens its own page; coming back puts you where you were
+  const router = useRouter();
+  const openProject = (slug: string | undefined) => {
+    if (!slug) return;
+    sessionStorage.setItem("home-scroll", String(scrollY));
+    router.push(`/ai/${slug}`, { scroll: false });
   };
   // a click target riding on the project screen the camera is at
   const screenHit = useRef<HTMLButtonElement>(null);
@@ -203,11 +237,35 @@ export function AiAutomation() {
           ref={screenHit}
           type="button"
           className="ai-screen-hit"
-          aria-label="Play this project's film"
-          onClick={(e) => openProjects(e, TECH_PROJECTS[Number(screenHit.current?.dataset.index ?? 0)]?.name ?? null)}
+          aria-label="Open this project"
+          onClick={() => openProject(TECH_PROJECTS[Number(screenHit.current?.dataset.index ?? 0)]?.slug)}
         >
-          <span>Play the film →</span>
+          <span>Open the project →</span>
         </button>
+
+        {/* the instrument frame over the world: brackets, rulers, readouts, a scan sweeping down */}
+        <div className="ai-frame" aria-hidden>
+          <i className="ai-br tl" />
+          <i className="ai-br tr" />
+          <i className="ai-br bl" />
+          <i className="ai-br br" />
+          <div className="ai-grid" />
+          <div className="ai-sweep" />
+          <div className="ai-ruler">
+            {Array.from({ length: 41 }, (_, k) => (
+              <span key={k} className={k % 5 ? "" : "major"} />
+            ))}
+          </div>
+          <p className="ai-read ai-read-tr">
+            SYS DZ-M1 <b>·</b> CH {pad(chapter)}/{pad(CHAPTERS.length - 1)} <b>·</b> BUS 16× <b>·</b> <span className="ai-ok">LINK OK</span>
+          </p>
+          <p className="ai-read ai-read-br" ref={readout}>
+            X +0.000 Y +0.000
+          </p>
+          <p className="ai-read ai-read-bl" ref={depth}>
+            Z 0.000
+          </p>
+        </div>
 
         <div className="ai-hud">
           <p className="ai-tag">
@@ -224,11 +282,13 @@ export function AiAutomation() {
                   <span>{c.no}</span> {c.kicker}
                 </p>
                 {i === 0 ? (
-                  <h2 id="ai-title" className="ai-title">
-                    {c.title}
+                  <h2 id="ai-title" className="ai-title" aria-label={c.title}>
+                    <Decode text={c.title} on={i === chapter} reduce={reduce} />
                   </h2>
                 ) : (
-                  <h3 className="ai-title">{c.title}</h3>
+                  <h3 className="ai-title" aria-label={c.title}>
+                    <Decode text={c.title} on={i === chapter} reduce={reduce} />
+                  </h3>
                 )}
                 <p className="ai-line">{c.line}</p>
                 {c.chips.length > 0 && (
@@ -239,14 +299,8 @@ export function AiAutomation() {
                   </ul>
                 )}
                 {c.project && (
-                  <button type="button" className="ai-cta" onClick={(e) => openProjects(e, c.project)} tabIndex={i === chapter ? 0 : -1}>
-                    <span>Play the film</span>
-                    <span aria-hidden>▶</span>
-                  </button>
-                )}
-                {c.cta && (
-                  <button type="button" className="ai-cta" onClick={(e) => openProjects(e)} tabIndex={i === chapter ? 0 : -1}>
-                    <span>Open all the projects</span>
+                  <button type="button" className="ai-cta" onClick={() => openProject(c.project)} tabIndex={i === chapter ? 0 : -1}>
+                    <span>Open the project</span>
                     <span aria-hidden>→</span>
                   </button>
                 )}
