@@ -897,10 +897,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       tmpB.copy(bridgeFromLook).lerp(tmpOut.set(0, GROUND + 12, 0), k1);
       // then in: over the rooftops first, coming down level with the heart only at the end, where the
       // plaza round him is clear, and square on to it
-      const fy = tmpA.y, dz = heartWorld.z + 2.4;
+      // it stops with the heart big over the rooftops, the towers still round it: the glitch takes it from there
+      const fy = tmpA.y, dz = heartWorld.z + 5.2, ty = heartWorld.y - 0.4;
       tmpA.x += (heartWorld.x - tmpA.x) * k2;
       tmpA.z += (dz - tmpA.z) * k2;
-      tmpA.y = fy + (heartWorld.y - fy) * smooth(0.55, 1, k2);
+      tmpA.y = fy + (ty - fy) * smooth(0.4, 1, k2);
       tmpB.lerp(heartWorld, k2);
       bridgeZoom = k2;
       const k = 1 - Math.exp(-3.2 * dt);
@@ -1088,7 +1089,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heart.visible = heartShow > 0.01;
       heart.scale.setScalar(1 + beat * 0.22);
       // up close it would fill the screen with white: held down as the camera comes in
-      const close = 1 - 0.55 * bridgeZoom;
+      const close = 1 - 0.3 * bridgeZoom;
       heartMat.opacity = heartShow * (0.55 + 0.45 * beat) * close;
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
       (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18 * close;
