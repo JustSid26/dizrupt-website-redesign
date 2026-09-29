@@ -31,12 +31,11 @@ const CHAPTERS: Chapter[] = [
     line: "Every system we build runs on the same idea: one brain, wired into the tools you already use. Here's what it powers.",
     chips: [],
   },
-  // PLACEHOLDER lines — one sentence each on what the project does and what it changed
   ...TECH_PROJECTS.slice(0, 4).map((pj, i) => ({
     no: String(i + 2).padStart(2, "0"),
     kicker: pj.about,
     title: pj.name,
-    line: "PLACEHOLDER — one line on what it does, and what it changed for the business.",
+    line: pj.summary,
     chips: [],
     project: pj.slug,
   })),
