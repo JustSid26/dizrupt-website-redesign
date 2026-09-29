@@ -283,7 +283,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   face.position.y = H / 2 + 0.001;
   chip.add(face);
   // the exposed pad underneath
-  const tin = new THREE.MeshPhysicalMaterial({ color: '#c9ccd1', metalness: 1, roughness: 0.34 });
+  const tin = new THREE.MeshPhysicalMaterial({ color: '#9da1a8', metalness: 1, roughness: 0.55 }); // matte tin: glossy legs caught the key light and bloomed white
   const pad = new THREE.Mesh(new THREE.BoxGeometry(BODY * 0.55, 0.01, BODY * 0.55), tin);
   pad.position.y = -H / 2 - 0.004;
   chip.add(pad);
@@ -334,7 +334,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     group.position.copy(at);
     group.rotation.y = -Math.sign(at.x) * 0.22; // turned a little in, towards the chip
     scene.add(group);
-    const frame = new THREE.Mesh(new RoundedBoxGeometry(PW + 0.16, PH + 0.16, 0.1, 3, 0.04), bezel);
+    const frameMat = bezel.clone();
+    frameMat.transparent = true;
+    frameMat.opacity = 0;
+    const frame = new THREE.Mesh(new RoundedBoxGeometry(PW + 0.16, PH + 0.16, 0.1, 3, 0.04), frameMat);
     frame.position.z = -0.06;
     frame.castShadow = true;
     group.add(frame);
@@ -383,7 +386,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     screen.position.z = 0.002;
     group.add(screen);
     // a lit edge round the bezel, like a hologram's frame
-    const edgeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.85, 1.0).multiplyScalar(1.6), toneMapped: false });
+    const edgeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.85, 1.0).multiplyScalar(1.6), toneMapped: false, transparent: true, opacity: 0 });
     for (const [w, h, x, y] of [[PW + 0.2, 0.018, 0, PH / 2 + 0.1], [PW + 0.2, 0.018, 0, -PH / 2 - 0.1], [0.018, PH + 0.2, PW / 2 + 0.1, 0], [0.018, PH + 0.2, -PW / 2 - 0.1, 0]] as const) {
       const e = new THREE.Mesh(new THREE.PlaneGeometry(w, h), edgeMat);
       e.position.set(x, y, 0.005);
@@ -392,13 +395,14 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     // and its plate, under it
     const plate = new THREE.Mesh(
       new THREE.PlaneGeometry(PW * 0.62, (PW * 0.62) / 16),
-      new THREE.MeshBasicMaterial({ map: plateTexture(`NODE ${String(k + 1).padStart(2, '0')} // ${pj.about.toUpperCase()} // ${pj.slug}`), transparent: true, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ opacity: 0, map: plateTexture(`NODE ${String(k + 1).padStart(2, '0')} // ${pj.about.toUpperCase()} // ${pj.slug}`), transparent: true, toneMapped: false }),
     );
     plate.position.set(-PW * 0.19, -PH / 2 - 0.26, 0);
     group.add(plate);
     // a poster, if the project has one, replaces the mock
     if (pj.poster) new THREE.TextureLoader().load(pj.poster, (t) => ((t.colorSpace = THREE.SRGBColorSpace), (mat.uniforms.map.value = t)));
-    return { group, mat };
+    group.visible = false; // nothing of it exists until its network reaches it
+    return { group, mat, frameMat, edgeMat, plateMat: plate.material as THREE.MeshBasicMaterial };
   });
 
   /* ================= the networks: chip → neurons → screen, one per project =================
@@ -419,27 +423,30 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
           void main(){
             // this layer's connections draw out as the signal crosses it
             float front = uReveal * 3.0 - vLayer;
-            if (vT > front) discard;
+            if (vT > front || uReveal <= 0.001) discard;
             float lead = exp(-(front - vT) * 6.0) * step(front, 1.0);
             float pulse = pow(fract(vT - uTime * (0.5 + vSeed * 0.7) + vSeed * 5.0), 14.0);
             vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.72, 0.4, 1.0), step(0.62, vSeed));
-            float a = 0.14 + pulse * 1.3 + lead * 1.6;
+            // near the chip the links bunch up: keep them faint there so the pins don't bloom white
+            float near = mix(0.06, 1.0, smoothstep(0.0, 0.6, vT + vLayer)); // twenty links meet at every pin
+            float a = (0.12 + pulse * 1.1 + lead * 1.1) * near;
             gl_FragColor = vec4(c * a, a);
           }`,
       });
     const nodeMatFor = () =>
       new THREE.ShaderMaterial({
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        uniforms: { uTime, uReveal: { value: 0 }, uSize: { value: 0.22 }, uViewH: { value: innerHeight * pixelRatio } },
+        uniforms: { uTime, uReveal: { value: 0 }, uSize: { value: 0.12 }, uViewH: { value: innerHeight * pixelRatio } },
         vertexShader: /* glsl */ `
           attribute float aLayer; uniform float uReveal, uSize, uViewH, uTime; varying float vOn; varying float vFire;
           void main(){
             float front = uReveal * 3.0 - aLayer;
-            vOn = step(0.0, front);
+            vOn = step(0.001, front) * step(0.001, uReveal) * step(0.5, aLayer); // the chip's pins are the input layer
             vFire = exp(-max(front, 0.0) * 4.0) * vOn + 0.25 * (0.5 + 0.5 * sin(uTime * 3.0 + aLayer * 1.7 + position.y));
             vec4 mv = modelViewMatrix * vec4(position, 1.0);
             gl_Position = projectionMatrix * mv;
-            gl_PointSize = vOn * uSize * (1.0 + vFire) * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z;
+            // capped: up close to the chip they'd otherwise swell into white blots
+            gl_PointSize = vOn * min(uSize * (1.0 + vFire * 0.5) * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z, uViewH * 0.018);
           }`,
         fragmentShader: /* glsl */ `
           varying float vOn; varying float vFire;
@@ -448,7 +455,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
             float d = length(gl_PointCoord - 0.5);
             float core = smoothstep(0.22, 0.12, d), ring = smoothstep(0.5, 0.3, d) * smoothstep(0.26, 0.34, d);
             vec3 c = vec3(0.45, 0.92, 1.0);
-            gl_FragColor = vec4(c * (core * (1.2 + vFire * 2.0) + ring * 0.6), max(core, ring * 0.7));
+            gl_FragColor = vec4(c * (core * (0.8 + vFire * 0.8) + ring * 0.45), max(core, ring * 0.7));
           }`,
       });
     projects.forEach((_, k) => {
@@ -599,7 +606,13 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       const focus = f < 0.5 ? i - 2 : j - 2; // the screen being visited, if any
       panels.forEach((pn, k2) => {
         // each screen builds from its network once the signal reaches its edge; the last is whole by wired = 0.93
-        pn.mat.uniforms.uOn.value = Math.min(1, Math.max(0, (wired - nets[k2].delay - 0.45) / 0.3));
+        const on = Math.min(1, Math.max(0, (wired - nets[k2].delay - 0.45) / 0.3));
+        pn.mat.uniforms.uOn.value = on;
+        // the window itself is made by the network: its frame and edges come up with the neurons
+        pn.group.visible = on > 0.001;
+        pn.edgeMat.opacity = smooth(0.0, 0.35, on);
+        pn.frameMat.opacity = smooth(0.2, 0.7, on);
+        pn.plateMat.opacity = smooth(0.7, 1.0, on);
         pn.mat.uniforms.uFocus.value += ((k2 === focus ? 1 : 0) - pn.mat.uniforms.uFocus.value) * Math.min(1, dt * 4);
       });
 
