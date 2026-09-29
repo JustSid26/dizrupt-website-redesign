@@ -473,8 +473,8 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   const poses = [
     { pos: new THREE.Vector3(0.9, 0.6, 5.2), look: new THREE.Vector3(0, 0, 0) },
     { pos: new THREE.Vector3(0, 0.4, 22), look: new THREE.Vector3(0, 0, -1.5) },
-    // each screen framed right of centre, a little low, clear of the copy on the left
-    ...slots.map((s) => ({ pos: new THREE.Vector3(s.x * 0.8 - 2.2, s.y * 0.85 + 0.3, s.z + 10.5), look: new THREE.Vector3(s.x - 2.5, s.y + 0.05, s.z) })),
+    // each screen framed middle-right: level with the camera, clear of the copy on the left
+    ...slots.map((s) => ({ pos: new THREE.Vector3(s.x * 0.8 - 2.2, s.y, s.z + 10.5), look: new THREE.Vector3(s.x - 2.5, s.y, s.z) })),
   ];
   const pos = new THREE.Vector3(), look = new THREE.Vector3(), tgtPos = new THREE.Vector3(), tgtLook = new THREE.Vector3();
   let first = true;
