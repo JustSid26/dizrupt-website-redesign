@@ -504,24 +504,26 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     /* its thoughts: three clouds to its left, grown from the neurons on its near edge when the
        camera comes close — what it does, what it's built with, what it changed */
     const cloudU = { uTime, uReveal: { value: 0 } };
+    // on the side away from the chip: the left of a left-hand window, the right of a right-hand one
+    const out = at.x < 0 ? -1 : 1;
     const clouds = [
-      { label: '// What it does', body: pj.summary, x: -PW / 2 - 2.05, y: 1.2 },
-      { label: '// Stack', body: pj.stack.slice(0, 6).join('  ·  '), x: -PW / 2 - 2.4, y: 0.0 },
-      { label: `// Outcome · ${pj.year}`, body: pj.result, x: -PW / 2 - 2.05, y: -1.2 },
+      { label: '// What it does', body: pj.summary, x: out * (PW / 2 + 2.05), y: 1.2 },
+      { label: '// Stack', body: pj.stack.slice(0, 6).join('  ·  '), x: out * (PW / 2 + 2.4), y: 0.0 },
+      { label: `// Outcome · ${pj.year}`, body: pj.result, x: out * (PW / 2 + 2.05), y: -1.2 },
     ].map((cl, ci) => {
       const cw = 2.9, ch = cw * (460 / 1024);
       const mat = new THREE.ShaderMaterial({
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-        uniforms: { map: { value: cloudTexture(cl.label, cl.body, 7 + k * 5 + ci) }, uOn: { value: 0 }, uTime },
+        uniforms: { map: { value: cloudTexture(cl.label, cl.body, 7 + k * 5 + ci) }, uOn: { value: 0 }, uTime, uOut: { value: out } },
         vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: /* glsl */ `
-          uniform sampler2D map; uniform float uOn, uTime; varying vec2 vUv;
+          uniform sampler2D map; uniform float uOn, uTime, uOut; varying vec2 vUv;
           float h2(vec2 p) { return fract(sin(dot(mod(p, 97.0), vec2(127.1, 311.7))) * 43758.5453); }
           void main(){
             // built the way the windows are: neurons fire in from the side the link arrives on, then resolve
             vec2 gp = vUv * vec2(40.0, 18.0);
             vec2 id = floor(gp), f = fract(gp) - 0.5;
-            float order = (1.0 - vUv.x) * 0.6 + h2(id) * 0.4;
+            float order = (uOut < 0.0 ? 1.0 - vUv.x : vUv.x) * 0.6 + h2(id) * 0.4; // from the window's side
             float fire = smoothstep(order * 0.6, order * 0.6 + 0.08, uOn);
             float grow = smoothstep(0.62, 1.0, uOn);
             vec3 c = texture2D(map, vUv).rgb;
@@ -534,32 +536,75 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cw, ch), mat);
       mesh.position.set(cl.x, cl.y, 0.25);
       group.add(mesh);
-      // the links from the window's near edge to the cloud: two each, with signals running out along them
-      const links: THREE.Mesh[] = [];
-      for (const ey of [cl.y * 0.55 + 0.25, cl.y * 0.55 - 0.25]) {
-        const a = new THREE.Vector3(-PW / 2 - 0.02, ey, 0.02);
-        const b = new THREE.Vector3(cl.x + cw / 2 - 0.1, cl.y + (ey - cl.y * 0.55) * 0.8, 0.25);
-        const mid = a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, (ci - 1) * 0.15, 0.15));
-        const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
-        const lm = new THREE.ShaderMaterial({
-          transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-          uniforms: cloudU,
-          vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-          fragmentShader: /* glsl */ `
-            uniform float uTime, uReveal; varying vec2 vUv;
-            void main(){
-              float s = vUv.x;
-              if (s > uReveal * 1.6 || uReveal <= 0.001) discard;
-              float pulse = pow(fract(s - uTime * 0.9), 10.0);
-              gl_FragColor = vec4(vec3(0.35, 0.9, 1.0) * (0.35 + pulse * 2.2), 1.0);
-            }`,
-        });
-        const link = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.012, 5, false), lm);
-        group.add(link);
-        links.push(link);
-      }
-      return { mat, links };
+      return { mat, cw, ch, x: cl.x, y: cl.y };
     });
+    /* between the window and its clouds, a small neural network like the chip's: neurons along the
+       window's edge, a hidden layer, and two neurons on each cloud's near edge, every one wired to
+       every one in the next layer; it fires out a layer at a time, then pulses run through it */
+    {
+      const L0 = Array.from({ length: 6 }, (_, j) => new THREE.Vector3(out * (PW / 2 + 0.02), (j / 5 - 0.5) * PH * 0.8, 0.02));
+      const L1 = Array.from({ length: 5 }, (_, j) => new THREE.Vector3(out * (PW / 2 + 0.62), (j / 4 - 0.5) * 2.4, 0.14));
+      const L2 = clouds.flatMap((cl) => [0.18, -0.18].map((dy) => new THREE.Vector3(cl.x - out * (cl.cw / 2 - 0.12), cl.y + dy, 0.25)));
+      const layers = [L0, L1, L2];
+      const geos: THREE.BufferGeometry[] = [];
+      const rand = rng(300 + k);
+      for (let l = 0; l < 2; l++)
+        for (const pa of layers[l])
+          for (const pb of layers[l + 1]) {
+            const g = new THREE.TubeGeometry(new THREE.LineCurve3(pa, pb), 6, 0.0075, 4, false);
+            const n = g.attributes.position.count, sd = rand();
+            g.setAttribute('aLayer', new THREE.Float32BufferAttribute(new Array(n).fill(l), 1));
+            g.setAttribute('aSeed', new THREE.Float32BufferAttribute(new Array(n).fill(sd), 1));
+            geos.push(g);
+          }
+      const netMat = new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+        uniforms: cloudU,
+        vertexShader: /* glsl */ `
+          attribute float aLayer; attribute float aSeed; varying float vT; varying float vLayer; varying float vSeed;
+          void main(){ vT = uv.x; vLayer = aLayer; vSeed = aSeed; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: /* glsl */ `
+          uniform float uTime, uReveal; varying float vT; varying float vLayer; varying float vSeed;
+          void main(){
+            float front = uReveal * 2.2 - vLayer;
+            if (vT > front || uReveal <= 0.001) discard;
+            float lead = exp(-(front - vT) * 6.0) * step(front, 1.0);
+            float pulse = pow(fract(vT - uTime * (0.5 + vSeed * 0.7) + vSeed * 5.0), 14.0);
+            vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.72, 0.4, 1.0), step(0.62, vSeed));
+            float a = 0.16 + pulse * 1.2 + lead * 1.2;
+            gl_FragColor = vec4(c * a, a);
+          }`,
+      });
+      group.add(new THREE.Mesh(mergeGeometries(geos), netMat));
+      geos.forEach((g) => g.dispose());
+      // the neurons: small glowing points, lit layer by layer as the signal reaches them
+      const nodeGeo = new THREE.BufferGeometry();
+      nodeGeo.setAttribute('position', new THREE.Float32BufferAttribute(layers.flat().flatMap((v) => [v.x, v.y, v.z]), 3));
+      nodeGeo.setAttribute('aLayer', new THREE.Float32BufferAttribute(layers.flatMap((ly, l) => ly.map(() => l)), 1));
+      group.add(new THREE.Points(nodeGeo, new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+        uniforms: { ...cloudU, uViewH: { value: innerHeight * pixelRatio } },
+        vertexShader: /* glsl */ `
+          attribute float aLayer; uniform float uReveal, uTime, uViewH; varying float vOn; varying float vFire;
+          void main(){
+            float front = uReveal * 2.2 - aLayer;
+            vOn = step(0.001, front) * step(0.001, uReveal);
+            vFire = exp(-max(front, 0.0) * 4.0) * vOn + 0.3 * (0.5 + 0.5 * sin(uTime * 3.0 + aLayer * 1.7 + position.y * 3.0));
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mv;
+            gl_PointSize = vOn * min(0.09 * (1.0 + vFire * 0.5) * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z, uViewH * 0.016);
+          }`,
+        fragmentShader: /* glsl */ `
+          varying float vOn; varying float vFire;
+          void main(){
+            if (vOn < 0.5) discard;
+            float d = length(gl_PointCoord - 0.5);
+            float core = smoothstep(0.22, 0.12, d), ring = smoothstep(0.5, 0.3, d) * smoothstep(0.26, 0.34, d);
+            gl_FragColor = vec4(vec3(0.45, 0.92, 1.0) * (core * (0.9 + vFire * 0.9) + ring * 0.5), max(core, ring * 0.7));
+          }`,
+      })));
+    }
+
     return { group, mat, frameMat, edgeMat, clouds, cloudU, cloudOn: 0, plateMat: plate.material as THREE.MeshBasicMaterial, burst: { next: 2 + k * 1.3, until: 0, strength: 0, reseed: 0 } };
   });
 
@@ -705,8 +750,8 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   const poses = [
     { pos: new THREE.Vector3(0.9, 0.6, 5.2), look: new THREE.Vector3(0, 0, 0) },
     { pos: new THREE.Vector3(0, 0.4, 22), look: new THREE.Vector3(0, 0, -1.5) },
-    // each screen framed middle-right: level with the camera, clear of the copy on the left
-    ...slots.map((s) => ({ pos: new THREE.Vector3(s.x * 0.8 - 2.2, s.y, s.z + 10.5), look: new THREE.Vector3(s.x - 2.5, s.y, s.z) })),
+    // a left-hand window sits right of centre with its clouds to its left; a right-hand one the mirror of that
+    ...slots.map((s) => { const o = s.x < 0 ? -1 : 1; return { pos: new THREE.Vector3(s.x * 0.8 + o * 2.2, s.y, s.z + 10.5), look: new THREE.Vector3(s.x + o * 2.5, s.y, s.z) }; }),
   ];
   const pos = new THREE.Vector3(), look = new THREE.Vector3(), tgtPos = new THREE.Vector3(), tgtLook = new THREE.Vector3();
   let first = true;
@@ -788,7 +833,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
         // its clouds, when the camera has come in close to it: links grow out, then the clouds build
         const close = (i - 2 === k2 ? 1 - f : 0) + (j - 2 === k2 && j !== i ? f : 0);
         pn.cloudOn += ((on > 0.95 ? smooth(0.55, 0.95, close) : 0) - pn.cloudOn) * Math.min(1, dt * 2.2);
-        pn.cloudU.uReveal.value = Math.min(1, pn.cloudOn * 1.6);
+        pn.cloudU.uReveal.value = Math.min(1, pn.cloudOn * 1.7);
         // while its thoughts are up, the network feeding it steps back so the clouds read clean
         nets[k2].edgeMat.uniforms.uDim.value = nets[k2].nodeMat.uniforms.uDim.value = 1 - 0.8 * pn.cloudOn;
         pn.clouds.forEach((cl, ci) => (cl.mat.uniforms.uOn.value = Math.min(1, Math.max(0, (pn.cloudOn - 0.35 - ci * 0.08) / 0.5))));
