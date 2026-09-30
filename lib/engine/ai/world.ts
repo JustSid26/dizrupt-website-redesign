@@ -383,12 +383,19 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
             guv += jump * (vec2(h2(blk + uSeed + 1.0), h2(blk + uSeed + 2.0)) - 0.5) * 0.12 * gl;
             guv.y += (h2(vec2(uSeed, 9.0)) - 0.5) * 0.04 * gl;
           }
-          float ca = 0.012 * gl;
-          vec3 c = vec3(texture2D(map, guv + vec2(ca, 0.0)).r, texture2D(map, guv).g, texture2D(map, guv - vec2(ca, 0.0)).b);
+          /* RGB: the three channels come apart, each band of rows splitting its own way, the red
+             and blue ghosts torn further than the picture */
+          float band = floor(vUv.y * 14.0);
+          float bs = (h2(vec2(band, uSeed + 5.0)) - 0.5) * 2.0;
+          vec2 ca = vec2(0.012 + 0.03 * abs(bs), (h2(vec2(band, uSeed + 7.0)) - 0.5) * 0.01) * gl;
+          vec3 c = vec3(texture2D(map, guv + ca * sign(bs + 0.001)).r, texture2D(map, guv).g, texture2D(map, guv - ca * sign(bs + 0.001)).b);
           if (gl > 0.0) {
-            c = mix(c, 1.0 - c, step(0.975, h2(floor(vUv * vec2(40.0, 30.0)) + uSeed)) * gl);   // inverted flecks
-            c += (h2(vUv * 512.0 + uSeed) - 0.5) * 0.07 * gl;                                   // a little snow
-            c *= 1.0 - 0.3 * gl * step(0.5, fract(vUv.y * 180.0));                             // heavy scanlines
+            // whole bands tinted to one channel, the way a failing signal drops the others
+            float tint = step(0.8, h2(vec2(band, uSeed + 11.0)));
+            float which = h2(vec2(band, uSeed + 13.0));
+            vec3 chan = which < 0.33 ? vec3(1.0, 0.18, 0.3) : which < 0.66 ? vec3(0.2, 1.0, 0.45) : vec3(0.25, 0.4, 1.0);
+            c = mix(c, c * chan * 1.6, tint * gl);
+            c *= 1.0 - 0.15 * gl * step(0.5, fract(vUv.y * 180.0));                            // scanlines
           }
           c *= 0.9 + 0.1 * sin(vUv.y * 600.0);                     // scanlines
           float scan = 1.0 - smoothstep(0.0, 0.012, abs(vUv.y - (1.0 - fract(uTime * 0.25))));

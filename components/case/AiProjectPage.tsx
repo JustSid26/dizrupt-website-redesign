@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { TECH_PROJECTS, type TechProject } from "@/content/techProjects";
@@ -39,15 +40,21 @@ export function AiProjectPage({ project }: { project: TechProject }) {
   const next = TECH_PROJECTS[(n + 1) % TECH_PROJECTS.length];
   const title = useDecode(project.name.toUpperCase(), 250, reduce);
   const [clock, setClock] = useState("");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     scrollTo(0, 0);
     requestAnimationFrame(() => root.current?.classList.add("in"));
+    document.body.classList.add("is-aip");
     const f = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
     const t = () => setClock(f.format(new Date()));
     t();
     const id = setInterval(t, 1000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      document.body.classList.remove("is-aip");
+    };
   }, [project]);
 
   // the chapters come up as they scroll into view
@@ -71,6 +78,8 @@ export function AiProjectPage({ project }: { project: TechProject }) {
         <div className="aip-scan" />
       </div>
 
+      {/* in the site's nav row, so it has to live beside the nav, not inside the page */}
+      {mounted && createPortal(
       <header className="aip-bar">
         <Link
           href="/"
@@ -80,7 +89,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
             if (!sessionStorage.getItem("home-scroll")) sessionStorage.setItem("home-target", "ai");
           }}
         >
-          <span aria-hidden>←</span> AI &amp; Automation
+          <span aria-hidden>←</span> <span className="aip-back-label">AI &amp; Automation</span>
         </Link>
         <p className="aip-path">
           ~/dizrupt/ai/projects/<strong>{project.slug}</strong>
@@ -88,7 +97,9 @@ export function AiProjectPage({ project }: { project: TechProject }) {
         <p className="aip-status">
           <i /> Node {pad(n + 1)} · online · {clock} IST
         </p>
-      </header>
+      </header>,
+        document.body,
+      )}
 
       <section className="aip-hero">
         <p className="aip-kicker">
