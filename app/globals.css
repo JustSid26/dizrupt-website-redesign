@@ -1605,3 +1605,13 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 /* the exit picker: only at the way out */
 .ai-picker.ai-picker-exit { opacity: 0; pointer-events: none; z-index: 5; }
 .ai.is-on .ai-picker.ai-picker-exit[data-show] { opacity: 1; pointer-events: auto; }
+/* the figures are written by his particles now: the page keeps each one's key and label (and the
+   digits for screen readers), but draws no digits of its own over them */
+.intro-stats .stat-n { color: transparent; }
+.intro-stats .stat-n .stat-key { color: #a310e7; }
+.intro-stats .stat-n::before, .intro-stats .stat-n::after { display: none; }
+/* under each figure, centred: its key and its label on one line */
+.intro-pin.stats-in .stat { display: flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 0.8em; text-align: center !important; }
+.intro-stats .stat-n { font-size: 0; line-height: 1; }
+.intro-stats .stat-n .stat-key { font-size: 12px; font-family: var(--mono); letter-spacing: 0.14em; }
+.intro-stats .stat-l { margin: 0; }

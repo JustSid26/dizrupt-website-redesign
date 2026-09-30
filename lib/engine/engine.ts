@@ -18,6 +18,7 @@ import { clients, slugOf, type Project } from '@/content/projects';
 import { SOLUTIONS } from '@/content/solutions';
 import { BANNERS } from '@/content/banners';
 import { SOCIALS } from '@/content/socials';
+import { site } from '@/content/site';
 import { createAiWorld, type AiWorld } from './ai/world';
 import { createTransitionPass } from './ai/transition';
 
@@ -540,44 +541,39 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const w = halfW * 1.6, h = Math.min(1.2, (halfH * 2 - 1.6) / 4 - 0.25);
       for (let i = 0; i < 4; i++) mk(0, (1.5 - i) * (h + 0.3) - 0.2, 0, w, h, (i % 2 ? 1 : -1) * 0.28, (1.5 - i) * 0.12);
     }
-    /* Particle i goes to a window by its own random number, low numbers first — so as the morph runs
-       (its stagger is by that same number) the windows build one after another, each drawing its
-       frame before its glass fills. */
+    /* No windows: his particles write the numbers themselves, big, one figure in each place. Each
+       number is set in type on a small canvas and the particles land on its lit pixels; particle i
+       goes to a number by its own random number, so as the morph runs the four arrive together. */
+    const glyphs = site.stats.map((st) => {
+      const W = 512, H = 176;
+      const c = document.createElement('canvas');
+      c.width = W;
+      c.height = H;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#fff';
+      g.font = '600 150px "JetBrains Mono", ui-monospace, Menlo, monospace';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(`${st.to}${st.suffix}`, W / 2, H / 2 + 6);
+      const data = g.getImageData(0, 0, W, H).data;
+      const px: number[] = [];
+      for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) if (data[(y * W + x) * 4 + 3] > 128) px.push(x / W - 0.5, 0.5 - y / H);
+      return px;
+    });
     const arr = new Float32Array(COUNT * 3);
     const v = new THREE.Vector3();
     const R = field.randoms;
     let seed = 9;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
     for (let i = 0; i < COUNT; i++) {
-      const r = R[i];
-      const pi = Math.min(3, Math.floor(r * 4));
+      const pi = Math.min(3, Math.floor(R[i] * 4));
       const pnl = statPanels[pi];
-      const within = r * 4 - pi; // 0..1: how early in this window's build
-      let x, y, z = 0;
-      if (within < 0.42) {
-        // the frame, front and back, traced round in order
-        const t = (within / 0.42) * 2 * (pnl.w + pnl.h);
-        [x, y] = t < pnl.w ? [t - pnl.w / 2, -pnl.h / 2] : t < pnl.w + pnl.h ? [pnl.w / 2, t - pnl.w - pnl.h / 2]
-          : t < 2 * pnl.w + pnl.h ? [pnl.w / 2 - (t - pnl.w - pnl.h), pnl.h / 2] : [-pnl.w / 2, pnl.h / 2 - (t - 2 * pnl.w - pnl.h)];
-        z = rnd() < 0.62 ? 0 : -0.16;
-      } else if (within < 0.5) {
-        // the depth between front and back at the four corners
-        x = (rnd() < 0.5 ? -1 : 1) * pnl.w / 2;
-        y = (rnd() < 0.5 ? -1 : 1) * pnl.h / 2;
-        z = -rnd() * 0.16;
-      } else if (within < 0.58) {
-        // corner brackets, standing proud
-        const cx = rnd() < 0.5 ? -1 : 1, cy = rnd() < 0.5 ? -1 : 1, along = rnd() * 0.32, hor = rnd() < 0.5;
-        x = cx * (pnl.w / 2 + 0.09 - (hor ? along : 0));
-        y = cy * (pnl.h / 2 + 0.09 - (hor ? 0 : along));
-        z = 0.05;
-      } else {
-        // the glass, scanlines filling from the bottom
-        x = (rnd() - 0.5) * pnl.w * 0.96;
-        y = -pnl.h * 0.48 + ((within - 0.58) / 0.42) * pnl.h * 0.96;
-        y = Math.round(y / 0.07) * 0.07;
-      }
-      v.set(x, y, z).applyMatrix4(pnl.m);
+      const g = glyphs[pi];
+      const k = Math.floor(rnd() * (g.length / 2)) * 2;
+      // the figure fills the upper part of its place; the label sits under it
+      const x = g[k] * pnl.w * 0.95 + (rnd() - 0.5) * 0.012;
+      const y = g[k + 1] * pnl.h * 0.6 + pnl.h * 0.1 + (rnd() - 0.5) * 0.012;
+      v.set(x, y, (rnd() - 0.5) * 0.04).applyMatrix4(pnl.m);
       arr[i * 3] = v.x; arr[i * 3 + 1] = v.y; arr[i * 3 + 2] = v.z;
     }
     const attr = new THREE.BufferAttribute(arr, 3) as THREE.BufferAttribute & { edge?: THREE.BufferAttribute };
@@ -669,7 +665,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       scrubbing = gather;
       key = want;
     }
-    if (scrubbing && key === 'stats' && section === 'intro') u.uProgress.value = smooth(0.44, 0.58, ip);
+    if (scrubbing && key === 'stats' && section === 'intro') u.uProgress.value = smooth(0.44, 0.5, ip);
     else if (scrubbing && key === 'train:station' && section === 'intro') u.uProgress.value = smooth(0.79, 0.94, ip);
     else if (scrubbing) {
       scrubbing = false;
