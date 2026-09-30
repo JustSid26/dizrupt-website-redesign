@@ -1602,3 +1602,6 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
   .aip-back .aip-back-label { display: none; }
   .aip-back::after { content: "Back"; }
 }
+/* the details look picker: above the transition picker, only at the project stops */
+.ai-picker.ai-picker-look { opacity: 0; pointer-events: none; }
+.ai.is-on .ai-picker.ai-picker-look[data-show] { opacity: 1; pointer-events: auto; }

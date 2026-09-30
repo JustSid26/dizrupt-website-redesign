@@ -72,12 +72,12 @@ function Decode({ text, on, reduce }: { text: string; on: boolean; reduce: boole
   }, [text, on, reduce]);
   return <span aria-hidden>{out}</span>;
 }
-const KEY = "dz-ai-transition";
+const LOOK_KEY = "dz-ai-look";
+const LOOKS = ["Clouds", "Neuron clusters", "HUD callouts", "Holo cards"];
 
 export function AiAutomation() {
   const section = useRef<HTMLElement>(null);
   const tween = useRef<gsap.core.Tween | null>(null);
-  const [mode, setMode] = useState(0);
   const [chapter, setChapter] = useState(0);
   const readout = useRef<HTMLParagraphElement>(null);
   const depth = useRef<HTMLParagraphElement>(null);
@@ -109,14 +109,8 @@ export function AiAutomation() {
   };
 
   useEffect(() => {
-    // which hand-over: ?t=1..4, else the last one picked
-    let m = 0;
-    try {
-      const q = Number(new URLSearchParams(location.search).get("t"));
-      m = q >= 1 && q <= TRANSITIONS.length ? q - 1 : Number(localStorage.getItem(KEY) ?? 0) || 0;
-    } catch {}
-    signals.ai.mode = m;
-    setMode(m);
+    // locked in: signal loss
+    signals.ai.mode = 0;
   }, []);
 
   useEffect(() => {
@@ -184,17 +178,24 @@ export function AiAutomation() {
     };
   }, []);
 
-  const pick = (m: number) => {
-    signals.ai.mode = m;
-    setMode(m);
+  const [look, setLook] = useState(0);
+  useEffect(() => {
+    let l = 0;
     try {
-      localStorage.setItem(KEY, String(m));
+      l = Number(localStorage.getItem(LOOK_KEY) ?? 0) || 0;
     } catch {}
-    // show it: run the hand-over again from the city
-    tween.current?.kill();
-    signals.ai.mix = 0;
-    play(1);
+    signals.ai.look = l;
+    setLook(l);
+  }, []);
+  const pickLook = (l: number) => {
+    signals.ai.look = l;
+    setLook(l);
+    try {
+      localStorage.setItem(LOOK_KEY, String(l));
+    } catch {}
   };
+
+
 
   // a project opens its own page; coming back puts you where you were
   const router = useRouter();
@@ -316,14 +317,15 @@ export function AiAutomation() {
           </ol>
         </div>
 
-        <div className="ai-picker" role="group" aria-label="Transition">
-          <span className="ai-picker-label">Transition</span>
-          {TRANSITIONS.map((t, i) => (
-            <button key={t.id} type="button" aria-pressed={mode === i} onClick={() => pick(i)}>
-              <span>{pad(i + 1)}</span> {t.name}
+        <div className="ai-picker ai-picker-look" role="group" aria-label="Project details look" data-show={chapter >= 2 || undefined}>
+          <span className="ai-picker-label">Details</span>
+          {LOOKS.map((name, i) => (
+            <button key={name} type="button" aria-pressed={look === i} onClick={() => pickLook(i)}>
+              <span>{pad(i + 1)}</span> {name}
             </button>
           ))}
         </div>
+
       </div>
     </section>
   );
