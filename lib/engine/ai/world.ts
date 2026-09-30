@@ -306,48 +306,7 @@ const canvas = (W: number, H: number) => {
   return [c, g] as const;
 };
 
-/** Look 1, a neuron cluster: a tight knot of firing neurons on the window's side, its words beside it. */
-function clusterTexture(label: string, body: string, chips: string[] | null, seed: number, flip: boolean) {
-  const W = 1024, H = 460;
-  const [c, g] = canvas(W, H);
-  const rand = rng(seed);
-  const kx = flip ? W - 110 : 110, ky = H / 2;
-  const nodes = Array.from({ length: 16 }, () => [kx + (rand() - 0.5) * 150, ky + (rand() - 0.5) * 260] as const);
-  g.lineWidth = 1.5;
-  nodes.forEach(([x, y], i) =>
-    nodes.slice(i + 1).forEach(([x2, y2]) => {
-      if (Math.hypot(x2 - x, y2 - y) > 120) return;
-      g.strokeStyle = `rgba(${rand() < 0.3 ? '165,139,255' : '80,220,255'},0.5)`;
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x2, y2);
-      g.stroke();
-    }),
-  );
-  // it outputs the words: a few axons reaching towards them
-  for (let i = 0; i < 4; i++) {
-    const [x, y] = nodes[i];
-    g.strokeStyle = 'rgba(80,220,255,0.35)';
-    g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(flip ? W - 250 : 250, 90 + i * 90);
-    g.stroke();
-  }
-  nodes.forEach(([x, y], i) => {
-    const r = i % 3 ? 5 : 9;
-    const grd = g.createRadialGradient(x, y, 0, x, y, r * 3);
-    grd.addColorStop(0, i % 4 ? 'rgba(150,240,255,1)' : 'rgba(210,180,255,1)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = grd;
-    g.beginPath();
-    g.arc(x, y, r * 3, 0, 7);
-    g.fill();
-  });
-  detailWords(g, label, body, chips, flip ? 40 : 270, 96, W - 330);
-  return texOf(c);
-}
-
-/** Look 2, a HUD callout: an angular frame with cut corners, a header tab and a leader tick. */
+/** A project's detail as a HUD callout: an angular frame with cut corners, a header tab and a leader tick. */
 function hudTexture(label: string, body: string, chips: string[] | null, index: number, flip: boolean) {
   const W = 1024, H = 460;
   const [c, g] = canvas(W, H);
@@ -387,103 +346,6 @@ function hudTexture(label: string, body: string, chips: string[] | null, index: 
   g.fillRect(flip ? W - m - 60 : m - 4, H / 2, 64, 3);
   detailWords(g, label, body, chips, 60, 118, W - 140);
   return texOf(c);
-}
-
-/** Look 3, a holographic card: glass with a gradient, a bright edge, scanlines, a corner glint. */
-function holoTexture(label: string, body: string, chips: string[] | null) {
-  const W = 1024, H = 460;
-  const [c, g] = canvas(W, H);
-  const grd = g.createLinearGradient(0, 0, W, H);
-  grd.addColorStop(0, 'rgba(40,140,200,0.35)');
-  grd.addColorStop(0.6, 'rgba(60,30,120,0.28)');
-  grd.addColorStop(1, 'rgba(20,60,110,0.2)');
-  g.fillStyle = grd;
-  g.beginPath();
-  g.roundRect(10, 10, W - 20, H - 20, 22);
-  g.fill();
-  g.strokeStyle = 'rgba(140,235,255,0.9)';
-  g.lineWidth = 3;
-  g.stroke();
-  g.fillStyle = 'rgba(160,240,255,0.06)';
-  for (let y = 14; y < H - 14; y += 5) g.fillRect(12, y, W - 24, 1.5);
-  const glint = g.createLinearGradient(0, 0, 360, 0);
-  glint.addColorStop(0, 'rgba(255,255,255,0.35)');
-  glint.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = glint;
-  g.fillRect(14, 14, 360, 3);
-  detailWords(g, label, body, chips, 64, 96, W - 140);
-  return texOf(c);
-}
-
-/** Look 0, a thought cloud: an irregular outline of neurons, linked round its edge, and its words inside. */
-function cloudTexture(label: string, body: string, seed: number) {
-  const W = 1024, H = 460;
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#000';
-  g.fillRect(0, 0, W, H);
-  const rand = rng(seed);
-  // the outline: a loop of neurons, pushed in and out so it reads as grown, not drawn
-  const n = 46, cx = W / 2, cy = H / 2, rx = W / 2 - 34, ry = H / 2 - 30;
-  const pts = Array.from({ length: n }, (_, i) => {
-    const a = (i / n) * Math.PI * 2;
-    const k = 1 + (rand() - 0.5) * 0.07 + Math.sin(a * 5 + seed) * 0.03;
-    // a rounded rectangle, not an ellipse: it has to hold lines of text
-    const sx = Math.sign(Math.cos(a)) * Math.pow(Math.abs(Math.cos(a)), 0.35);
-    const sy = Math.sign(Math.sin(a)) * Math.pow(Math.abs(Math.sin(a)), 0.35);
-    return [cx + sx * rx * k, cy + sy * ry * k] as const;
-  });
-  // a faint fill, the links round the edge and a few across it, then the neurons
-  g.fillStyle = 'rgba(20,60,90,0.35)';
-  g.beginPath();
-  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-  g.closePath();
-  g.fill();
-  g.lineWidth = 2;
-  g.strokeStyle = 'rgba(80,220,255,0.55)';
-  g.beginPath();
-  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-  g.closePath();
-  g.stroke();
-  g.strokeStyle = 'rgba(165,139,255,0.35)';
-  g.lineWidth = 1.2;
-  for (let i = 0; i < n; i += 3) {
-    const [x0, y0] = pts[i], [x1, y1] = pts[(i + 5 + ((rand() * 4) | 0)) % n];
-    g.beginPath();
-    g.moveTo(x0, y0);
-    g.lineTo(x0 + (x1 - x0) * 0.35, y0 + (y1 - y0) * 0.35);
-    g.stroke();
-  }
-  pts.forEach(([x, y], i) => {
-    g.fillStyle = i % 4 ? 'rgba(120,235,255,0.9)' : 'rgba(200,170,255,1)';
-    g.beginPath();
-    g.arc(x, y, i % 4 ? 3.5 : 6, 0, 7);
-    g.fill();
-  });
-  // the words
-  g.fillStyle = '#a58bff';
-  g.font = '600 26px "JetBrains Mono", Menlo, monospace';
-  g.fillText(label.toUpperCase(), 92, 110);
-  g.fillStyle = '#eafcff';
-  g.font = '500 38px "Inter Tight", system-ui, sans-serif';
-  const words = body.split(' ');
-  const lines: string[] = [];
-  let line = '';
-  for (const w of words) {
-    const t = line ? `${line} ${w}` : w;
-    if (g.measureText(t).width > W - 190 && line) {
-      lines.push(line);
-      line = w;
-    } else line = t;
-  }
-  if (line) lines.push(line);
-  lines.slice(0, 5).forEach((l, i) => g.fillText(i === 4 && lines.length > 5 ? `${l}…` : l, 92, 172 + i * 50));
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
 }
 
 export type AiWorld = ReturnType<typeof createAiWorld>;
@@ -675,22 +537,15 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     // on the side away from the chip: the left of a left-hand window, the right of a right-hand one
     const out = at.x < 0 ? -1 : 1;
     const clouds = [
-      { label: '// What it does', body: pj.summary, chips: null as string[] | null, x: out * (PW / 2 + 2.15), y: 1.42 },
+      { label: '// What it does', body: pj.summary, chips: null as string[] | null, x: out * (PW / 2 + 2.15), y: 1.18 },
       { label: '// Stack', body: pj.stack.slice(0, 6).join('  ·  '), chips: pj.stack.slice(0, 6), x: out * (PW / 2 + 2.65), y: 0.0 },
-      { label: `// Outcome · ${pj.year}`, body: pj.result, chips: null, x: out * (PW / 2 + 2.15), y: -1.42 },
+      { label: `// Outcome · ${pj.year}`, body: pj.result, chips: null, x: out * (PW / 2 + 2.15), y: -1.3 },
     ].map((cl, ci) => {
       const cw = 2.75, ch = cw * (460 / 1024); // a gap of about a third of a cloud between them
-      // the four looks, drawn once each: clouds, neuron clusters, HUD callouts, holographic cards
-      const flip = out > 0;
-      const looks = [
-        cloudTexture(cl.label, cl.chips ? cl.body : cl.body, 7 + k * 5 + ci),
-        clusterTexture(cl.label, cl.body, cl.chips, 40 + k * 5 + ci, flip),
-        hudTexture(cl.label, cl.body, cl.chips, ci, flip),
-        holoTexture(cl.label, cl.body, cl.chips),
-      ];
+      const tex = hudTexture(cl.label, cl.body, cl.chips, ci, out > 0);
       const mat = new THREE.ShaderMaterial({
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-        uniforms: { map: { value: looks[0] as THREE.Texture }, uOn: { value: 0 }, uTime, uOut: { value: out } },
+        uniforms: { map: { value: tex as THREE.Texture }, uOn: { value: 0 }, uTime, uOut: { value: out } },
         vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: /* glsl */ `
           uniform sampler2D map; uniform float uOn, uTime, uOut; varying vec2 vUv;
@@ -712,7 +567,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cw, ch), mat);
       mesh.position.set(cl.x, cl.y, 0.25);
       group.add(mesh);
-      return { mat, mesh, looks, cw, ch, x: cl.x, y: cl.y };
+      return { mat, mesh, cw, ch, x: cl.x, y: cl.y };
     });
     /* between the window and its clouds, a small neural network like the chip's: neurons along the
        window's edge, a hidden layer, and two neurons on each cloud's near edge, every one wired to
@@ -1012,15 +867,12 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
         pn.cloudU.uReveal.value = Math.min(1, pn.cloudOn * 1.7);
         // while its thoughts are up, the network feeding it steps back so the clouds read clean
         nets[k2].edgeMat.uniforms.uDim.value = nets[k2].nodeMat.uniforms.uDim.value = 1 - 0.8 * pn.cloudOn;
-        const look = signals.ai.look;
+        // the callouts float at their own depths, tilted in towards the window, and drift with the cursor
         pn.clouds.forEach((cl, ci) => {
-          if (cl.mat.uniforms.map.value !== cl.looks[look]) cl.mat.uniforms.map.value = cl.looks[look];
-          // holographic cards float at their own depths, tilted in towards the window, and drift with the cursor
-          const holo = look === 3 ? 1 : 0;
           const o = Math.sign(slots[k2].x);
-          cl.mesh.rotation.y = holo * (-o * 0.28 + px * 0.12);
-          cl.mesh.rotation.x = holo * (-py * 0.1 + (ci - 1) * 0.06);
-          cl.mesh.position.z = 0.25 + holo * (0.35 + ci * 0.25 + Math.sin(time * 0.8 + ci) * 0.05);
+          cl.mesh.rotation.y = -o * 0.28 + px * 0.12;
+          cl.mesh.rotation.x = -py * 0.1 + (ci - 1) * 0.06;
+          cl.mesh.position.z = 0.4 + ci * 0.18 + Math.sin(time * 0.8 + ci) * 0.05;
         });
         pn.clouds.forEach((cl, ci) => (cl.mat.uniforms.uOn.value = Math.min(1, Math.max(0, (pn.cloudOn - 0.35 - ci * 0.08) / 0.5))));
         pn.mat.uniforms.uFocus.value += ((k2 === focus ? 1 : 0) - pn.mat.uniforms.uFocus.value) * Math.min(1, dt * 4);

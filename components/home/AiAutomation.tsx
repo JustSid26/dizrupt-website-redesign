@@ -72,8 +72,6 @@ function Decode({ text, on, reduce }: { text: string; on: boolean; reduce: boole
   }, [text, on, reduce]);
   return <span aria-hidden>{out}</span>;
 }
-const LOOK_KEY = "dz-ai-look";
-const LOOKS = ["Clouds", "Neuron clusters", "HUD callouts", "Holo cards"];
 
 export function AiAutomation() {
   const section = useRef<HTMLElement>(null);
@@ -178,22 +176,7 @@ export function AiAutomation() {
     };
   }, []);
 
-  const [look, setLook] = useState(0);
-  useEffect(() => {
-    let l = 0;
-    try {
-      l = Number(localStorage.getItem(LOOK_KEY) ?? 0) || 0;
-    } catch {}
-    signals.ai.look = l;
-    setLook(l);
-  }, []);
-  const pickLook = (l: number) => {
-    signals.ai.look = l;
-    setLook(l);
-    try {
-      localStorage.setItem(LOOK_KEY, String(l));
-    } catch {}
-  };
+
 
 
 
@@ -315,15 +298,6 @@ export function AiAutomation() {
               </li>
             ))}
           </ol>
-        </div>
-
-        <div className="ai-picker ai-picker-look" role="group" aria-label="Project details look" data-show={chapter >= 2 || undefined}>
-          <span className="ai-picker-label">Details</span>
-          {LOOKS.map((name, i) => (
-            <button key={name} type="button" aria-pressed={look === i} onClick={() => pickLook(i)}>
-              <span>{pad(i + 1)}</span> {name}
-            </button>
-          ))}
         </div>
 
       </div>
