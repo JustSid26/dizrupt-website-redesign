@@ -19,8 +19,8 @@ export function SmoothScroll() {
       window.addEventListener("scroll", onScroll, { passive: true });
       return () => window.removeEventListener("scroll", onScroll);
     }
-    /* From the station on, the ride goes stop to stop: one swipe and the train carries you to the
-       next billboard, slowly, on its own. Outside that stretch the scroll is free. */
+    /* The ride follows the scroll: the train moves as you scroll and never stops at a station on
+       its own. The arrow keys can still carry it stop to stop. */
     let gliding = false;
     let lastGesture = 0;
     const glide = (dir: number) => {
@@ -53,9 +53,10 @@ export function SmoothScroll() {
     const lenis = new Lenis({
       lerp: 0.085, smoothWheel: true, syncTouch: false,
       // return false to take the gesture away from Lenis
-      virtualScroll: (d) => {
-        if (Math.abs(d.deltaY) < 2) return !gliding;
-        return !glide(Math.sign(d.deltaY));
+      // the wheel and touch scroll freely, the train following; only the arrow keys ride stop to stop
+      virtualScroll: () => {
+        if (!gliding) signals.rideTarget = null;
+        return !gliding;
       },
     });
     const onKey = (e: KeyboardEvent) => {

@@ -62,10 +62,8 @@ export function Solutions() {
            and within each one it travels, then stands, so each solution is read while it is still. */
         const x = Math.min(1, Math.max(0, (p - 0.01) / 0.99)) * N;
         const i = Math.min(N - 1, Math.floor(x));
-        const f = x - Math.floor(x);
-        // the train moves over nearly all of each stop's scroll, so a glide is the ride, not a wait
-        const k = Math.min(1, Math.max(0, (f - 0.03) / 0.94));
-        signals.scroll.trainS = Math.min(N, Math.floor(x) + k * k * (3 - 2 * k));
+        // straight with the scroll: no standing at a station
+        signals.scroll.trainS = Math.min(N, x);
 
 
         if (bar.current) bar.current.style.transform = `scaleX(${(p >= 1 ? 1 : x - i).toFixed(3)})`;

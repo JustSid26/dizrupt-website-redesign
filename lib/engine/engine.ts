@@ -732,11 +732,20 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        the scroll jumps, the ride stays slow and smooth. */
     {
       if (section !== 'intro' && section !== 'solutions') signals.rideTarget = null;
+      const keyed = signals.rideTarget !== null;
       const target = signals.rideTarget ?? (section === 'intro' ? 0 : s.trainS);
-      const K = 0.55, C = 1.5, VMAX = 0.40; // stops per second at most: a slow, stately ride
-      ride.v += ((target - ride.s) * K - ride.v * C) * dt;
-      ride.v = Math.max(-VMAX, Math.min(VMAX, ride.v));
-      ride.s += ride.v * dt;
+      if (keyed) {
+        // an arrow key sent it to a stop: it drives there on its own, gently
+        const K = 0.55, C = 1.5, VMAX = 0.40;
+        ride.v += ((target - ride.s) * K - ride.v * C) * dt;
+        ride.v = Math.max(-VMAX, Math.min(VMAX, ride.v));
+        ride.s += ride.v * dt;
+      } else {
+        // the scroll drives it: close behind, smoothed, never waiting at a station
+        const prev = ride.s;
+        ride.s = damp(ride.s, target, 3.2, dt);
+        ride.v = (ride.s - prev) / Math.max(dt, 1e-4);
+      }
       if (Math.abs(target - ride.s) < 0.0005 && Math.abs(ride.v) < 0.002) { ride.s = target; ride.v = 0; }
       signals.rideS = ride.s;
     }
@@ -745,7 +754,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        that station's own framing, rather than drifting with the train through it. */
     const nearStop = Math.round(ride.s);
     const dock = nearStop >= 1 ? 1 - smooth(0.03, 0.14, Math.abs(ride.s - nearStop)) : 0; // only as it pulls in
-    const camPose = line.poseAt(ride.s + (nearStop - ride.s) * dock);
+    const camPose = line.poseAt(signals.rideTarget !== null ? ride.s + (nearStop - ride.s) * dock : ride.s); // scrolling: no hold at a station
     if (riding) {
       // on the line: eased onto it while the morph lands, then held to it exactly
       const k = u.uProgress.value >= 1 ? 1 : 1 - Math.exp(-5 * dt);
