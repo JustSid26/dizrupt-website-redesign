@@ -507,11 +507,11 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     // on the side away from the chip: the left of a left-hand window, the right of a right-hand one
     const out = at.x < 0 ? -1 : 1;
     const clouds = [
-      { label: '// What it does', body: pj.summary, x: out * (PW / 2 + 2.05), y: 1.2 },
-      { label: '// Stack', body: pj.stack.slice(0, 6).join('  ·  '), x: out * (PW / 2 + 2.4), y: 0.0 },
-      { label: `// Outcome · ${pj.year}`, body: pj.result, x: out * (PW / 2 + 2.05), y: -1.2 },
+      { label: '// What it does', body: pj.summary, x: out * (PW / 2 + 2.15), y: 1.42 },
+      { label: '// Stack', body: pj.stack.slice(0, 6).join('  ·  '), x: out * (PW / 2 + 2.65), y: 0.0 },
+      { label: `// Outcome · ${pj.year}`, body: pj.result, x: out * (PW / 2 + 2.15), y: -1.42 },
     ].map((cl, ci) => {
-      const cw = 2.9, ch = cw * (460 / 1024);
+      const cw = 2.75, ch = cw * (460 / 1024); // a gap of about a third of a cloud between them
       const mat = new THREE.ShaderMaterial({
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
         uniforms: { map: { value: cloudTexture(cl.label, cl.body, 7 + k * 5 + ci) }, uOn: { value: 0 }, uTime, uOut: { value: out } },
@@ -543,7 +543,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
        every one in the next layer; it fires out a layer at a time, then pulses run through it */
     {
       const L0 = Array.from({ length: 6 }, (_, j) => new THREE.Vector3(out * (PW / 2 + 0.02), (j / 5 - 0.5) * PH * 0.8, 0.02));
-      const L1 = Array.from({ length: 5 }, (_, j) => new THREE.Vector3(out * (PW / 2 + 0.62), (j / 4 - 0.5) * 2.4, 0.14));
+      const L1 = Array.from({ length: 5 }, (_, j) => new THREE.Vector3(out * (PW / 2 + 0.62), (j / 4 - 0.5) * 2.9, 0.14));
       const L2 = clouds.flatMap((cl) => [0.18, -0.18].map((dy) => new THREE.Vector3(cl.x - out * (cl.cw / 2 - 0.12), cl.y + dy, 0.25)));
       const layers = [L0, L1, L2];
       const geos: THREE.BufferGeometry[] = [];
