@@ -276,7 +276,7 @@ export function AiAutomation() {
 
           <div className="ai-chapters">
             {CHAPTERS.map((c, i) => (
-              <article key={c.no} className="ai-ch" data-on={i === chapter || undefined} aria-hidden={i !== chapter}>
+              <article key={c.no} className={`ai-ch${c.project ? " sr-only" : ""}`} data-on={i === chapter || undefined} aria-hidden={i !== chapter}>
                 <p className="ai-kicker">
                   <span>{c.no}</span> {c.kicker}
                 </p>
