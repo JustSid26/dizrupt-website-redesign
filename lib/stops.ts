@@ -12,8 +12,9 @@ export function stopPositions() {
   const sol = document.getElementById("solutions");
   if (!intro || !sol) return [];
   const iSpan = intro.offsetHeight - innerHeight;
-  const sTop = sol.getBoundingClientRect().top + scrollY;
-  const sSpan = sol.offsetHeight - innerHeight;
+  // Solutions' ride runs from its top reaching the bottom of the screen (see Solutions.tsx)
+  const sTop = sol.getBoundingClientRect().top + scrollY - innerHeight;
+  const sSpan = sol.offsetHeight;
   const ys = [intro.getBoundingClientRect().top + scrollY + iSpan * 0.995]; // the train at its station
   for (let k = 1; k <= N; k++) ys.push(sTop + sSpan * solutionsProgress(k));
   return ys;

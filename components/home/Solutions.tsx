@@ -53,7 +53,8 @@ export function Solutions() {
   useEffect(() => {
     const st = ScrollTrigger.create({
       trigger: section.current,
-      start: "top top",
+      // the ride starts the moment the landing lets go, not a screen later when this pins
+      start: "top bottom",
       end: "bottom bottom",
       onUpdate: (self) => {
         const p = self.progress;

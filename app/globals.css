@@ -281,7 +281,7 @@ body.panel-open #work { opacity: 0; pointer-events: none; }
 #contact .back { margin-top: 48px; }
 
 /* ---------- Intro ---------- */
-#intro { position: relative; height: 640svh; }
+#intro { position: relative; height: 500svh; } /* the scroll is reshaped in Intro.tsx: less held on the count and the station */
 .intro-pin {
   position: sticky; top: 0; height: 100svh; overflow: hidden;
   color: #fff;

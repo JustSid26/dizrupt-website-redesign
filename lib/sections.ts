@@ -10,7 +10,8 @@ export function sectionTop(id: string) {
   if (id.startsWith("solution-")) {
     const el = document.getElementById("solutions");
     const i = Number(id.slice(9));
-    return top(el) + span(el) * ((i + 0.5) / SOLUTIONS.length);
+    // the ride runs from a screen before the section pins (see Solutions.tsx)
+    return top(el) - innerHeight + (el ? (el as HTMLElement).offsetHeight : 0) * ((i + 1) / SOLUTIONS.length);
   }
   const el = document.getElementById(id);
   if (id === "contact") return top(el) + span(el); // the hand-over complete

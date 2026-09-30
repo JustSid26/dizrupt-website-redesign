@@ -276,7 +276,10 @@ export function Intro() {
       start: "top top",
       end: "bottom bottom",
       onUpdate: (self) => {
-        const p = self.progress;
+        /* the scroll, reshaped: everything up to the count as it was, then less of a wait on the
+           count (0.5 → 0.76) and on the station (0.76 → 1), so the train sets off sooner */
+        const r = self.progress;
+        const p = r < 0.675 ? (r / 0.675) * 0.5 : r < 0.825 ? 0.5 + ((r - 0.675) / 0.15) * 0.26 : 0.76 + ((r - 0.825) / 0.175) * 0.24;
         signals.scroll.intro = p;
         // the last line fades before the train sets off
         el.style.setProperty('--profile-out', String(1 - Math.min(1, Math.max(0, (p - 0.93) / 0.06))));

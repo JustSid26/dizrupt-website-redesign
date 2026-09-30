@@ -729,7 +729,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     {
       if (section !== 'intro' && section !== 'solutions') signals.rideTarget = null;
       const keyed = signals.rideTarget !== null;
-      const target = signals.rideTarget ?? (section === 'intro' ? 0 : s.trainS);
+      const target = signals.rideTarget ?? s.trainS; // it follows the scroll from the moment the landing lets go
       if (keyed) {
         // an arrow key sent it to a stop: it drives there on its own, gently
         const K = 0.55, C = 1.5, VMAX = 0.40;
