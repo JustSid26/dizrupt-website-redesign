@@ -345,10 +345,11 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       uniforms: {
         map: { value: screenTexture(pj.name, pj.about, pj.flow, k) as THREE.Texture }, uOn: { value: 0 }, uTime, uFocus: { value: 0 },
         uSide: { value: at.x < 0 ? 1 : 0 }, // the network plugs into the edge nearest the chip: build from there
+        uGlitch: { value: 0 }, uSeed: { value: 0 },
       },
       vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D map; uniform float uOn, uTime, uFocus, uSide; varying vec2 vUv;
+        uniform sampler2D map; uniform float uOn, uTime, uFocus, uSide, uGlitch, uSeed; varying vec2 vUv;
         float h2(vec2 p) { return fract(sin(dot(mod(p, 97.0), vec2(127.1, 311.7))) * 43758.5453); }
         void main(){
           /* built by a neural network: a grid of neurons fires in from the edge the network plugs
@@ -369,7 +370,26 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
           lat *= fire * (1.0 - grow);
           // a signal runs along the lattice as it fires
           float spark = pow(fract(order * 3.0 - uTime * 1.5), 12.0) * (1.0 - grow);
-          vec3 c = texture2D(map, vUv).rgb;
+          /* the signal drops now and then: rows tear sideways, the channels split, blocks of the
+             picture jump or freeze, and the whole frame jolts */
+          vec2 guv = vUv;
+          float gl = uGlitch;
+          if (gl > 0.0) {
+            float row = floor(vUv.y * 22.0);
+            float tear = step(0.62, h2(vec2(row, uSeed)));
+            guv.x += tear * (h2(vec2(row, uSeed + 3.0)) - 0.5) * 0.22 * gl;
+            vec2 blk = floor(vUv * vec2(12.0, 8.0));
+            float jump = step(0.86, h2(blk + uSeed));
+            guv += jump * (vec2(h2(blk + uSeed + 1.0), h2(blk + uSeed + 2.0)) - 0.5) * 0.12 * gl;
+            guv.y += (h2(vec2(uSeed, 9.0)) - 0.5) * 0.04 * gl;
+          }
+          float ca = 0.012 * gl;
+          vec3 c = vec3(texture2D(map, guv + vec2(ca, 0.0)).r, texture2D(map, guv).g, texture2D(map, guv - vec2(ca, 0.0)).b);
+          if (gl > 0.0) {
+            c = mix(c, 1.0 - c, step(0.975, h2(floor(vUv * vec2(40.0, 30.0)) + uSeed)) * gl);   // inverted flecks
+            c += (h2(vUv * 512.0 + uSeed) - 0.5) * 0.07 * gl;                                   // a little snow
+            c *= 1.0 - 0.3 * gl * step(0.5, fract(vUv.y * 180.0));                             // heavy scanlines
+          }
           c *= 0.9 + 0.1 * sin(vUv.y * 600.0);                     // scanlines
           float scan = 1.0 - smoothstep(0.0, 0.012, abs(vUv.y - (1.0 - fract(uTime * 0.25))));
           c += vec3(0.2, 0.8, 1.0) * scan * 0.25 * grow;
@@ -402,7 +422,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     // a poster, if the project has one, replaces the mock
     if (pj.poster) new THREE.TextureLoader().load(pj.poster, (t) => ((t.colorSpace = THREE.SRGBColorSpace), (mat.uniforms.map.value = t)));
     group.visible = false; // nothing of it exists until its network reaches it
-    return { group, mat, frameMat, edgeMat, plateMat: plate.material as THREE.MeshBasicMaterial };
+    return { group, mat, frameMat, edgeMat, plateMat: plate.material as THREE.MeshBasicMaterial, burst: { next: 2 + k * 1.3, until: 0, strength: 0, reseed: 0 } };
   });
 
   /* ================= the networks: chip → neurons → screen, one per project =================
@@ -613,6 +633,20 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
         pn.edgeMat.opacity = smooth(0.0, 0.35, on);
         pn.frameMat.opacity = smooth(0.2, 0.7, on);
         pn.plateMat.opacity = smooth(0.7, 1.0, on);
+        // glitch bursts: every few seconds, short and stuttering, some heavy
+        const gb = pn.burst;
+        if (time > gb.next) {
+          gb.until = time + 0.12 + Math.random() * 0.35;
+          gb.strength = Math.random() < 0.35 ? 1 : 0.4 + Math.random() * 0.3;
+          gb.next = gb.until + 1.8 + Math.random() * 3.5;
+        }
+        const glitching = on > 0.95 && time < gb.until;
+        if (glitching && time > gb.reseed) {
+          pn.mat.uniforms.uSeed.value = Math.random() * 90;
+          gb.reseed = time + 0.05;
+        }
+        pn.mat.uniforms.uGlitch.value = glitching ? gb.strength * (Math.floor(time * 20) % 3 === 1 ? 0.6 : 1) : 0;
+        pn.group.position.x = slots[k2].x + (glitching ? (Math.random() - 0.5) * 0.12 * gb.strength : 0);
         pn.mat.uniforms.uFocus.value += ((k2 === focus ? 1 : 0) - pn.mat.uniforms.uFocus.value) * Math.min(1, dt * 4);
       });
 
