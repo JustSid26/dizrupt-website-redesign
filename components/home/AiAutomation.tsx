@@ -7,7 +7,8 @@ import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { useSection } from "@/components/home/useSection";
 import { TRANSITIONS } from "@/lib/engine/ai/transition";
-import { AI_STOPS } from "@/lib/engine/ai/world";
+import { AI_STOPS, AI_EXIT_FROM } from "@/lib/engine/ai/world";
+import { scrollToTarget } from "@/lib/scroll";
 import { TECH_PROJECTS } from "@/content/techProjects";
 
 /* AI & Automation: not a seventh solution but its own world. Past the last billboard the page loses
@@ -50,6 +51,8 @@ const BOOT = [
   "handing over ▌",
 ];
 const pad = (n: number) => String(n).padStart(2, "0");
+const EXIT_KEY = "dz-ai-exit";
+const EXITS = ["Network hand-over", "Out through the chip", "Screens become cards", "Plain glitch"];
 const NOISE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#%&$@";
 
 /** A title that decodes out of noise whenever it comes on. */
@@ -106,10 +109,29 @@ export function AiAutomation() {
     tween.current = gsap.to(ai, { mix: to, duration: T.duration * dist, ease: ai.mode === 1 ? "power1.inOut" : "none" });
   };
 
+  const [exit, setExit] = useState(0);
+  const [atExit, setAtExit] = useState(false);
   useEffect(() => {
-    // locked in: signal loss
+    // locked in: signal loss on the way in; the way out is picked (?x=1..4, else the last one picked)
     signals.ai.mode = 0;
+    let x = 0;
+    try {
+      const q = Number(new URLSearchParams(location.search).get("x"));
+      x = q >= 1 && q <= EXITS.length ? q - 1 : Number(localStorage.getItem(EXIT_KEY) ?? 0) || 0;
+    } catch {}
+    signals.ai.exit = x;
+    setExit(x);
   }, []);
+  const pickExit = (x: number) => {
+    signals.ai.exit = x;
+    setExit(x);
+    try {
+      localStorage.setItem(EXIT_KEY, String(x));
+    } catch {}
+    // back to where the way out begins, so it can be scrolled through again
+    const el = section.current;
+    if (el) scrollToTarget(el.getBoundingClientRect().top + scrollY + (el.offsetHeight - innerHeight) * (AI_EXIT_FROM - 0.02));
+  };
 
   useEffect(() => {
     const el = section.current!;
@@ -119,13 +141,14 @@ export function AiAutomation() {
       ScrollTrigger.create({
         trigger: el,
         start: "top 60%",
-        onEnter: () => play(1),
-        onLeaveBack: () => play(0),
+        onEnter: () => ((signals.ai.mode = 0), play(1)),
+        onLeaveBack: () => ((signals.ai.mode = 0), play(0)),
       }),
       ScrollTrigger.create({
         trigger: el,
         start: "bottom bottom",
-        onEnter: () => play(0),
+        // the plain way out hands back through a different glitch (ASCII decode); the rest, signal loss
+        onEnter: () => ((signals.ai.mode = signals.ai.exit === 3 ? 2 : 0), play(0)),
         onLeaveBack: () => play(1),
       }),
       ScrollTrigger.create({
@@ -134,6 +157,7 @@ export function AiAutomation() {
         end: "bottom bottom",
         onUpdate: (self) => {
           signals.ai.p = self.progress;
+          setAtExit(self.progress > AI_EXIT_FROM - 0.04);
           // the chapter whose stop is nearest (the camera holds at each one)
           const p = self.progress;
           let best = 0;
@@ -206,7 +230,7 @@ export function AiAutomation() {
   }, []);
 
   return (
-    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} aria-labelledby="ai-title" style={{ height: "560svh" }}>
+    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} aria-labelledby="ai-title" style={{ height: "660svh" }}>
       <div className="ai-pin">
         <div ref={boot} className="ai-boot" aria-hidden>
           {BOOT.map((l, i) => (
@@ -248,6 +272,15 @@ export function AiAutomation() {
           <p className="ai-read ai-read-bl" ref={depth}>
             Z 0.000
           </p>
+        </div>
+
+        <div className="ai-picker ai-picker-exit" role="group" aria-label="Way out to the work" data-show={atExit || undefined}>
+          <span className="ai-picker-label">Exit</span>
+          {EXITS.map((name, i) => (
+            <button key={name} type="button" aria-pressed={exit === i} onClick={() => pickExit(i)}>
+              <span>{pad(i + 1)}</span> {name}
+            </button>
+          ))}
         </div>
 
         <div className="ai-hud">

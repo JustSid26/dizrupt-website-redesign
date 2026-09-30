@@ -1602,3 +1602,6 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
   .aip-back .aip-back-label { display: none; }
   .aip-back::after { content: "Back"; }
 }
+/* the exit picker: only at the way out */
+.ai-picker.ai-picker-exit { opacity: 0; pointer-events: none; z-index: 5; }
+.ai.is-on .ai-picker.ai-picker-exit[data-show] { opacity: 1; pointer-events: auto; }

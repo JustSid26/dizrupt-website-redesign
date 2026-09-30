@@ -26,7 +26,9 @@ import { signals } from '@/lib/signals';
    ========================================================= */
 
 /** Where the scroll (0..1 through the section) holds: the chip, the whole board, each project. */
-export const AI_STOPS = [0, 0.17, 0.36, 0.54, 0.72, 0.9];
+export const AI_STOPS = [0, 0.15, 0.31, 0.47, 0.63, 0.78];
+/** Past the last stop, the way out to the work (signals.ai.exit picks which). */
+export const AI_EXIT_FROM = 0.8;
 
 function rng(seed: number) {
   let s = seed;
@@ -446,11 +448,11 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       uniforms: {
         map: { value: screenTexture(pj.name, pj.about, pj.flow, k) as THREE.Texture }, uOn: { value: 0 }, uTime, uFocus: { value: 0 },
         uSide: { value: at.x < 0 ? 1 : 0 }, // the network plugs into the edge nearest the chip: build from there
-        uGlitch: { value: 0 }, uSeed: { value: 0 },
+        uGlitch: { value: 0 }, uSeed: { value: 0 }, uDissolve: { value: 0 },
       },
       vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D map; uniform float uOn, uTime, uFocus, uSide, uGlitch, uSeed; varying vec2 vUv;
+        uniform sampler2D map; uniform float uOn, uTime, uFocus, uSide, uGlitch, uSeed, uDissolve; varying vec2 vUv;
         float h2(vec2 p) { return fract(sin(dot(mod(p, 97.0), vec2(127.1, 311.7))) * 43758.5453); }
         void main(){
           /* built by a neural network: a grid of neurons fires in from the edge the network plugs
@@ -507,6 +509,13 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
                     + neuron * node * fire * (1.0 - grow) * (0.7 + spark * 2.0)
                     + neuron * lat * (0.3 + spark * 1.5);
           outc *= 0.8 + uFocus * 0.35;
+          // handing over: the picture breaks back into neurons, cell by cell, each flashing as it goes
+          if (uDissolve > 0.0) {
+            float gone = h2(id + 31.0) * 0.85 + 0.1;
+            float edge = smoothstep(gone - 0.12, gone, uDissolve) * (1.0 - smoothstep(gone, gone + 0.04, uDissolve));
+            outc *= 1.0 - step(gone, uDissolve);
+            outc += vec3(0.4, 0.9, 1.0) * node * edge * 2.0;
+          }
           gl_FragColor = vec4(outc, 1.0);
         }`,
     });
@@ -638,6 +647,52 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
 
     return { group, mat, frameMat, edgeMat, clouds, cloudU, cloudOn: 0, plateMat: plate.material as THREE.MeshBasicMaterial, burst: { next: 2 + k * 1.3, until: 0, strength: 0, reseed: 0 } };
   });
+
+  /* ================= the hand-over's particles: each screen's picture, as it breaks up ================= */
+  const burst = (() => {
+    const n = 900 * panels.length;
+    const start = new Float32Array(n * 3), vel = new Float32Array(n * 3), seed = new Float32Array(n);
+    panels.forEach((pn, k) => {
+      pn.group.updateMatrixWorld(true);
+      const v = new THREE.Vector3();
+      for (let i = 0; i < 900; i++) {
+        const idx = k * 900 + i;
+        v.set((Math.random() - 0.5) * PW, (Math.random() - 0.5) * PH, 0.05).applyMatrix4(pn.group.matrixWorld);
+        start.set([v.x, v.y, v.z], idx * 3);
+        // out towards the camera and away from the middle, so the stream leaves the frame
+        const dir = new THREE.Vector3(v.x * 0.35, v.y * 0.35, 6 + Math.random() * 6);
+        vel.set([dir.x + (Math.random() - 0.5) * 3, dir.y + (Math.random() - 0.5) * 3, dir.z], idx * 3);
+        seed[idx] = Math.random();
+      }
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(start, 3));
+    geo.setAttribute('aVel', new THREE.BufferAttribute(vel, 3));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+      uniforms: { uT: { value: 0 }, uViewH: { value: innerHeight * pixelRatio } },
+      vertexShader: /* glsl */ `
+        attribute vec3 aVel; attribute float aSeed; uniform float uT, uViewH; varying float vA;
+        void main(){
+          float t = clamp((uT - aSeed * 0.35) / 0.65, 0.0, 1.0);
+          vec3 p = position + aVel * t * t;
+          vA = step(0.001, t) * (1.0 - t);
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = vA * min(0.16 * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z, uViewH * 0.02);
+        }`,
+      fragmentShader: /* glsl */ `
+        varying float vA;
+        void main(){ float d = length(gl_PointCoord - 0.5); if (vA <= 0.0) discard;
+          gl_FragColor = vec4(vec3(0.45, 0.9, 1.0) * smoothstep(0.5, 0.0, d) * 1.6, vA); }`,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false;
+    pts.visible = false;
+    scene.add(pts);
+    return { pts, mat };
+  })();
 
   /* ================= the networks: chip → neurons → screen, one per project =================
      Layers of neurons between the chip and each screen — four at the chip's pins, then five, six,
@@ -802,6 +857,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     return x * x * (3 - 2 * x);
   };
   let wired = 0;
+  const tmpExit = new THREE.Vector3(), tmpExit2 = new THREE.Vector3(), camFwd = new THREE.Vector3();
   const corner = new THREE.Vector3();
 
   return {
@@ -819,6 +875,24 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       const f = j === i ? 0 : smooth(0.25, 0.75, (q - AI_STOPS[i]) / (AI_STOPS[j] - AI_STOPS[i]));
       tgtPos.lerpVectors(poses[i].pos, poses[j].pos, f);
       tgtLook.lerpVectors(poses[i].look, poses[j].look, f);
+      /* the way out, past the last stop (signals.ai.exit):
+         0 the network hands the work over — back to the whole board, it fires, the screens break into particles
+         1 out through the chip — into the Dizrupt mark, the reverse of the dive in
+         2 the screens become the cards — they fly out at the camera one after another
+         3 a plain hand-back — nothing here; the glitch itself is a different one */
+      const xp = smooth(AI_EXIT_FROM, 0.97, q);
+      const ex = signals.ai.exit;
+      if (xp > 0) {
+        if (ex === 0 || ex === 2) {
+          const w = smooth(0, 0.3, xp);
+          tgtPos.lerp(poses[1].pos, w);
+          tgtLook.lerp(poses[1].look, w);
+        } else if (ex === 1) {
+          const w = smooth(0, 1, xp);
+          tgtPos.lerp(tmpExit.set(0, 0, 0.9), w);
+          tgtLook.lerp(tmpExit2.set(0, 0, 0), w);
+        }
+      }
       const reach = tgtPos.length() * 0.05;
       tgtPos.x += Math.sin(time * 0.15) * reach * 0.4 + px * (0.2 + reach);
       tgtPos.y += py * (0.1 + reach * 0.5);
@@ -837,6 +911,12 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
         n.edgeMat.uniforms.uReveal.value = r;
         n.nodeMat.uniforms.uReveal.value = r;
       });
+      // exit 0: every network fires at once, then the screens break up into particles that stream out
+      const fire = ex === 0 ? smooth(0.25, 0.45, xp) * (1 - smooth(0.75, 1, xp)) : 0;
+      const dissolve = ex === 0 ? smooth(0.4, 0.8, xp) : 0;
+      burst.pts.visible = dissolve > 0.001;
+      burst.mat.uniforms.uT.value = smooth(0.4, 1, xp);
+      camera.getWorldDirection(camFwd);
       const focus = f < 0.5 ? i - 2 : j - 2; // the screen being visited, if any
       panels.forEach((pn, k2) => {
         // each screen builds from its network once the signal reaches its edge; the last is whole by wired = 0.93
@@ -844,9 +924,11 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
         pn.mat.uniforms.uOn.value = on;
         // the window itself is made by the network: its frame and edges come up with the neurons
         pn.group.visible = on > 0.001;
-        pn.edgeMat.opacity = smooth(0.0, 0.35, on);
-        pn.frameMat.opacity = smooth(0.2, 0.7, on);
-        pn.plateMat.opacity = smooth(0.7, 1.0, on);
+        // on the way out (exit 0) the frame goes with the picture
+        const keep = 1 - (ex === 0 ? smooth(0.5, 0.85, xp) : 0);
+        pn.edgeMat.opacity = smooth(0.0, 0.35, on) * keep;
+        pn.frameMat.opacity = smooth(0.2, 0.7, on) * keep;
+        pn.plateMat.opacity = smooth(0.7, 1.0, on) * keep;
         // glitch bursts: every few seconds, short and stuttering, some heavy
         const gb = pn.burst;
         if (time > gb.next) {
@@ -860,13 +942,30 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
           gb.reseed = time + 0.05;
         }
         pn.mat.uniforms.uGlitch.value = glitching ? gb.strength * (Math.floor(time * 20) % 3 === 1 ? 0.6 : 1) : 0;
-        pn.group.position.x = slots[k2].x + (glitching ? (Math.random() - 0.5) * 0.12 * gb.strength : 0);
+        if (!(ex === 2 && xp > 0)) pn.group.position.x = slots[k2].x + (glitching ? (Math.random() - 0.5) * 0.12 * gb.strength : 0);
         // its clouds, when the camera has come in close to it: links grow out, then the clouds build
-        const close = (i - 2 === k2 ? 1 - f : 0) + (j - 2 === k2 && j !== i ? f : 0);
+        const close = ((i - 2 === k2 ? 1 - f : 0) + (j - 2 === k2 && j !== i ? f : 0)) * (1 - smooth(0, 0.2, xp));
         pn.cloudOn += ((on > 0.95 ? smooth(0.55, 0.95, close) : 0) - pn.cloudOn) * Math.min(1, dt * 2.2);
         pn.cloudU.uReveal.value = Math.min(1, pn.cloudOn * 1.7);
         // while its thoughts are up, the network feeding it steps back so the clouds read clean
-        nets[k2].edgeMat.uniforms.uDim.value = nets[k2].nodeMat.uniforms.uDim.value = 1 - 0.8 * pn.cloudOn;
+        nets[k2].edgeMat.uniforms.uDim.value = nets[k2].nodeMat.uniforms.uDim.value = (1 - 0.8 * pn.cloudOn) * (1 + fire * 2.5);
+        pn.mat.uniforms.uDissolve.value = dissolve;
+        // exit 2: each screen flies out at the camera in turn, the last filling the frame
+        if (ex === 2 && xp > 0) {
+          // each flies up to fill the frame; all but the last then swing away, and the last one stays
+          const t0 = 0.08 + k2 * 0.2;
+          const t = smooth(t0, t0 + 0.22, xp);
+          const away = k2 < panels.length - 1 ? smooth(t0 + 0.22, t0 + 0.34, xp) : 0;
+          const fill = PW / (2 * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect) * 1.02; // distance where it fills the width
+          tmpExit.copy(camera.position).addScaledVector(camFwd, fill);
+          tmpExit.x += (k2 % 2 ? 1 : -1) * away * 9;
+          pn.group.position.lerpVectors(slots[k2], tmpExit, t);
+          pn.group.rotation.set(0, -Math.sign(slots[k2].x) * 0.22 * (1 - t) + (k2 % 2 ? -1 : 1) * away * 0.6, Math.sin(t * Math.PI) * (k2 % 2 ? 0.25 : -0.25));
+          pn.group.renderOrder = Math.round(t * 10) + k2;
+        } else if (pn.group.position.z !== slots[k2].z) {
+          pn.group.position.copy(slots[k2]);
+          pn.group.rotation.set(0, -Math.sign(slots[k2].x) * 0.22, 0);
+        }
         // the callouts float at their own depths, tilted in towards the window, and drift with the cursor
         pn.clouds.forEach((cl, ci) => {
           const o = Math.sign(slots[k2].x);
@@ -884,12 +983,12 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       chipRoot.rotation.set(Math.sin(time * 0.5) * 0.35 * free - 0.3 * free, Math.sin(time * 0.37) * 0.5 * free + 0.4 * free, Math.sin(time * 0.29) * 0.08 * free);
       const bt = beatAt(time % 1);
       markMat.color.setRGB(0.85, 0.6, 1.2).multiplyScalar(1.3 + bt * 1.0);
-      markGlowMat.opacity = 0.2 + bt * 0.4;
+      markGlowMat.opacity = 0.2 + bt * 0.4 + (ex === 1 ? smooth(0.5, 1, xp) * 0.8 : 0);
       dust.rotation.y = time * 0.01;
 
       // the screen being visited: where it is on screen, for its click target
       const out = signals.aiPanel;
-      out.on = focus >= 0 && focus < panels.length && Math.abs(f - 0.5) > 0.35 && panels[focus].mat.uniforms.uOn.value > 0.95;
+      out.on = xp <= 0 && focus >= 0 && focus < panels.length && Math.abs(f - 0.5) > 0.35 && panels[focus].mat.uniforms.uOn.value > 0.95;
       out.index = focus;
       if (out.on) {
         const g = panels[focus].group;
