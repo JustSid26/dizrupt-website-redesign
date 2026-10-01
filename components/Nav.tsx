@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { SectionRail } from "@/components/SectionRail";
-import { ModeToggle } from "@/components/ModeToggle";
 
+// The logo and the sections. The city is always at night; there is no menu.
 export function Nav() {
-  const open = useStore((s) => s.menuOpen);
   const loaded = useStore((s) => s.loaded);
-  const set = useStore((s) => s.set);
   return (
     <header className="nav" data-loaded={loaded || undefined}>
       <Link href="/" className="logo" aria-label="Dizrupt, home">
@@ -17,20 +15,7 @@ export function Nav() {
         </span>
       </Link>
       <SectionRail />
-      <div className="nav-right">
-        <ModeToggle />
-        <button
-          type="button"
-          className="menu-btn"
-          aria-expanded={open}
-          aria-controls="menu"
-          onClick={() => set({ menuOpen: !open })}
-        >
-          <span className="menu-btn-label">{open ? "Close" : "Menu"}</span>
-          <i />
-          <i />
-        </button>
-      </div>
+      <span aria-hidden className="nav-right" />
     </header>
   );
 }

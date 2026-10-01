@@ -36,7 +36,7 @@ export const signals = {
   rideS: 0, // where the train actually is (it drives itself towards trainS)
   // the social skyscrapers' logos on screen at contact (the engine writes them, SocialTowers links them)
   socials: Array.from({ length: 5 }, () => ({ x: 0, y: 0, w: 0, h: 0, on: false })),
-  night: 0, // 0 blue hour, 1 full night (the nav's switch)
+  night: 1, // 0 blue hour, 1 full night (the nav's switch)
   // AI & Automation: its own world, handed over to through a transition (lib/engine/ai)
   ai: { mix: 0, p: 0, mode: 0, warm: false, exit: 0 }, // exit: the way out to the work (0 network, 1 chip, 2 screens, 3 plain)
   // the AI world's project screen being visited, on screen (the engine writes it, AiAutomation links it)

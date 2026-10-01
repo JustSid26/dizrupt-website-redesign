@@ -26,9 +26,8 @@ export function SectionRail() {
   if (!home) return <span />;
   return (
     <nav className="rail" aria-label="Sections">
-      {ITEMS.map((it, i) => (
+      {ITEMS.map((it) => (
         <button key={it.id} type="button" aria-current={cur === it.id || undefined} onClick={() => goToSection(it.dom)}>
-          <span className="hud-no">{String(i + 1).padStart(2, "0")}</span>
           {it.label}
         </button>
       ))}

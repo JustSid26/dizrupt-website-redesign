@@ -5,7 +5,6 @@ import { useStore } from "@/lib/store";
 import { Stage } from "@/components/Stage";
 import { SmoothScroll } from "@/components/SmoothScroll";
 import { Nav } from "@/components/Nav";
-import { Menu } from "@/components/Menu";
 import { Cursor } from "@/components/Cursor";
 import { MacProjects } from "@/components/MacProjects";
 
@@ -27,7 +26,6 @@ export function Experience({ children }: { children: React.ReactNode }) {
       <div className="grain" aria-hidden />
       <SmoothScroll />
       <Nav />
-      <Menu />
       <main id="main">{children}</main>
       <MacProjects />
       <Cursor />

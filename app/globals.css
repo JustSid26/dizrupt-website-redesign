@@ -1615,3 +1615,9 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .intro-stats .stat-n { font-size: 0; line-height: 1; }
 .intro-stats .stat-n .stat-key { font-size: 12px; font-family: var(--mono); letter-spacing: 0.14em; }
 .intro-stats .stat-l { margin: 0; }
+/* no menu now: the section links are the navigation on a phone too */
+@media (max-width: 760px) {
+  .rail { display: flex; gap: 14px; font-size: 10px; letter-spacing: 0.06em; }
+  .nav .logo { display: none; }
+  .nav { justify-content: center; }
+}

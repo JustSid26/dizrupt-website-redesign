@@ -14,7 +14,7 @@ export const useStore = create<State>((set) => ({
   loaded: false,
   reducedMotion: false,
   menuOpen: false,
-  mode: 'dusk',
+  mode: 'night',
   macOpen: false,
   macProject: null,
   set: (partial) => set(partial),
