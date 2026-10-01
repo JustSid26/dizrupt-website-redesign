@@ -6,7 +6,7 @@ import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { setLenis } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
-import { stopPositions } from "@/lib/stops";
+import { landingPositions, stopPositions } from "@/lib/stops";
 
 // One Lenis instance for the whole site, ticking with GSAP so ScrollTriggers stay in step.
 export function SmoothScroll() {
@@ -23,6 +23,28 @@ export function SmoothScroll() {
        its own. The arrow keys can still carry it stop to stop. */
     let gliding = false;
     let lastGesture = 0;
+    // the landing: one gesture plays the whole build-up, down or back up
+    const autoLanding = (dir: number) => {
+      const lp = landingPositions();
+      if (!lp) return false;
+      const y = window.scrollY, tol = 30;
+      if (y < lp.start - tol || y > lp.built + tol) return false;
+      if (dir > 0 && y >= lp.built - tol) return false; // past it: the scroll is free again
+      if (dir < 0 && y <= lp.start + tol) return false;
+      const now = performance.now();
+      if (gliding || now - lastGesture < 350) { lastGesture = now; return true; }
+      lastGesture = now;
+      const target = dir > 0 ? lp.built : lp.start;
+      gliding = true;
+      lenis.scrollTo(target, {
+        duration: Math.max(1.5, 5.5 * (Math.abs(target - y) / Math.max(1, lp.built - lp.start))),
+        easing: (t) => 0.5 - 0.5 * Math.cos(Math.PI * t),
+        lock: true,
+        force: true,
+        onComplete: () => { gliding = false; lastGesture = performance.now(); },
+      });
+      return true;
+    };
     const glide = (dir: number) => {
       const ys = stopPositions();
       if (ys.length < 2) return false;
@@ -54,16 +76,18 @@ export function SmoothScroll() {
       lerp: 0.085, smoothWheel: true, syncTouch: false,
       // return false to take the gesture away from Lenis
       // the wheel and touch scroll freely, the train following; only the arrow keys ride stop to stop
-      virtualScroll: () => {
-        if (!gliding) signals.rideTarget = null;
-        return !gliding;
+      virtualScroll: (d) => {
+        if (gliding) return false;
+        if (Math.abs(d.deltaY) >= 2 && useStore.getState().loaded && autoLanding(Math.sign(d.deltaY))) return false;
+        signals.rideTarget = null;
+        return true;
       },
     });
     const onKey = (e: KeyboardEvent) => {
       // → and ↓ ride forward to the next stop, ← and ↑ back to the last
       if (e.metaKey || e.ctrlKey || e.altKey || useStore.getState().menuOpen || useStore.getState().macOpen) return;
       const dir = ["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key) ? -1 : 0;
-      if (dir && glide(dir)) e.preventDefault();
+      if (dir && (autoLanding(dir) || glide(dir))) e.preventDefault();
     };
     addEventListener("keydown", onKey);
     setLenis(lenis);

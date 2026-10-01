@@ -19,3 +19,14 @@ export function stopPositions() {
   for (let k = 1; k <= N; k++) ys.push(sTop + sSpan * solutionsProgress(k));
   return ys;
 }
+
+/* The landing plays itself: one gesture from the DIZRUPT screen runs the whole build-up (the city,
+   the billboard's rig, him beamed in) and lands where he stands whole in the city. Where that is,
+   as a scroll position: intro progress 0.42, through the reshaping in Intro.tsx (0.5 at 0.675). */
+export function landingPositions() {
+  const intro = document.getElementById("intro");
+  if (!intro) return null;
+  const top = intro.getBoundingClientRect().top + scrollY;
+  const span = intro.offsetHeight - innerHeight;
+  return { start: top, built: top + span * (0.42 / 0.5) * 0.675 };
+}
