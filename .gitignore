@@ -11,3 +11,6 @@ node_modules/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+# internal docs, kept local
+*.md
