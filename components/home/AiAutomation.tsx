@@ -7,8 +7,7 @@ import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { useSection } from "@/components/home/useSection";
 import { TRANSITIONS } from "@/lib/engine/ai/transition";
-import { AI_STOPS, AI_EXIT_FROM } from "@/lib/aiStops";
-import { scrollToTarget } from "@/lib/scroll";
+import { AI_STOPS } from "@/lib/aiStops";
 import { TECH_PROJECTS } from "@/content/techProjects";
 import { goToSection } from "@/lib/sections";
 
@@ -61,8 +60,7 @@ const BOOT = [
   "handing over ▌",
 ];
 const pad = (n: number) => String(n).padStart(2, "0");
-const EXIT_KEY = "dz-ai-exit";
-const EXITS = ["Network hand-over", "Out through the chip", "Screens become cards", "Plain glitch"];
+const EXITS = 4; // the ways out to the work (world.ts): the network hand-over unless ?x=1..4 asks for another
 const NOISE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#%&$@";
 
 /** A title that decodes out of noise whenever it comes on. */
@@ -120,29 +118,16 @@ export function AiAutomation() {
     tween.current = gsap.to(ai, { mix: to, duration: T.duration * dist, ease: ai.mode === 1 ? "power1.inOut" : "none" });
   };
 
-  const [exit, setExit] = useState(0);
-  const [atExit, setAtExit] = useState(false);
   useEffect(() => {
-    // locked in: signal loss on the way in; the way out is picked (?x=1..4, else the last one picked)
+    // locked in: signal loss on the way in; the way out is the network hand-over (?x=1..4 to try another)
     signals.ai.mode = 0;
     let x = 0;
     try {
       const q = Number(new URLSearchParams(location.search).get("x"));
-      x = q >= 1 && q <= EXITS.length ? q - 1 : Number(localStorage.getItem(EXIT_KEY) ?? 0) || 0;
+      if (q >= 1 && q <= EXITS) x = q - 1;
     } catch {}
     signals.ai.exit = x;
-    setExit(x);
   }, []);
-  const pickExit = (x: number) => {
-    signals.ai.exit = x;
-    setExit(x);
-    try {
-      localStorage.setItem(EXIT_KEY, String(x));
-    } catch {}
-    // back to where the way out begins, so it can be scrolled through again
-    const el = section.current;
-    if (el) scrollToTarget(el.getBoundingClientRect().top + scrollY + (el.offsetHeight - innerHeight) * (AI_EXIT_FROM - 0.02));
-  };
 
   useEffect(() => {
     const el = section.current!;
@@ -168,7 +153,6 @@ export function AiAutomation() {
         end: "bottom bottom",
         onUpdate: (self) => {
           signals.ai.p = self.progress;
-          setAtExit(self.progress > AI_EXIT_FROM - 0.04);
           // the chapter whose stop is nearest (the camera holds at each one)
           const p = self.progress;
           let best = 0;
@@ -284,15 +268,6 @@ export function AiAutomation() {
           <p className="ai-read ai-read-bl" ref={depth}>
             Z 0.000
           </p>
-        </div>
-
-        <div className="ai-picker ai-picker-exit" role="group" aria-label="Way out to the work" data-show={atExit || undefined}>
-          <span className="ai-picker-label">Exit</span>
-          {EXITS.map((name, i) => (
-            <button key={name} type="button" aria-pressed={exit === i} onClick={() => pickExit(i)}>
-              <span>{pad(i + 1)}</span> {name}
-            </button>
-          ))}
         </div>
 
         <div className="ai-hud">

@@ -43,6 +43,8 @@ const introRaw = (p: number) =>
    `train` is the stop the train drives itself to, or null while it is still in the intro. */
 export type ScrollStop = { y: number; dur: number; train: number | null; pass?: boolean }; // pass: a waypoint the ride carries on through, either way
 
+const TRAIN_PACE = 1.2;
+
 export function scrollStops(): ScrollStop[] {
   const intro = document.getElementById("intro");
   const lp = landingPositions();
@@ -57,8 +59,9 @@ export function scrollStops(): ScrollStop[] {
     // the count, in its windows: late in it, so the ride on starts where the camera does (0.76)
     { y: top + span * introRaw(0.72), dur: 2.6, train: null },
     { y: ys[0], dur: 2.8, train: 0 }, // the station built, the train at it
-    // pulling out of the station is the first ride: slower than the hops between billboards (4.35s)
-    ...ys.slice(1).map((y, i) => ({ y, dur: i === 0 ? 4.35 : 3.5, train: i + 1 })), // each billboard
+    // pulling out of the station is the first ride: slower than the hops between billboards
+    // (TRAIN_PACE: the train's speed; 1.2 = a fifth faster than the 4.35s / 3.5s it was set at)
+    ...ys.slice(1).map((y, i) => ({ y, dur: (i === 0 ? 4.35 : 3.5) / TRAIN_PACE, train: i + 1 })), // each billboard
     // on to AI & Automation in two: him whole again, the line read (Bridge.tsx: its progress runs from
     // its top at the middle of the screen to its bottom there; the line is up at 0.28–0.42) …
     ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, dur: 3.6, train: null }] : []),

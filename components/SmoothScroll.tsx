@@ -25,9 +25,8 @@ export function SmoothScroll() {
        you are carried to the next stop at the ride's own pace, however hard or soft the gesture was.
        Anything more while it plays (a trackpad's momentum, a second flick) is ignored, so the
        animation between two stops always plays out whole. Past the last billboard the scroll is free. */
-    /* A ride is under way from one stop to another; a new gesture during it (not its own momentum)
-       sends it on one stop further, or back one, from where it is and at the speed it already has, so
-       you can skim through the stops while every gesture still counts as exactly one. */
+    /* A ride is under way from one stop to another: nothing sent while it plays (its own momentum, a
+       second swipe, a double scroll) changes it. */
     let glide: { stops: ScrollStop[]; i: number; dir: number; chain: boolean } | null = null;
     let landedAt = 0; // when the last ride came to rest: its momentum is still arriving for a moment
     let seq = 0;
@@ -69,14 +68,9 @@ export function SmoothScroll() {
        fresh: a new gesture, not the tail of the last one. A trackpad's momentum keeps sending
        events for a second or more after the swipe, so a pause alone can't tell them apart. */
     const ride = (dir: number, fresh: boolean) => {
-      if (glide) {
-        if (!fresh || glide.chain) return true; // the hand-over plays out whole
-        let i = glide.i;
-        if (dir === glide.dir) while (glide.stops[i]?.pass && glide.stops[i + dir]) i += dir; // past the waypoints it is already riding through
-        i += dir;
-        if (i >= 0 && i < glide.stops.length) go(glide.stops, i, true);
-        return true; // past the end of the run, the ride finishes where it was going
-      }
+      // a ride under way plays out whole: a second swipe (or a double scroll) while it runs is ignored,
+      // so one gesture is always exactly one stop
+      if (glide) return true;
       const y = window.scrollY;
       // the run of stops this point is in: the landing and the train, or the work's tower
       const stops = [scrollStops(), workStops()].find((g) => g.length > 1 && y >= g[0].y - TOL && y <= g[g.length - 1].y + TOL);

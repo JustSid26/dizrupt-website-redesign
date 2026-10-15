@@ -1380,6 +1380,11 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
   text-shadow: 0 0 40px rgba(60, 200, 255, 0.25);
 }
 .ai-line { margin-top: 16px; max-width: 44ch; color: rgba(242, 240, 235, 0.72); font-size: 16px; line-height: 1.5; }
+/* the opening chapter sits beside the chip at its biggest: set smaller, so it stays clear of it */
+.ai-ch:first-child .ai-title { font-size: clamp(26px, 2.5vw, 42px); }
+.ai-ch:first-child .ai-line { font-size: 13px; max-width: 30ch; }
+.ai-ch:first-child .ai-chips { max-width: 250px; }
+.ai-ch:first-child .ai-chips li { font-size: 10px; }
 .ai-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
 .ai-chips li {
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -1400,21 +1405,6 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .ai-steps li { font-family: var(--mono); font-size: 10px; color: var(--dim); padding: 4px 8px; border-top: 2px solid rgba(242, 240, 235, 0.15); transition: color 0.3s, border-color 0.3s; }
 .ai-steps li[data-on] { color: #7cf2ff; border-color: #3cf0ff; }
 
-.ai-picker {
-  position: absolute; left: 50%; bottom: calc(var(--gutter) * 2.6); transform: translateX(-50%);
-  display: flex; gap: 4px; align-items: center; pointer-events: auto;
-  padding: 5px; border-radius: 999px; border: 1px solid rgba(242, 240, 235, 0.14); background: rgba(5, 5, 7, 0.6); backdrop-filter: blur(10px);
-  opacity: 0; transition: opacity 0.4s;
-}
-.ai.is-on .ai-picker, .ai-shifting .ai-picker { opacity: 1; }
-.ai-picker-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); padding: 0 8px 0 10px; }
-.ai-picker button {
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg);
-  background: transparent; border: 0; border-radius: 999px; padding: 8px 12px; cursor: pointer; white-space: nowrap;
-}
-.ai-picker button span { color: var(--dim); margin-right: 4px; }
-.ai-picker button[aria-pressed="true"] { background: #3cf0ff; color: #041016; }
-.ai-picker button[aria-pressed="true"] span { color: #0b3a44; }
 
 .ai-boot {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2;
@@ -1427,8 +1417,6 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 @keyframes ai-boot-line { to { opacity: 1; } }
 
 @media (max-width: 800px) {
-  .ai-picker { top: auto; bottom: calc(var(--gutter) * 3.6); flex-wrap: wrap; justify-content: center; border-radius: 12px; width: calc(100% - var(--gutter) * 2); }
-  .ai-picker-label { width: 100%; text-align: center; padding: 4px 0; }
   .ai-chapters { bottom: calc(var(--gutter) * 11); height: 300px; }
   .ai-steps { display: none; }
 }
@@ -1610,8 +1598,6 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
   .aip-back::after { content: "Back"; }
 }
 /* the exit picker: only at the way out */
-.ai-picker.ai-picker-exit { opacity: 0; pointer-events: none; z-index: 5; }
-.ai.is-on .ai-picker.ai-picker-exit[data-show] { opacity: 1; pointer-events: auto; }
 /* the figures are written by his particles now: the page keeps each one's key and label (and the
    digits for screen readers), but draws no digits of its own over them */
 .intro-stats .stat-n { color: transparent; }

@@ -649,9 +649,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       sp.renderOrder = 51;
       group.add(sp);
       // where in its number's window, how big, how dense, which way it turns and drifts
-      // which way it's thrown, how far, how big, how dense, how it turns, how long it lasts
-      const ang = (i / PER) * Math.PI * 2 + rnd() * 0.7;
-      return { sp, mat, panel: Math.floor(i / PER), dx: Math.cos(ang), dy: Math.sin(ang), reach: 0.7 + rnd() * 0.8, z: (rnd() - 0.5) * 0.3, size: 0.55 + rnd() * 0.6, alpha: 0.75 + rnd() * 0.25, spin: (rnd() - 0.5) * 0.9, rot: rnd() * 6.28, life: 1.4 + rnd() * 1.1 };
+      // where in the one cloud over all four figures, how far it's thrown, how big, how dense, how it
+      // turns, how long it lasts
+      const ang = rnd() * Math.PI * 2, rr = Math.sqrt(rnd());
+      return { sp, mat, ux: Math.cos(ang) * rr, uy: Math.sin(ang) * rr, dx: Math.cos(ang), dy: Math.sin(ang), reach: 0.7 + rnd() * 0.8, z: (rnd() - 0.5) * 0.3, size: 0.55 + rnd() * 0.6, alpha: 0.75 + rnd() * 0.25, spin: (rnd() - 0.5) * 0.9, rot: rnd() * 6.28, life: 1.4 + rnd() * 1.1 };
     });
     const v = new THREE.Vector3();
     let burstAt = -1;
@@ -669,15 +670,20 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         group.visible = (burstAt < 0 && brew > 0.004) || (t >= 0 && t < 2.6);
         if (!group.visible) return;
         const out = t < 0 ? 0 : 1 - Math.exp(-4.5 * t); // a blast: fast off the mark, slowing as it spreads
+        // one cloud over the whole count: its middle and its reach, from the four windows together
+        if (statPanels.length === 0) { group.visible = false; return; }
+        let cx = 0, cy = 0;
+        for (const pn of statPanels) { cx += pn.x; cy += pn.y; }
+        cx /= statPanels.length; cy /= statPanels.length;
+        let ex = 0, ey = 0, h = 0;
+        for (const pn of statPanels) { ex = Math.max(ex, Math.abs(pn.x - cx) + pn.w / 2); ey = Math.max(ey, Math.abs(pn.y - cy) + pn.h / 2); h = Math.max(h, pn.h); }
+        const cz = statPanels[0].z;
         for (const p of puffs) {
-          const pnl = statPanels[p.panel];
-          if (!pnl) { p.sp.visible = false; continue; }
           p.sp.visible = true;
-          // packed over the figure while it brews, then thrown out from there, rising a little
-          const bx = p.dx * 0.36 * pnl.w, by = pnl.h * 0.12 + p.dy * 0.22 * pnl.h;
-          v.set(bx + p.dx * p.reach * out * pnl.w * 0.6, by + p.dy * p.reach * out * pnl.h * 0.8 + Math.max(0, t) * pnl.h * 0.1, p.z).applyMatrix4(pnl.m);
+          // packed across all four figures while it brews, then blown out from the middle of them all
+          v.set(cx + p.ux * ex * 0.95 + p.dx * p.reach * out * ex * 0.7, cy + 0.1 * h + p.uy * ey * 0.85 + p.dy * p.reach * out * ey * 0.7 + Math.max(0, t) * h * 0.1, cz + p.z);
           p.sp.position.copy(v);
-          p.sp.scale.setScalar(pnl.h * p.size * (1.15 + 0.9 * out));
+          p.sp.scale.setScalar(h * p.size * (1.35 + 0.9 * out));
           p.mat.rotation = p.rot + time * p.spin * 0.3 + p.spin * out * 2; // it churns, then is flung
           p.mat.opacity = t < 0 ? p.alpha * brew : p.alpha * (1 - smooth(0.05, p.life * 0.75, t));
         }
