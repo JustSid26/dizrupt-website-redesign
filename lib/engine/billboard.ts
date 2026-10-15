@@ -117,7 +117,9 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
   let nextBurst = 0;
   let burstUntil = 0;
   let tear: null | { jx: number; jy: number; rx: number; ry: number; bx: number; by: number; band: number[] | null } = null;
-  function draw(time: number) {
+  // text: false while the landing's own DOM word is up, so the cursor's hole in the veil shows
+  // snow and not a second, slightly offset DIZRUPT behind the real one
+  function draw(time: number, text = true) {
     if (frameNo++ % 2) return;
     const W = canvas.width, H = canvas.height;
     ctx.fillStyle = '#000';
@@ -156,7 +158,7 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
     } else if (!tearing) tear = null;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    for (const g of glyphs) {
+    for (const g of text ? glyphs : []) {
       ctx.font = g.font;
       ctx.fillStyle = g.color;
       if (g.flip) {

@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { createBrandingFilm } from './brandingFilm';
+
+// the films drawn in code, by the name a solution asks for
+const LIVE_FILMS = { branding: createBrandingFilm };
 import { COUNT, isMobile } from './config';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
@@ -14,7 +18,7 @@ import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
    The track builds itself out of particles, like the city, as
    the section begins. Everything on it is his colour.
    ========================================================= */
-export type Station = { name: string; shape: Float32Array; colors: [string, string]; images: string[] };
+export type Station = { name: string; shape: Float32Array; colors: [string, string]; images: string[]; film?: string; filmY?: number; live?: keyof typeof LIVE_FILMS };
 
 const VIOLET = new THREE.Color('#a855ff');
 
@@ -444,14 +448,25 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     S.clone().addScaledVector(SDIR, -11),
     S.clone(),
     S.clone().addScaledVector(SDIR, 9),
-    new THREE.Vector3(0, GROUND + 5, 17),
-    new THREE.Vector3(0, TRACK_Y, 26),
   ];
+  /* The avenue runs straight out along a radius of the loop, so it can't simply meet it: that was
+     a 90° turn in a couple of metres, and the train swung round it all at once. It bends onto the
+     loop instead, on a wide arc tangent to both, climbing to the deck as it goes. */
+  const FR = Math.min(14, R * 0.38); // the bend's radius: it has to fit inside the loop (on a phone the loop is smaller)
+  const fc = new THREE.Vector2(FR, Math.sqrt((R - FR) ** 2 - FR ** 2)); // its centre, tangent to the loop inside it
+  const joinT = Math.atan2(fc.y, fc.x); // where on the loop the bend meets it
+  const BEND = 8;
+  for (let k = 0; k <= BEND; k++) {
+    const phi = Math.PI + (joinT - Math.PI) * (k / BEND);
+    // up from the station's level to the deck over the whole bend, eased at both ends
+    const c = (k + 1) / (BEND + 1), y0 = S.y;
+    pts.push(new THREE.Vector3(fc.x + Math.cos(phi) * FR, y0 + (TRACK_Y - y0) * c * c * (3 - 2 * c), fc.y + Math.sin(phi) * FR));
+  }
   // the loop, clockwise seen from above, starting where the avenue meets it
   const loopStart = Math.PI / 2;
-  for (let a = 0; a <= Math.PI * 2 * 0.94; a += Math.PI / 12) {
+  for (let a = Math.PI / 12; a <= Math.PI * 2 * 0.94; a += Math.PI / 12) {
     const t = loopStart - a;
-    pts.push(new THREE.Vector3(Math.cos(t) * R, TRACK_Y, Math.sin(t) * R));
+    if (t < joinT - 0.05) pts.push(new THREE.Vector3(Math.cos(t) * R, TRACK_Y, Math.sin(t) * R));
   }
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
   const LEN = curve.getLength();
@@ -589,6 +604,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const banners: { mat: THREE.MeshBasicMaterial; texs: THREE.Texture[]; i: number; next: number }[] = [];
   const liveBoards: ReturnType<typeof glitchBoard>[] = [];
   const screens: THREE.Mesh[] = [];
+  const lives: { film: { tex: THREE.Texture; draw: (t: number) => void; stop?: () => void }; k: number; mat: THREE.MeshBasicMaterial; start: number; on: boolean }[] = [];
+  const films: { video: HTMLVideoElement; k: number; mat: THREE.MeshBasicMaterial; tex: THREE.Texture; on: boolean; start: number }[] = [];
   stations.forEach((st, k) => {
     const u = stops[k + 1];
     curve.getPointAt(u, P);
@@ -682,6 +699,30 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       texs.push(t);
     }
     banners.push({ mat: screenMat, texs, i: 0, next: 5 + k });
+    /* A film instead of the slideshow: it takes the screen once it can play, cropped to fill it,
+       and starts from the top each time the train pulls in, so its story is seen from the start. */
+    // a film drawn in code: the screen is its canvas from the start
+    if (st.live) {
+      const film = LIVE_FILMS[st.live](1600, Math.round(1600 * BH / BW));
+      screenMat.map = film.tex;
+      screenMat.color.setScalar(0.5); // the films run darker than the photographs
+      lives.push({ film, k, mat: screenMat, start: 0, on: false });
+    }
+    if (st.film) {
+      const v = document.createElement('video');
+      Object.assign(v, { src: st.film, muted: true, loop: true, playsInline: true, preload: 'auto', crossOrigin: 'anonymous' });
+      v.addEventListener('loadeddata', () => {
+        const vt = new THREE.VideoTexture(v);
+        vt.colorSpace = THREE.SRGBColorSpace;
+        const va = v.videoWidth / v.videoHeight, sa = BW / BH;
+        if (va > sa) { vt.repeat.set(sa / va, 1); vt.offset.set((1 - sa / va) / 2, 0); }
+        else { vt.repeat.set(1, va / sa); vt.offset.set(0, (1 - va / sa) * (st.filmY ?? 0.5)); }
+        films.push({ video: v, k, mat: screenMat, tex: vt, on: false, start: -1 });
+        screenMat.map = vt;
+        screenMat.color.setScalar(0.3); // footage runs brighter than the photographs: the bloom would wash it out
+      }, { once: true });
+      v.load();
+    }
     } else {
       /* Tech & Automation: a silver MacBook Pro, giant, standing open beside the line on a steel
          deck, its screen a macOS desktop with the projects folder on it. Clicking it opens the Mac. */
@@ -869,12 +910,18 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const dir = new THREE.Vector3();
   const quat = new THREE.Quaternion();
   const zAxis = new THREE.Vector3(0, 0, 1);
+  // the train is steered by its bogies, front and rear, both on the rails: it turns through a bend
+  // over its whole length, as a train does, rather than pivoting about its middle
+  const BOGIE = 4.6 / LEN;
+  const front = new THREE.Vector3(), rear = new THREE.Vector3();
   function poseAt(s: number) {
     const i = Math.max(0, Math.min(stops.length - 2, Math.floor(s)));
     const f = Math.min(1, Math.max(0, s - i));
     const u = stops[i] + (stops[i + 1] - stops[i]) * f;
     curve.getPointAt(u, pos);
-    curve.getTangentAt(u, dir);
+    curve.getPointAt(Math.min(1, u + BOGIE), front);
+    curve.getPointAt(Math.max(0, u - BOGIE), rear);
+    dir.subVectors(front, rear).normalize();
     // the train rides on the deck; its own points have their wheels at y = 0
     quat.setFromUnitVectors(zAxis, dir);
     return { pos: pos.clone().add(new THREE.Vector3(0, 0.03, 0)), dir: dir.clone(), quat: quat.clone(), u };
@@ -909,7 +956,28 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       });
     }
     if (reveal > 0.001) liveBoards.forEach((b) => b.draw(time));
+    /* A film waits on its opening frame while the train comes in and starts once it has pulled in,
+       so its story is seen from the start; it stops once the train has gone. */
+    const ARRIVED = 0.04;
+    for (const f of films) {
+      const d = Math.abs(s - (f.k + 1)), near = d < 0.9 && reveal > 0.001;
+      if (near && !f.on) { f.video.pause(); f.video.currentTime = 0; f.start = -1; }
+      if (near && f.start < 0 && d < ARRIVED) { f.start = time; void f.video.play().catch(() => {}); }
+      if (!near && f.on) f.video.pause();
+      f.on = near;
+      f.mat.map = f.tex;
+    }
+    for (const l of lives) {
+      const d = Math.abs(s - (l.k + 1)), near = d < 0.9 && reveal > 0.001;
+      if (near && !l.on) l.start = -1;
+      if (near && l.start < 0 && d < ARRIVED) l.start = time;
+      if (!near && l.on) l.film.stop?.(); // footage stops once the train has gone
+      l.on = near;
+      if (near) l.film.draw(l.start < 0 ? 0 : time - l.start);
+      l.mat.map = l.film.tex;
+    }
     for (const b of banners) {
+      if (films.some((f) => f.mat === b.mat) || lives.some((l) => l.mat === b.mat)) continue; // its film holds the screen
       if (time > b.next && b.texs.length > 1) {
         b.i = (b.i + 1) % b.texs.length;
         b.mat.map = b.texs[b.i];

@@ -21,6 +21,9 @@ import { SOCIALS } from '@/content/socials';
 import { site } from '@/content/site';
 import { createAiWorld, type AiWorld } from './ai/world';
 import { createTransitionPass } from './ai/transition';
+import { createWorkTower } from './workTower';
+import { workP, WORK_LEAD } from '@/lib/stops';
+import { bannerFor } from '@/content/banners';
 
 /* =========================================================
    The engine: one canvas behind the whole site.
@@ -35,7 +38,7 @@ import { createTransitionPass } from './ai/transition';
 export type EngineOptions = {
   canvas: HTMLCanvasElement;
   indexLayer: HTMLElement; // where the spiral's hit areas and labels are placed
-  onOpenProject: (slug: string) => void;
+  onOpenProject: (slug: string, card: HTMLElement | null) => void; // card: the clicked card's hit area, on screen
 };
 
 const MASCOT_COLORS: [string, string] = ['#c9b8ff', '#6f4dff'];
@@ -74,22 +77,26 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   // the spiral of client cards (spiral.ts); clicking one presents it, then its case page opens
   let presentTimer = 0;
+  let isolating = false, wasIsolating = false; // the work's tower standing alone, this frame and last
   const index = createIndex({
     projects: clients,
     scene,
     camera,
     isMobile,
     container: indexLayer,
-    onSelect: (p: Project) => {
-      const n = clients.indexOf(p);
-      index.fault(n, 340);
-      triggerGlitch(320, 0.9);
-      index.present(n);
-      signals.presenting = n;
-      clearTimeout(presentTimer);
-      presentTimer = window.setTimeout(() => onOpenProject(slugOf(p)), 520);
-    },
+    onSelect: (p: Project) => openCard(clients.indexOf(p)),
   });
+  // a card opens: it faults, squares up in the middle of the screen, then its page grows out of it
+  function openCard(n: number) {
+    const p = clients[n];
+    if (!p) return;
+    index.fault(n, 340);
+    triggerGlitch(320, 0.9);
+    index.present(n);
+    signals.presenting = n;
+    clearTimeout(presentTimer);
+    presentTimer = window.setTimeout(() => onOpenProject(slugOf(p), index.hit(n)), 520);
+  }
   const windowField = createWindowField({ scene, count: COUNT, cardScale: index.cardScale });
 
   const composer = new EffectComposer(renderer);
@@ -176,10 +183,25 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const billboard = createBillboard(boardAt, boardFacing);
   const city = createCity(pixelRatio, { center: boardAt, normal: boardFacing, height: BOARD_HEIGHT }, GROUND, PLINTH_TOP, BUST_DROP + BUST_HEIGHT / 2, landmarks, cityModel);
   scene.add(city.group, billboard.group);
+  /* The work's building: one of the city's own (nyc-city.glb), just behind the plaza on his left,
+     facing him; its windows are the work (workTower.ts). Its footprint and height as the model has them. */
+  const haze = (city.group.children.find((o) => ((o as THREE.Mesh).material as THREE.ShaderMaterial | undefined)?.uniforms?.uSkyHorizon) as THREE.Mesh | undefined);
+  const tower = createWorkTower({
+    // its shaft, from the top of the podium to the setback (both of which it keeps as they are)
+    box: { x0: -4.368, x1: -1.232, z0: -15.4316, z1: -12.5684, y0: GROUND + 1.6, h: 13.533 },
+    banners: clients.map((c) => bannerFor(c.title)), colors: clients.map((c) => c.colors),
+    haze: (haze?.material as THREE.ShaderMaterial | undefined)?.uniforms.uSkyHorizon ?? { value: new THREE.Color('#1a1630') },
+    light: (haze?.material as THREE.ShaderMaterial | undefined)?.uniforms as Parameters<typeof createWorkTower>[0]['light'],
+  });
+  scene.add(tower.group);
+  const towerA = new THREE.Vector3(), towerB = new THREE.Vector3(), towerC = new THREE.Vector3();
   // his own line, with a station for each solution
   const line = createMascotLine(pixelRatio, GROUND, PLINTH_TOP, isMobile ? 34 : 48,
     SOLUTIONS.map((sol) => ({
       name: sol.name, shape: field.shape(sol.shape).array as Float32Array, colors: sol.colors,
+      film: sol.film,
+      filmY: sol.filmY,
+      live: sol.live,
       // the banner at each station shows the work that proves it
       images: [sol.image, ...sol.work.split('·').map((w) => w.trim().toLowerCase())
         .map((w) => Object.entries(BANNERS).find(([title]) => title.toLowerCase().startsWith(w.split(' ')[0]))?.[1])
@@ -583,8 +605,89 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   buildStatWindows();
   addEventListener('resize', () => { if (key !== 'stats') buildStatWindows(); });
+
+  /* The count bursts out of smoke: as each number gathers, a tight, dense puff hides it, and then it
+     blows outward, the number punching out of the middle, the smoke thrown off in every direction and
+     gone in a couple of seconds. Soft puffs facing the camera, in front of the figures. */
+  const smoke = (() => {
+    const puffTex = (seed: number) => {
+      const S = 256, c = document.createElement('canvas');
+      c.width = c.height = S;
+      const g = c.getContext('2d')!;
+      let r = seed;
+      const rnd = () => ((r = (r * 16807) % 2147483647) - 1) / 2147483646;
+      // a puff is many soft blobs, thicker in the middle
+      for (let i = 0; i < 26; i++) {
+        const a = rnd() * Math.PI * 2, d = Math.pow(rnd(), 0.8) * S * 0.26;
+        const x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d, rad = S * (0.1 + rnd() * 0.16);
+        const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+        grd.addColorStop(0, 'rgba(255,255,255,0.22)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, S, S);
+      }
+      // and fades out before its edge, so no square ever shows
+      g.globalCompositeOperation = 'destination-in';
+      const edge = g.createRadialGradient(S / 2, S / 2, S * 0.18, S / 2, S / 2, S / 2);
+      edge.addColorStop(0, 'rgba(0,0,0,1)');
+      edge.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = edge;
+      g.fillRect(0, 0, S, S);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    const texs = [puffTex(7), puffTex(31), puffTex(113)];
+    const group = new THREE.Group();
+    points.add(group);
+    const PER = isMobile ? 9 : 14;
+    let sr = 5;
+    const rnd = () => ((sr = (sr * 16807) % 2147483647) - 1) / 2147483646;
+    const puffs = Array.from({ length: 4 * PER }, (_, i) => {
+      const mat = new THREE.SpriteMaterial({ map: texs[i % 3], color: new THREE.Color(0.16, 0.145, 0.21), transparent: true, depthWrite: false, depthTest: false, opacity: 0, toneMapped: false }); // dim: smoke, not cloud lit from inside
+      const sp = new THREE.Sprite(mat);
+      sp.renderOrder = 51;
+      group.add(sp);
+      // where in its number's window, how big, how dense, which way it turns and drifts
+      // which way it's thrown, how far, how big, how dense, how it turns, how long it lasts
+      const ang = (i / PER) * Math.PI * 2 + rnd() * 0.7;
+      return { sp, mat, panel: Math.floor(i / PER), dx: Math.cos(ang), dy: Math.sin(ang), reach: 0.7 + rnd() * 0.8, z: (rnd() - 0.5) * 0.3, size: 0.55 + rnd() * 0.6, alpha: 0.75 + rnd() * 0.25, spin: (rnd() - 0.5) * 0.9, rot: rnd() * 6.28, life: 1.4 + rnd() * 1.1 };
+    });
+    const v = new THREE.Vector3();
+    let burstAt = -1;
+    return {
+      /** progress: how far the figures have gathered (0..1); on: the count is what's showing */
+      update(time: number, progress: number, on: boolean) {
+        /* two beats: while the figures gather (and the camera flies in) a dense ball of smoke churns
+           where each will be and hides it; the moment they have formed it blows apart and the number
+           punches out of it. Going back before they have formed sets it all again. */
+        // (formed, and the camera come to rest in front of them: the ride there has ended)
+        if (on && progress >= 0.985 && Math.abs(signals.scroll.velocity) < 0.4 && burstAt < 0) burstAt = time;
+        if (!on || progress < 0.9) burstAt = -1;
+        const brew = on ? smooth(0.3, 0.6, progress) : 0;
+        const t = burstAt < 0 ? -1 : time - burstAt;
+        group.visible = (burstAt < 0 && brew > 0.004) || (t >= 0 && t < 2.6);
+        if (!group.visible) return;
+        const out = t < 0 ? 0 : 1 - Math.exp(-4.5 * t); // a blast: fast off the mark, slowing as it spreads
+        for (const p of puffs) {
+          const pnl = statPanels[p.panel];
+          if (!pnl) { p.sp.visible = false; continue; }
+          p.sp.visible = true;
+          // packed over the figure while it brews, then thrown out from there, rising a little
+          const bx = p.dx * 0.36 * pnl.w, by = pnl.h * 0.12 + p.dy * 0.22 * pnl.h;
+          v.set(bx + p.dx * p.reach * out * pnl.w * 0.6, by + p.dy * p.reach * out * pnl.h * 0.8 + Math.max(0, t) * pnl.h * 0.1, p.z).applyMatrix4(pnl.m);
+          p.sp.position.copy(v);
+          p.sp.scale.setScalar(pnl.h * p.size * (1.15 + 0.9 * out));
+          p.mat.rotation = p.rot + time * p.spin * 0.3 + p.spin * out * 2; // it churns, then is flung
+          p.mat.opacity = t < 0 ? p.alpha * brew : p.alpha * (1 - smooth(0.05, p.life * 0.75, t));
+        }
+      },
+    };
+  })();
   const corner = new THREE.Vector3();
   let wasCase = false;
+  const rideCamPos = new THREE.Vector3(), rideCamLook = new THREE.Vector3();
+  let rideCamAt = -1; // the time the ride's camera last ran (a gap means it is picked up afresh)
   let wasBridge = false;
   let bridgeZoom = 0;
   const bridgeLook = new THREE.Vector3(), bridgeFrom = new THREE.Vector3(), bridgeFromLook = new THREE.Vector3(), heartWorld = new THREE.Vector3();
@@ -606,7 +709,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const view = signals.caseShape;
     const preview = signals.preview;
     // behind the AI world the city holds where the bridge left it: in his heart
-    const section = s.section === 'ai' ? 'bridge' : s.section;
+    /* behind AI & Automation the city holds what it handed over from: the bridge's view on the way in;
+       on the way out to the work (its second half) the tower's wide shot, so as the AI world hands back,
+       or comes up again on the way back, the city behind it is already where the work begins */
+    const section = s.section === 'ai' ? (signals.ai.p > 0.5 ? 'projects' : 'bridge') : s.section;
     const ip = s.intro;
 
     /* ---- what the field should be ---- */
@@ -731,11 +837,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const keyed = signals.rideTarget !== null;
       const target = signals.rideTarget ?? s.trainS; // it follows the scroll from the moment the landing lets go
       if (keyed) {
-        // an arrow key sent it to a stop: it drives there on its own, gently
-        const K = 0.55, C = 1.5, VMAX = 0.40;
-        ride.v += ((target - ride.s) * K - ride.v * C) * dt;
-        ride.v = Math.max(-VMAX, Math.min(VMAX, ride.v));
-        ride.s += ride.v * dt;
+        /* a gesture sent it to a stop: the scroll is already riding there on a fixed, eased clock,
+           so the train rides with it, tightly, and pulls in as the scroll does */
+        const prev = ride.s;
+        ride.s = damp(ride.s, s.trainS, 7, dt);
+        if (Math.abs(target - ride.s) < 0.01) ride.s = target;
+        ride.v = (ride.s - prev) / Math.max(dt, 1e-4);
       } else {
         // the scroll drives it: close behind, smoothed, never waiting at a station
         const prev = ride.s;
@@ -834,7 +941,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       signals.presenting = -1;
     }
     wasCase = !!view;
-    const open = !view && s.projectsIn > 0.5;
+    const open = false; // the work is a tower of windows now (components/home/Projects.tsx), not the spiral
     indexLayer.parentElement?.classList.toggle('open', open && s.contact < 0.4);
     if (!view && signals.presenting < 0) index.drive(s.projectIndex);
     index.setExit(Math.max(smooth(0, 0.45, s.contact), menuOpen ? 1 : 0));
@@ -842,7 +949,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     /* ---- the field's own visibility ---- */
     const landing = onIntro && ip < 0.015;
-    const fieldTarget = landing ? 0 : view ? (isMobile ? 0.3 : 0.9) : 1;
+    const fieldTarget = landing || (section === 'projects' && !view) ? 0 : view ? (isMobile ? 0.3 : 0.9) : 1;
     fieldOpacity = damp(fieldOpacity, fieldTarget, 4, dt);
     const trainOn = key.startsWith('train') && !view && !preview && (section === 'intro' || section === 'solutions') && !!trainModel;
     const landed = trainOn && u.uProgress.value >= 0.999;
@@ -933,11 +1040,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camLook.copy(stationCamLook).lerp(aerialLook, a);
       // alongside the train, on the outside of the loop, a little behind and above it
       const flat = tmpDir.set(camPose.dir.x, 0, camPose.dir.z).normalize();
-      /* Beside the train: on the avenue that is its left (the side the station camera was on); out on
-         the loop it is the outside of the curve. Blended between the two by how far out it is. */
+      /* Beside the train, always on its left: the side the station camera was on, and, the loop
+         running clockwise, the outside of the curve once it is out on it. It turns with the train
+         through the bend onto the loop; picking a side by which way it pointed flipped the camera
+         across the train halfway round. Settled onto the loop's own outward line once there. */
       const r = Math.hypot(camPose.pos.x, camPose.pos.z);
       const beside = tmpOut.set(-flat.z, 0, flat.x);
-      if (beside.x > 0) beside.negate();
       const radial = tmpB.set(camPose.pos.x, 0, camPose.pos.z).normalize();
       const out = beside.lerp(radial, smooth(33, 36, r)).normalize(); // only once it is on the loop itself
       // docked, it stands further back and wider, so the whole billboard is in frame beside the train
@@ -949,10 +1057,85 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       target.addScaledVector(left, innerWidth > 900 ? -3 : 0); // the copy is on the right: train and board sit left
       camPos.lerp(chase, b);
       camLook.lerp(target, Math.max(b, smooth(0, 0.12, ride.s))); // turn to the train as soon as it moves
-      camera.position.copy(camPos);
+      /* The camera follows that framing with a little weight rather than bolted to the train: through
+         a bend, and as it settles into or swings out of a billboard's framing, the view eases round
+         instead of whipping round with the train. Picked up where it is on the first frame. */
+      if (time - rideCamAt > 0.25) { rideCamPos.copy(camPos); rideCamLook.copy(camLook); }
+      rideCamAt = time;
+      const follow = 1 - Math.exp(-2.6 * dt);
+      rideCamPos.lerp(camPos, follow);
+      rideCamLook.lerp(camLook, follow);
+      camera.position.copy(rideCamPos);
       camera.position.x += p.x * 0.3;
       camera.position.y += p.y * 0.2;
-      camera.lookAt(camLook);
+      camera.lookAt(rideCamLook);
+    } else if (section === 'projects' && !view && !preview) {
+      // (see below: the city is isolated round the tower while the camera is at it)
+      /* The work: from the whole tower into the first window, then out to the facade and across into
+         the next, up the building. The camera always faces the facade square on, so each window stays
+         a true rectangle on screen for the page to lay its project over. */
+      const wp = workP(s.projects), N = tower.count;
+      const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 2, aspect = camera.aspect;
+      const dWide = Math.max((tower.height + 12) / tanH, (tower.width * 1.7) / (tanH * aspect));
+      const dFacade = Math.max((tower.dims.cellH * 12) / tanH, (tower.width * 0.6) / (tanH * aspect)); // pulled back: the floors round the window
+      /* at a project: held back from the glass, its window about half the screen's height (most of its
+         width on a phone), the facade and its lit neighbours round it, the project's name beside it */
+      const dClose = Math.max(tower.dims.winH / (0.52 * tanH), tower.dims.winW / ((aspect < 1 ? 0.8 : 0.62) * tanH * aspect));
+      const easeIO = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+      const logLerp = (a: number, b: number, k: number) => Math.exp(Math.log(a) + (Math.log(b) - Math.log(a)) * k);
+      let dist: number;
+      if (wp <= 0 || wp >= N - 1) {
+        // the first and the last are on the front: in from the wide shot, out to it
+        const first = wp <= 0, t = clamp01(first ? (wp + WORK_LEAD) / WORK_LEAD : 1 - (wp - (N - 1)) / WORK_LEAD);
+        tower.windowWorld(first ? 0 : N - 1, towerA);
+        // in to the window at an even pace the whole way (equal steps in log distance read as steady),
+        // lined up on it in the first part of the move
+        towerC.copy(tower.centre()).lerp(towerA, easeIO(smooth(0, 0.55, t)));
+        dist = logLerp(dWide, dClose, smooth(0.04, 1, t));
+        camera.position.copy(towerC).addScaledVector(tower.normal, dist);
+      } else {
+        /* from window i to window i+1: out from the glass, across, in again. On another side of the
+           building the camera goes round it: its bearing about the building's axis turns from the one
+           facing the first window to the one facing the next, pulled back enough to clear the corner. */
+        const i = Math.floor(wp), f = wp - i;
+        tower.windowWorld(i, towerA); tower.windowWorld(i + 1, towerB);
+        const nA = tower.normalOf(i), nB = tower.normalOf(i + 1);
+        const turn = nA.dot(nB) < 0.99;
+        const travel = easeIO(smooth(turn ? 0.12 : 0.22, turn ? 0.88 : 0.78, f));
+        towerC.copy(towerA).lerp(towerB, travel);
+        /* never far enough back for anything but the tower to be in shot: at most the distance where
+           its narrower face still covers the frame's width; between windows far apart it pans along the
+           facade instead of pulling out, and round a corner it stays tight to the building */
+        const dFill = (Math.min(tower.width, tower.depth) / (tanH * aspect)) * 0.78;
+        const span = Math.min(dFill, Math.max(dFacade, (towerA.distanceTo(towerB) * 1.5) / tanH));
+        dist = logLerp(dClose, span, Math.sin(Math.PI * smooth(0.02, 0.98, f)));
+        const camA = tmpA.copy(towerA).addScaledVector(nA, dist), camB = tmpB.copy(towerB).addScaledVector(nB, dist);
+        if (!turn) camera.position.lerpVectors(camA, camB, travel);
+        else {
+          const ax = tower.axis();
+          const bear = (v: THREE.Vector3) => Math.atan2(v.x - ax.x, v.z - ax.z);
+          const ta = bear(camA);
+          let tb = bear(camB);
+          while (tb - ta > Math.PI) tb -= Math.PI * 2;
+          while (tb - ta < -Math.PI) tb += Math.PI * 2;
+          const th = ta + (tb - ta) * travel;
+          const rad = Math.hypot(camA.x - ax.x, camA.z - ax.z) * (1 - travel) + Math.hypot(camB.x - ax.x, camB.z - ax.z) * travel;
+          camera.position.set(ax.x + Math.sin(th) * rad, camA.y + (camB.y - camA.y) * travel, ax.z + Math.cos(th) * rad);
+        }
+      }
+      /* close to the tower it stands alone: the rest of the city dissolves, so nothing else is ever
+         in shot as the camera works round it; it comes back as the camera pulls out to a wide shot */
+      const alone = wp <= 0 ? smooth(-WORK_LEAD * 0.7, -WORK_LEAD * 0.35, wp) : wp >= N - 1 ? 1 - smooth(N - 1 + WORK_LEAD * 0.35, N - 1 + WORK_LEAD * 0.7, wp) : 1;
+      const ax0 = tower.axis();
+      city.setIsolate(alone, ax0.x, ax0.z);
+      billboard.group.visible = alone < 0.5;
+      isolating = true;
+      // the pointer leans the view only on the wide shots: close to the tower a lean would bring the
+      // street into the edges of the frame
+      const lean = wp <= 0 || wp >= N - 1 ? smooth(dClose * 1.6, dFacade, dist) * smooth(dFacade, dFacade * 2, dist) : 0;
+      camera.position.x += p.x * 0.6 * lean;
+      camera.position.y += p.y * 0.4 * lean;
+      camera.lookAt(towerC);
     } else {
       camera.position.x = damp(camera.position.x, p.x * 0.35, 2, dt);
       camera.position.y = damp(camera.position.y, p.y * 0.2, 2, dt);
@@ -960,6 +1143,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.lookAt(0, 0, 0);
     }
 
+    /* ---- the work's tower: its rooms seen from here, and each project window's place on screen ---- */
+    camera.updateMatrixWorld();
+    tower.group.visible = !(onIntro && ip < 0.6); // the city builds itself in the landing: it is one of its buildings
+    tower.update(time, camera, 0.4 + 0.6 * cityDim, signals.workHidden);
+    if (section === 'projects' && !view) {
+      for (let k = 0; k < tower.count; k++) tower.screenRect(k, camera, signals.workWindows[k]);
+      signals.onWorkFrame?.(); // the page lays the projects over them in this same frame
+    }
+
+    if (!isolating && wasIsolating) { city.setIsolate(0, 0, 0); billboard.group.visible = true; }
+    wasIsolating = isolating;
+    isolating = false;
     // from across the city his light is spread over far fewer pixels; swell the points so he still reads
     const far = camera.position.distanceTo(points.getWorldPosition(tmpV)) / CAMERA_Z;
     u.uSolid.value = damp(u.uSolid.value, key.startsWith('train') ? 1 : 0, 3, dt);
@@ -967,7 +1162,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    cityDim = damp(cityDim, section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
+    cityDim = damp(cityDim, section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     // the board's rig goes up first, as the camera pulls back from its screen
@@ -983,9 +1178,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const lineReveal = ride.s > 0.001 ? Math.max(at0, ahead)
       : section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, ahead) : 1.02;
     line.update(time, lineReveal, cityDim, ride.s, stationT);
+    if (wasIsolating) line.group.visible = false; // the work's tower alone: the line and its stations go with the city
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
-    if (billboard.material.opacity > 0.05) billboard.draw(time);
+    if (billboard.material.opacity > 0.05) billboard.draw(time, !landing);
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();
 
     sky = damp(sky, onIntro ? smooth(0.1, 0.3, ip) : 1, 3, dt);
@@ -1010,6 +1206,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       if (m.depthTest === onTop) { m.depthTest = !onTop; m.needsUpdate = true; }
     }
     points.renderOrder = onTop ? 50 : 0;
+    smoke.update(time, key === 'stats' ? u.uProgress.value : 0, key === 'stats' && section === 'intro' && !view && !preview);
     if (key === 'stats') {
       statPanels.forEach((pnl, i) => {
         const out = signals.statWindows[i];
@@ -1116,7 +1313,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         aiPass.uniforms.uMix.value = ai.mix;
         aiPass.uniforms.uMode.value = ai.mode;
         aiPass.uniforms.uTime.value = time;
-      }
+      } else aiWorld?.sleep(time);
     }
     composer.render();
   }

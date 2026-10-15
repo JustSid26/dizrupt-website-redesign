@@ -27,6 +27,17 @@ export type Billboard = { center: THREE.Vector3; normal: THREE.Vector3; height: 
 const FOG = new THREE.Color('#0f1726'); // the horizon's own colour, so the far city melts into it
 
 /* ---------- buildings ---------- */
+/* The work's tower alone: the buildings round it dissolve away pixel by pixel, each judged by its
+   centre so none is cut in two at the edge, and the skyline beyond them stays. */
+const ISO_GLSL = /* glsl */ `
+uniform float uIso, uIsoR;
+uniform vec2 uIsoAt;
+bool isoGone(vec2 centre) {
+  float d = distance(centre, uIsoAt);
+  if (uIso <= 0.0 || d < 2.6 || d > uIsoR) return false;
+  return fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) < uIso;
+}`;
+
 const buildingVertex = /* glsl */ `
 uniform float uBuild;
 attribute vec3 aSize;    // width, height, depth
@@ -37,7 +48,7 @@ attribute float aSeed;
 attribute vec2 aStack; // this block's base, and its building's whole height
 varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
 varying float vStyle, vSeed, vGrow;
-varying vec2 vStack;
+varying vec2 vStack, vCentre;
 void main() {
   float g = clamp((uBuild - aStart * 0.6) / 0.4, 0.0, 1.0);
   g = g * g * (3.0 - 2.0 * g);
@@ -47,6 +58,7 @@ void main() {
   vLocal = local; // floors stay where they are in the world, so rising uncovers them one by one
   vNormal = normal;
   vTint = aTint; vSize = aSize; vStyle = aStyle; vSeed = aSeed; vGrow = g; vWorld = world.xyz; vStack = aStack;
+  vCentre = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
 }`;
 
 const ROOF_GLSL = /* glsl */ `
@@ -55,14 +67,15 @@ vec3 roofCol(vec3 n) {
   return vec3(0.05, 0.05, 0.055) * (amb + uSunCol * max(dot(n, uSunDir), 0.0) * 0.8);
 }`;
 
-const buildingFragment = FACADE_GLSL + ROOF_GLSL + /* glsl */ `
+const buildingFragment = FACADE_GLSL + ROOF_GLSL + ISO_GLSL + /* glsl */ `
 uniform float uDim, uGround;
 uniform vec3 uCam;
 varying vec3 vLocal, vNormal, vTint, vSize, vWorld;
 varying float vStyle, vSeed, vGrow;
-varying vec2 vStack;
+varying vec2 vStack, vCentre;
 void main() {
   if (vGrow < 0.001) discard;
+  if (isoGone(vCentre)) discard;
   vec3 n = normalize(vNormal);
   float y = vLocal.y;
   // the particles land first; the building stands only as far as they have got
@@ -89,6 +102,7 @@ attribute vec2 uv1;
 attribute vec3 color;
 varying vec3 vWorld, vN, vTint;
 varying float vH, vMat, vSeed, vStart;
+varying vec2 vCentre;
 uniform vec3 uBoard;
 uniform float uExtent;
 void main() {
@@ -102,18 +116,21 @@ void main() {
   vSeed = fract(ms) / 0.9;
   vTint = color;
   vStart = min(1.0, distance(centre, uBoard.xz) / (uExtent * 1.7)) * 0.85;
+  vCentre = centre;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
-const modelFragment = FACADE_GLSL + ROOF_GLSL + /* glsl */ `
+const modelFragment = FACADE_GLSL + ROOF_GLSL + ISO_GLSL + /* glsl */ `
 uniform float uDim, uGround, uBuild;
 uniform vec3 uCam;
 varying vec3 vWorld, vN, vTint;
 varying float vH, vMat, vSeed, vStart;
+varying vec2 vCentre;
 void main() {
   float g = clamp((uBuild - vStart * 0.6) / 0.4, 0.0, 1.0);
   g = g * g * (3.0 - 2.0 * g);
   float y = vWorld.y - uGround;
   if (y > clamp((g - 0.22) / 0.78, 0.0, 1.0) * vH + 0.001) discard;
+  if (isoGone(vCentre)) discard; // the work's tower alone
   vec3 n = normalize(vN);
   vec3 view = normalize(uCam - vWorld);
   vec3 col;
@@ -157,7 +174,8 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const groundFragment = /* glsl */ `
-uniform float uPitch, uPlaza, uExtent, uBuild, uDim, uTime, uNight, uAmbient;
+uniform float uPitch, uPlaza, uExtent, uBuild, uDim, uTime, uNight, uAmbient, uIso, uIsoR;
+uniform vec2 uIsoAt;
 uniform vec3 uSkyHorizon;
 uniform vec3 uFog, uCam, uBoard;
 varying vec3 vWorld;
@@ -200,6 +218,9 @@ void main() {
   // the edge of town fades into the dark
   col *= 1.0 - smoothstep(uExtent - 2.0, uExtent + 12.0, max(abs(p.x), abs(p.y)));
   col = mix(col, uSkyHorizon * 0.8, smoothstep(40.0, 140.0, distance(vWorld, uCam)));
+  // the work's tower alone: the streets round it go dark, out to where the skyline carries on
+  float iso = distance(p, uIsoAt);
+  col = mix(col, vec3(0.012, 0.012, 0.018), uIso * smoothstep(2.6, 4.0, iso) * (1.0 - smoothstep(uIsoR - 1.5, uIsoR + 1.5, iso)));
   gl_FragColor = vec4(col * uDim, 1.0);
 }`;
 
@@ -394,8 +415,9 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const N = blds.length;
   const size = new Float32Array(N * 3), tint = new Float32Array(N * 3), style = new Float32Array(N), start = new Float32Array(N), bseed = new Float32Array(N), bbase = new Float32Array(N * 2);
+  const isoU = { value: 0 }, isoAt = { value: new THREE.Vector2() }, isoR = { value: 9 }; // the work's tower alone, and how far round it
   const buildingUniforms = {
-    ...light,
+    ...light, uIso: isoU, uIsoAt: isoAt, uIsoR: isoR,
     uBuild: { value: 1 }, uDim: { value: 1 }, uGround: { value: GROUND },
     uFog: { value: FOG }, uCam: { value: new THREE.Vector3() },
   };
@@ -439,8 +461,9 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     vertexShader: /* glsl */ `
       uniform float uBuild;
       attribute vec3 aSize; attribute vec3 aTint; attribute float aStart;
-      varying vec3 vTint, vWorld; varying float vGrow, vY;
+      varying vec3 vTint, vWorld; varying float vGrow, vY; varying vec2 vCentre;
       void main() {
+        vCentre = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
         float g = clamp((uBuild - aStart * 0.6) / 0.4, 0.0, 1.0);
         g = g * g * (3.0 - 2.0 * g);
         vec3 local = position * vec3(aSize.x, min(aSize.x, aSize.z), aSize.z) * step(0.999, g);
@@ -449,11 +472,11 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         gl_Position = projectionMatrix * viewMatrix * w;
         vTint = aTint; vGrow = g; vWorld = w.xyz; vY = position.y;
       }`,
-    fragmentShader: /* glsl */ `
+    fragmentShader: ISO_GLSL + /* glsl */ `
       uniform vec3 uFog, uCam; uniform float uDim;
-      varying vec3 vTint, vWorld; varying float vGrow, vY;
+      varying vec3 vTint, vWorld; varying float vGrow, vY; varying vec2 vCentre;
       void main() {
-        if (vGrow < 0.999) discard;
+        if (vGrow < 0.999 || isoGone(vCentre)) discard;
         vec3 col = vec3(0.045, 0.02, 0.016) + vTint * 0.35 * smoothstep(0.44, 0.5, vY); // tiles, lit ridge
         col = mix(col, uFog, smoothstep(40.0, 130.0, distance(vWorld, uCam)));
         gl_FragColor = vec4(col * uDim, 1.0);
@@ -698,6 +721,8 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
 
   /* ---- the modelled city ---- */
   const screenMats: THREE.ShaderMaterial[] = [];
+  const isoKeep = new Set<THREE.Object3D>(); // what stays while the work's tower stands alone
+  const screenMeshes: THREE.Mesh[] = [];
   if (model) {
     const mat = new THREE.ShaderMaterial({
       uniforms: { ...buildingUniforms, uBoard: { value: billboard.center.clone() }, uExtent: { value: EXTENT } },
@@ -706,6 +731,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     const mesh = new THREE.Mesh(model.city.clone().translate(0, GROUND, 0), mat);
     mesh.frustumCulled = false;
     group.add(mesh);
+    isoKeep.add(mesh); // it dissolves on its own, round the tower
     // the construction particles, sampled over its surface; each needs its building's height
     const uvA = mesh.geometry.attributes.uv as THREE.BufferAttribute, uv1A = mesh.geometry.attributes.uv1 as THREE.BufferAttribute;
     const heights = new Map<string, number>();
@@ -742,6 +768,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       const sMesh = new THREE.Mesh(geo, sm);
       sMesh.frustumCulled = false;
       group.add(sMesh);
+      screenMeshes.push(sMesh);
     }
   }
 
@@ -950,7 +977,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     uNight: light.uNight, uAmbient: light.uAmbient, uSkyHorizon: light.uSkyHorizon,
     uPitch: { value: PITCH }, uPlaza: { value: PLAZA }, uExtent: { value: EXTENT }, uBuild: { value: 1 },
     uDim: { value: 1 }, uTime: { value: 0 }, uFog: { value: FOG }, uCam: buildingUniforms.uCam,
-    uBoard: { value: billboard.center.clone() },
+    uBoard: { value: billboard.center.clone() }, uIso: isoU, uIsoAt: isoAt, uIsoR: isoR,
   };
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(EXTENT * 2 + 40, EXTENT * 2 + 40).rotateX(-Math.PI / 2).translate(0, GROUND, 0),
@@ -1280,5 +1307,37 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     }
   }
 
-  return { group, update, setPlinth: (on: boolean) => { hidePlinth = !on; } };
+  /* the work's tower alone: the buildings round it dissolve, and whatever else stands near it (the
+     landmark there and its lights, the screens on the buildings that are going) is put away until the
+     camera pulls back out, when each goes back as it was. What moves through the streets (cars, the
+     trains and their line) goes too. The skyline beyond, the sky and the planes stay. */
+  isoKeep.add(sky).add(stars).add(ground).add(bMesh).add(roofs);
+  planes.forEach((pl) => isoKeep.add(pl.points));
+  const movers = new Set<THREE.Object3D>([cars, rails, deck, pillars, carriages, sparks, plinth, construct]);
+  const box = new THREE.Box3(), mid = new THREE.Vector3();
+  let isoSaved: Map<THREE.Object3D, boolean> | null = null;
+  const applyIso = () => {
+    const away = isoU.value >= 0.5;
+    if (away && !isoSaved) {
+      isoSaved = new Map();
+      for (const o of [...group.children, ...screenMeshes]) {
+        if (isoKeep.has(o)) continue;
+        const near = movers.has(o) || (box.setFromObject(o).isEmpty() ? false : Math.hypot(box.getCenter(mid).x - isoAt.value.x, mid.z - isoAt.value.y) < isoR.value);
+        if (near) isoSaved.set(o, o.visible);
+      }
+    }
+    if (away) for (const o of isoSaved!.keys()) o.visible = false;
+    else if (isoSaved) {
+      for (const [o, v] of isoSaved) o.visible = v;
+      isoSaved = null;
+    }
+  };
+  const setIsolate = (k: number, x: number, z: number) => {
+    isoU.value = k;
+    isoAt.value.set(x, z);
+    applyIso();
+  };
+  // the city's own frame may show things again: while the tower is alone, they are put back away after it
+  const frame = (...a: Parameters<typeof update>) => { update(...a); if (isoSaved) applyIso(); };
+  return { group, update: frame, setPlinth: (on: boolean) => { hidePlinth = !on; }, setIsolate };
 }

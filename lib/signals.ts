@@ -43,5 +43,11 @@ export const signals = {
   aiPanel: { x: 0, y: 0, w: 0, h: 0, on: false, index: -1 },
   // where the Mac should grow from when something other than a billboard opens it
   macFrom: null as null | { x: number; y: number; w: number; h: number },
+  workApply: null as null | (() => void), // the work's tower: draw this scroll position's frame now
+  // the work's tower: each project window on screen (the engine writes them), the ones the page has up
+  // full (the engine hides their own glass), and the page's draw for the frame
+  workWindows: Array.from({ length: 16 }, () => ({ x: 0, y: 0, w: 0, h: 0, on: false, face: 1 })),
+  workHidden: [] as number[],
+  onWorkFrame: null as null | (() => void),
   ready: false, // the engine has built everything it needs
 };

@@ -7,9 +7,19 @@ import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { useSection } from "@/components/home/useSection";
 import { TRANSITIONS } from "@/lib/engine/ai/transition";
-import { AI_STOPS, AI_EXIT_FROM } from "@/lib/engine/ai/world";
+import { AI_STOPS, AI_EXIT_FROM } from "@/lib/aiStops";
 import { scrollToTarget } from "@/lib/scroll";
 import { TECH_PROJECTS } from "@/content/techProjects";
+import { goToSection } from "@/lib/sections";
+
+// what it runs beyond the featured work (the same four the chip's bus shows, plus the core)
+const SOLUTIONS = [
+  { name: "Voice AI", line: "Agents that answer, book and follow up on the phone." },
+  { name: "Workflow automation", line: "The repetitive steps between your tools, done for you." },
+  { name: "Document processing", line: "Invoices, contracts and forms read, checked and filed." },
+  { name: "Custom AI solutions", line: "Models and tools built around your own data." },
+  { name: "Agents & integrations", line: "Wired into the CRM, inbox and stack you already run." },
+];
 
 /* AI & Automation: not a seventh solution but its own world. Past the last billboard the page loses
    its signal and hands over — on the real pixels, in the engine (lib/engine/ai) — to a
@@ -29,7 +39,7 @@ const CHAPTERS: Chapter[] = [
     no: "01",
     kicker: "Wired in",
     title: "One chip, everything connected",
-    line: "Every system we build runs on the same idea: one brain, wired into the tools you already use. Here's what it powers.",
+    line: "Every system we build runs on one brain, wired into the tools you already use. The four here are featured work, a sample of what it powers.",
     chips: [],
   },
   ...TECH_PROJECTS.slice(0, 4).map((pj, i) => ({
@@ -92,6 +102,7 @@ export function AiAutomation() {
     return () => gsap.ticker.remove(tick);
   }, []);
   const [on, setOn] = useState(false);
+  const [explore, setExplore] = useState(false);
   const reduce = useStore((s) => s.reducedMotion);
   const boot = useRef<HTMLDivElement>(null);
   useSection(section, "ai");
@@ -163,6 +174,7 @@ export function AiAutomation() {
           let best = 0;
           AI_STOPS.forEach((s, i) => Math.abs(s - p) < Math.abs(AI_STOPS[best] - p) && (best = i));
           setChapter(Math.min(CHAPTERS.length - 1, best));
+          if (best !== 1) setExplore(false);
         },
       }),
     ];
@@ -293,7 +305,12 @@ export function AiAutomation() {
 
           <div className="ai-chapters">
             {CHAPTERS.map((c, i) => (
-              <article key={c.no} className={`ai-ch${c.project ? " sr-only" : ""}`} data-on={i === chapter || undefined} aria-hidden={i !== chapter}>
+              <article key={c.no} className={`ai-ch${c.project ? " sr-only" : ""}${i === 1 && explore ? " is-exploring" : ""}`} data-on={i === chapter || undefined} aria-hidden={i !== chapter}>
+                {i === 1 && (
+                  <p className="ai-featured">
+                    <i /> Featured work <b>· {pad(Math.min(4, TECH_PROJECTS.length))} case studies on the board</b>
+                  </p>
+                )}
                 <p className="ai-kicker">
                   <span>{c.no}</span> {c.kicker}
                 </p>
@@ -307,6 +324,26 @@ export function AiAutomation() {
                   </h3>
                 )}
                 <p className="ai-line">{c.line}</p>
+                {i === 1 && (
+                  <div className="ai-explore">
+                    <button type="button" className="ai-explore-btn" aria-expanded={explore} onClick={() => setExplore((v) => !v)} tabIndex={i === chapter ? 0 : -1}>
+                      <span>Explore our solutions</span>
+                      <i aria-hidden>{explore ? "−" : "+"}</i>
+                    </button>
+                    <div className="ai-solutions" data-open={explore || undefined} aria-hidden={!explore}>
+                      <ul>
+                        {SOLUTIONS.map((sl, k) => (
+                          <li key={sl.name} title={sl.line} style={{ "--k": k } as React.CSSProperties}>
+                            {sl.name}
+                          </li>
+                        ))}
+                      </ul>
+                      <button type="button" className="ai-solutions-cta" onClick={() => goToSection("contact")} tabIndex={explore ? 0 : -1}>
+                        Start a project <span aria-hidden>→</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {c.chips.length > 0 && (
                   <ul className="ai-chips">
                     {c.chips.map((ch) => (

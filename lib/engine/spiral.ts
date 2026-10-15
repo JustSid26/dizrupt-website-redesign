@@ -701,6 +701,7 @@ export function createIndex({ projects, scene, camera, isMobile, onSelect, conta
     scrubPresent: (v) => { present = presentTarget = Math.max(0, Math.min(1, v)); },
     release: () => { presentTarget = 0; },
     presented: () => present,
+    hit: (n) => items[n]?.hit ?? null, // a card's hit area: the page transition flies from it
     setExit: (v) => { exitTarget = typeof v === 'number' ? v : v ? 1 : 0; },
     setSlide: (x) => { slide = x; },
     atEnd: () => scroll > last - 0.08,

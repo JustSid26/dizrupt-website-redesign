@@ -48,6 +48,8 @@ main { position: relative; z-index: 6; }
   position: fixed; inset: 0; pointer-events: none; z-index: 4;
   background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.75) 100%);
 }
+.vignette { transition: opacity 0.6s; }
+body.is-light-page .vignette { opacity: 0.25; }
 .grain {
   position: fixed; inset: -50%; width: 200%; height: 200%;
   pointer-events: none; z-index: 5; opacity: 0.06;
@@ -72,9 +74,13 @@ main { position: relative; z-index: 6; }
   color: var(--fg); /* every page is dark now, so the nav never has to change colour */
 }
 .logo {
-  position: relative; display: block; width: 120px; height: 48px;
-  font-weight: 500; letter-spacing: 0.18em;
+  position: relative; display: block; width: 190px; height: 48px;
+  font-size: 19px; font-weight: 700; letter-spacing: 0.16em;
 }
+/* the logo and the sections come in once the landing's DIZRUPT has assembled (it takes about 1.7s
+   from the count reaching 100), not before it */
+.nav .logo, .nav .rail { transition: opacity 0.8s var(--ease) 1.8s; }
+.nav:not([data-loaded]) .logo { opacity: 0; transition: none; }
 .logo-word {
   position: absolute; left: 0; top: 50%; translate: 0 -50%; white-space: nowrap;
   opacity: 1; transition: opacity 0.16s linear;
@@ -1001,12 +1007,13 @@ body:has(.case-page) .nav::before { opacity: 1; }
 .intro-pin { display: flex; align-items: center; justify-content: center; color: #fff; }
 
 /* the chapters along the top */
-.rail { display: flex; gap: clamp(14px, 2vw, 30px); font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; }
+.rail { display: flex; gap: clamp(16px, 2.2vw, 34px); font-family: var(--mono); font-size: 13px; letter-spacing: 0.12em; }
 .rail button { color: var(--dim); transition: color 0.3s; }
 .rail button .hud-no { margin-right: 0.6em; }
 .rail button[aria-current] { color: var(--fg); }
-.nav:not([data-loaded]) .rail { opacity: 0; }
-.rail { transition: opacity 0.6s var(--ease); }
+.nav:not([data-loaded]) .rail { opacity: 0; transition: none; }
+/* the sections sit in the middle of the page, whatever the logo's width */
+.nav .rail { position: absolute; left: 50%; translate: -50% 0; }
 @media (max-width: 760px) { .rail { display: none; } }
 
 /* ---------- Solutions: six channels, the model on the right ---------- */
@@ -1617,7 +1624,194 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .intro-stats .stat-l { margin: 0; }
 /* no menu now: the section links are the navigation on a phone too */
 @media (max-width: 760px) {
-  .rail { display: flex; gap: 14px; font-size: 10px; letter-spacing: 0.06em; }
+  .rail { display: flex; gap: 14px; font-size: 11px; letter-spacing: 0.06em; }
   .nav .logo { display: none; }
   .nav { justify-content: center; }
+}
+
+/* =========================== The work: one motion system ===========================
+   Everything in the work moves on one curve and two clocks: about 0.28s for what answers your hand
+   (hover, press), about 0.7s for what moves the page (a project handing over, a case opening). */
+:root { --ease-work: cubic-bezier(0.22, 1, 0.36, 1); --ease-travel: cubic-bezier(0.6, 0, 0.2, 1); --t-touch: 0.28s; --t-move: 0.72s; }
+/* --ease-work is for what answers your hand and for things arriving; something travelling across
+   the screen (the card growing into the banner) also has to pull away, so it eases in as well */
+@property --pa { syntax: '<color>'; inherits: true; initial-value: #a310e7; }
+@property --pb { syntax: '<color>'; inherits: true; initial-value: #d4b8ff; }
+
+/* ---------- the work: the tower is in the 3D city (lib/engine/workTower.ts); the page only holds the projects ---------- */
+.tower-pin { overflow: hidden; pointer-events: none; }
+
+/* ---------- a project in its window, its name beside it ---------- */
+.work-shot {
+  position: absolute; left: 0; top: 0; width: 100vw; height: 100%;
+  transform-origin: 0 0; visibility: hidden; overflow: hidden; z-index: 2;
+  background: linear-gradient(120deg, var(--pa), var(--pb));
+  pointer-events: none;
+}
+.work-shot-media {
+  position: absolute; inset: 0; background-size: cover; background-position: center;
+  transform: scale(calc(1.14 - 0.14 * var(--m, 0))); /* it settles as the camera lands */
+}
+/* travelling it is a picture on a screen in a window: scanlines that clear as it lands */
+.work-shot::before {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px);
+  opacity: calc(1 - var(--m, 0) * 1.25);
+}
+.work-shot.is-on { pointer-events: auto; cursor: pointer; }
+.work-cap {
+  position: absolute; left: 0; top: 0; z-index: 3; visibility: hidden;
+  display: grid; gap: 12px; width: min(380px, 30vw);
+  opacity: var(--m, 0); pointer-events: none;
+}
+.work-cap.is-on { pointer-events: auto; }
+/* a little night behind the name, so a lit room next door never reads through it */
+.work-cap::before {
+  content: ''; position: absolute; inset: -28px -36px; z-index: -1; border-radius: 28px; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(6, 5, 12, 0.82), rgba(6, 5, 12, 0.55) 60%, transparent);
+}
+.work-cap-title {
+  margin: 0; font-family: var(--display); font-weight: 700; font-stretch: 78%; text-transform: uppercase;
+  font-size: clamp(34px, 4.2vw, 68px); line-height: 0.9; letter-spacing: -0.03em; color: #fff;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+}
+.work-cap .work-shot-no { flex-wrap: wrap; gap: 6px 18px; }
+.work-cap .work-shot-no span { white-space: nowrap; }
+@media (max-width: 800px) { .work-cap { width: calc(100vw - 32px); } .tower-pin .index-hint { display: none; } } /* on a phone the name and its button take the foot of the screen */
+.work-shot-no {
+  display: flex; gap: 22px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(242, 240, 235, 0.7);
+}
+.work-shot-no span:first-child { color: color-mix(in srgb, var(--pb) 80%, #fff); }
+.work-shot-services { font-size: clamp(14px, 1.3vw, 18px); color: rgba(242, 240, 235, 0.82); }
+.work-shot-open {
+  justify-self: start; margin-top: 8px;
+  display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 999px;
+  font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #fff;
+  border: 1px solid color-mix(in srgb, var(--pb) 70%, rgba(255, 255, 255, 0.3));
+  background: color-mix(in srgb, var(--pa) 22%, rgba(5, 4, 10, 0.4));
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: background var(--t-touch) var(--ease-work), box-shadow var(--t-touch) var(--ease-work), transform var(--t-touch) var(--ease-work);
+}
+.work-shot-open i { font-style: normal; transition: transform var(--t-touch) var(--ease-work); }
+.work-shot-open:hover { background: color-mix(in srgb, var(--pa) 45%, rgba(5, 4, 10, 0.3)); box-shadow: 0 0 30px -6px var(--pa); }
+.work-shot-open:hover i { transform: translateX(4px); }
+.work-shot-open:active { transform: scale(0.97); }
+.work-shot-open:focus-visible, .case-page .back:focus-visible, .project-next:focus-visible { outline: 2px solid var(--pb, #d4b8ff); outline-offset: 4px; }
+/* the picture that becomes the case's banner, and the title that becomes its title */
+.work-shot.is-leaving .work-shot-media { view-transition-name: work-hero; }
+.work-cap.is-leaving .work-cap-title { view-transition-name: work-title; }
+.tower-pin .work-eyebrow, .tower-pin .work-count, .tower-pin .index-hint { z-index: 3; }
+.tower-pin .index-hint { opacity: 0.8; }
+
+/* ---------- the case page: the banner and the title are the ones it grew from ---------- */
+.case-page .project-hero { view-transition-name: work-hero; }
+.case-page .project-title { view-transition-name: work-title; }
+/* arriving through a transition, the banner and the title are already in place (they flew there);
+   the lines round the title follow them in */
+html[data-vt] .case-page .project-hero,
+html[data-vt] .case-page .project-inner { opacity: 1; transform: none; transition: none; }
+.case-page .project-no, .case-page .project-lead {
+  opacity: 0; transform: translateY(16px);
+  transition: opacity var(--t-move) var(--ease-work), transform var(--t-move) var(--ease-work);
+}
+.case-page.in .project-no { opacity: 1; transform: none; transition-delay: 0.3s; }
+.case-page.in .project-lead { opacity: 1; transform: none; transition-delay: 0.42s; }
+/* further down: each block as it comes into view, once, its pieces one after another */
+.case-page [data-reveal] { opacity: 0; transform: translateY(28px); transition: opacity 0.8s var(--ease-work), transform 0.9s var(--ease-work); }
+.case-page [data-reveal].is-revealed { opacity: 1; transform: none; }
+.case-page .project-results[data-reveal] > li { opacity: 0; transform: translateY(14px); transition: opacity var(--t-move) var(--ease-work), transform var(--t-move) var(--ease-work); }
+.case-page .project-results.is-revealed > li { opacity: 1; transform: none; }
+.case-page .project-results.is-revealed > li:nth-child(2) { transition-delay: 0.08s; }
+.case-page .project-results.is-revealed > li:nth-child(3) { transition-delay: 0.16s; }
+.case-page .chapter[data-reveal] h3, .case-page .chapter[data-reveal] p { opacity: 0; transform: translateY(12px); transition: opacity var(--t-move) var(--ease-work), transform var(--t-move) var(--ease-work); }
+.case-page .chapter.is-revealed h3 { opacity: 1; transform: none; transition-delay: 0.08s; }
+.case-page .chapter.is-revealed p { opacity: 1; transform: none; transition-delay: 0.18s; }
+/* what answers your hand */
+.case-page .back { transition: background var(--t-touch) var(--ease-work), color var(--t-touch) var(--ease-work), transform var(--t-touch) var(--ease-work); }
+.case-page .back:active, .project-next:active { transform: scale(0.97); }
+.project-next { transition: transform var(--t-touch) var(--ease-work); }
+.project-next-label { transition: color var(--t-touch) var(--ease-work), letter-spacing var(--t-touch) var(--ease-work); }
+.project-next:hover .project-next-label { color: var(--project-b, #d4b8ff); letter-spacing: 0.22em; }
+
+/* ---------- the page moves themselves ---------- */
+::view-transition-group(*) { animation-duration: 0.9s; animation-timing-function: var(--ease-travel); }
+/* the two pages cross over each other in the same time, so there is no dip to dark between them */
+::view-transition-old(root) { animation: 0.5s ease-in-out both vt-fade-out; }
+::view-transition-new(root) { animation: 0.5s ease-in-out both vt-fade-in; }
+/* the card and the banner are different shapes: crop, never stretch, on the way between them */
+::view-transition-old(work-hero), ::view-transition-new(work-hero) { height: 100%; width: 100%; object-fit: cover; }
+html[data-vt="open"]::view-transition-group(work-hero), html[data-vt="open"]::view-transition-group(work-title) { animation-duration: 1s; }
+/* next case: the old one slides off to the left as the new one comes in from the right */
+html[data-vt="next"]::view-transition-old(work-hero), html[data-vt="next"]::view-transition-old(work-title) { animation: 0.5s var(--ease-work) both vt-off-left; }
+html[data-vt="next"]::view-transition-new(work-hero), html[data-vt="next"]::view-transition-new(work-title) { animation: var(--t-move) var(--ease-work) 0.08s both vt-on-right; }
+/* back to the work: the banner settles back into the scene, the title back onto the panel */
+html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: 0.55s var(--ease-work) both vt-settle; }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+@keyframes vt-off-left { to { opacity: 0; transform: translateX(-6%); filter: blur(6px); } }
+@keyframes vt-on-right { from { opacity: 0; transform: translateX(6%); filter: blur(6px); } }
+@keyframes vt-settle { to { opacity: 0; transform: scale(0.88); filter: blur(8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  .work-shot::before { display: none; }
+  .case-page .project-no, .case-page .project-lead, .case-page [data-reveal], .case-page [data-reveal] * { opacity: 1 !important; transform: none !important; transition: none !important; }
+}
+@media (max-width: 600px) {
+  .work-shot-no { flex-direction: column; gap: 4px; }
+}
+
+/* the window's glass, until you pass through it: the night on it, and a streak of light that slides
+   off as you go through */
+.work-shot-glass {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  opacity: var(--g, 0);
+  background:
+    linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 42%, rgba(255, 255, 255, 0.05) 48%, transparent 58%),
+    linear-gradient(rgba(20, 16, 40, 0.38), rgba(10, 8, 22, 0.5));
+  background-size: 220% 100%, 100% 100%;
+  background-position: calc(var(--g, 0) * 100%) 0, 0 0;
+}
+
+/* ---------- AI: featured work, and what else it runs ---------- */
+.ai-featured {
+  display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #7cf2ff;
+}
+.ai-featured i { width: 14px; height: 1px; background: #3cf0ff; box-shadow: 0 0 8px #3cf0ff; }
+.ai-featured b { font-weight: 400; color: var(--dim); }
+.ai-explore { margin-top: 18px; }
+.ai-explore-btn {
+  display: inline-flex; align-items: center; gap: 12px; padding: 9px 14px 9px 16px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #dff9ff;
+  border: 1px solid rgba(124, 242, 255, 0.4); border-radius: 2px;
+  background: rgba(60, 240, 255, 0.05);
+  transition: background 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.28s, box-shadow 0.28s;
+}
+.ai-explore-btn i { font-style: normal; color: #7cf2ff; width: 10px; text-align: center; }
+.ai-explore-btn:hover, .ai-explore-btn:focus-visible { background: rgba(60, 240, 255, 0.12); border-color: #3cf0ff; box-shadow: 0 0 24px rgba(60, 240, 255, 0.25); }
+.ai-solutions {
+  display: grid; grid-template-rows: 0fr; opacity: 0; margin-top: 0;
+  transition: grid-template-rows 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s, margin-top 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ai-solutions > * { min-height: 0; overflow: hidden; }
+.ai-solutions[data-open] { grid-template-rows: 1fr; opacity: 1; margin-top: 12px; }
+.ai-solutions ul { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; max-width: 520px; }
+.ai-solutions li {
+  padding: 6px 10px; font-size: 12.5px; color: #eaf8ff;
+  border: 1px solid rgba(124, 242, 255, 0.28); background: rgba(60, 240, 255, 0.05);
+  opacity: 0; transform: translateY(6px);
+  transition: opacity 0.4s, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ai-solutions[data-open] li { opacity: 1; transform: none; transition-delay: calc(0.06s + var(--k) * 0.045s); }
+/* while it is open the paragraph gives it its place, so the block keeps its height */
+.ai-ch .ai-line { transition: opacity 0.3s; }
+.ai-ch.is-exploring .ai-line { display: none; }
+.ai-solutions-cta {
+  margin: 10px 0 2px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #7cf2ff;
+  transition: color 0.28s, letter-spacing 0.28s;
+}
+.ai-solutions-cta:hover { color: #fff; letter-spacing: 0.18em; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-solutions, .ai-solutions li { transition: none; }
 }

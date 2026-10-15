@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { routeReady, transitionTo } from "@/lib/viewTransition";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { bannerFor } from "@/content/banners";
@@ -12,18 +14,41 @@ import { clients, slugOf, type Project } from "@/content/projects";
 export function CaseStudy({ project }: { project: Project }) {
   const root = useRef<HTMLElement>(null);
   const reduce = useStore((s) => s.reducedMotion);
-  const n = clients.indexOf(project);
+  // by slug: the project arrives from the server as a copy, so it is never the same object as the list's
+  const n = Math.max(0, clients.findIndex((c) => slugOf(c) === slugOf(project)));
   const next = clients[(n + 1) % clients.length];
   const banner = bannerFor(project.title);
+  const router = useRouter();
 
   useEffect(() => {
     signals.caseShape = { shape: project.shape, colors: project.colors, spin: project.spin };
     scrollTo(0, 0);
+    routeReady(); // a transition into this page can take its "after" picture now
     requestAnimationFrame(() => root.current?.classList.add("in"));
     return () => {
       signals.caseShape = null;
     };
   }, [project]);
+
+  /* Further down, each block arrives as it comes into view: once, rising a little as it fades in,
+     its own pieces one after another. */
+  useEffect(() => {
+    const els = [...(root.current?.querySelectorAll<HTMLElement>("[data-reveal]") ?? [])];
+    if (reduce) return void els.forEach((el) => el.classList.add("is-revealed"));
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        e.target.classList.add("is-revealed");
+        io.unobserve(e.target);
+      }),
+      { rootMargin: "0px 0px -12% 0px", threshold: 0.12 },
+    );
+    els.forEach((el) => {
+      el.classList.remove("is-revealed");
+      io.observe(el);
+    });
+    return () => io.disconnect();
+  }, [project, reduce]);
 
   // the headline numbers count up once they are on screen
   useEffect(() => {
@@ -60,7 +85,7 @@ export function CaseStudy({ project }: { project: Project }) {
           <p className="project-lead">{project.summary}</p>
         </header>
         {project.results && (
-          <ul className="project-results" aria-label="Results">
+          <ul className="project-results" aria-label="Results" data-reveal>
             {project.results.map((r) => (
               <li key={r.label}>
                 <strong data-to={r.value} data-suffix={r.suffix}>
@@ -72,7 +97,7 @@ export function CaseStudy({ project }: { project: Project }) {
             ))}
           </ul>
         )}
-        <dl className="project-meta">
+        <dl className="project-meta" data-reveal>
           <div>
             <dt>Client</dt>
             <dd>{project.title}</dd>
@@ -93,7 +118,7 @@ export function CaseStudy({ project }: { project: Project }) {
               ["The Solution", cs.solution],
               ["The Dizruption", cs.dizruption],
             ].map(([h, body], i) => (
-              <section key={h} className="chapter">
+              <section key={h} className="chapter" data-reveal>
                 <p className="chapter-no">{String(i + 1).padStart(2, "0")}</p>
                 <div>
                   <h3>{h}</h3>
@@ -103,11 +128,29 @@ export function CaseStudy({ project }: { project: Project }) {
             ))}
           </div>
         )}
-        <nav className="project-foot">
-          <Link className="back" href="/" scroll={false}>
+        <nav className="project-foot" data-reveal>
+          <Link
+            className="back"
+            href="/"
+            scroll={false}
+            onClick={(e) => {
+              e.preventDefault();
+              // back to this project's window in the tower, wherever the visit came in
+              sessionStorage.removeItem("home-scroll");
+              sessionStorage.setItem("home-target", `work-${n}`);
+              transitionTo(() => router.push("/", { scroll: false }), "back");
+            }}
+          >
             ← Back to work
           </Link>
-          <Link className="project-next" href={`/work/${slugOf(next)}`}>
+          <Link
+            className="project-next"
+            href={`/work/${slugOf(next)}`}
+            onClick={(e) => {
+              e.preventDefault();
+              transitionTo(() => router.push(`/work/${slugOf(next)}`), "next");
+            }}
+          >
             <span className="project-next-label">Next project</span>
             <strong>{next.title}</strong>
           </Link>
