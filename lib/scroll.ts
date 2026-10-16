@@ -1,4 +1,5 @@
 import type Lenis from "lenis";
+import { signals } from "@/lib/signals";
 
 // Single Lenis instance, owned by <SmoothScroll/>.
 let instance: Lenis | null = null;
@@ -18,6 +19,7 @@ export const setRideCanceller = (fn: (() => void) | null) => {
 
 export const scrollToTarget = (target: string | number | HTMLElement, immediate = false) => {
   cancelRide?.();
+  signals.navJumpUntil = performance.now() + (immediate ? 300 : 1900);
   if (instance) {
     // the page may have just changed height (a route change); measure before clamping to it
     instance.resize();

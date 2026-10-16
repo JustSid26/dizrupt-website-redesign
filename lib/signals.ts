@@ -42,6 +42,9 @@ export const signals = {
   // the AI world's chip on screen: its centre and half its width in px (the engine writes it; the
   // section's network grows out of it)
   aiChip: { x: 0, y: 0, size: 0 },
+  // until when (performance.now()) the page is jumping to a place the nav sent it: scenes it passes
+  // on the way should be where the scroll is at once, not play their way there
+  navJumpUntil: 0,
   // the pointer turning the chip (AiAutomation.tsx): movement since the world last read it, held or not, and when it last moved
   aiGrab: { dx: 0, dy: 0, down: false, at: 0 },
   // where the Mac should grow from when something other than a billboard opens it

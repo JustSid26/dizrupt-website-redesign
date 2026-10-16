@@ -126,6 +126,47 @@ function lidTop() {
 
 /* Metal can't outshine the neon: its highlight is held under the bloom's threshold, so the leads and
    the lid keep a metal sheen as the chip turns but never flare into a white halo. */
+/** The underside, as a processor's back is: a green laminate substrate covered edge to edge in gold
+    contact pads, a bare dark field in the middle where the small components sit (those are real
+    geometry, built beside it). Returns its colour, roughness+metalness (green: roughness, blue:
+    metalness) and bump maps. `inner` is the bare field's width as a share of the whole. */
+function packageBack(inner: number) {
+  const S = 1024;
+  const make = () => { const c = document.createElement('canvas'); c.width = c.height = S; return [c, c.getContext('2d')!] as const; };
+  const [col, g] = make(), [orm, o] = make(), [bmp, b] = make();
+  const rand = rng(41);
+  // the laminate: a deep solder-mask green, faintly mottled, glossy and not metal
+  g.fillStyle = '#2a4a1f'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${rand() < 0.5 ? '120,170,140' : '0,10,6'},${0.02 + rand() * 0.04})`; g.fillRect(rand() * S, rand() * S, 2 + rand() * 30, 2 + rand() * 30); }
+  o.fillStyle = 'rgb(0,90,0)'; o.fillRect(0, 0, S, S);
+  b.fillStyle = '#7a7a7a'; b.fillRect(0, 0, S, S);
+  // a pale edge where the board is cut, as the photos show it
+  g.strokeStyle = 'rgba(190,210,170,0.55)'; g.lineWidth = 6; g.strokeRect(3, 3, S - 6, S - 6);
+  // the bare field in the middle: darker, almost black-green, matte
+  const f0 = (S * (1 - inner)) / 2, f1 = S - f0;
+  g.fillStyle = '#16251a'; g.fillRect(f0, f0, f1 - f0, f1 - f0);
+  o.fillStyle = 'rgb(0,150,0)'; o.fillRect(f0, f0, f1 - f0, f1 - f0);
+  b.fillStyle = '#6e6e6e'; b.fillRect(f0, f0, f1 - f0, f1 - f0);
+  // the pads: a tight grid of gold dots over the rest, each a little raised and bright metal
+  const n = 34, step = (S - 40) / n, r0 = step * 0.4;
+  const pads: [number, number][] = []; // each pad's centre, 0..1 across the face: a pin stands on each
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const cx = 20 + (x + 0.5) * step, cy = 20 + (y + 0.5) * step;
+    if (cx > f0 - step * 0.6 && cx < f1 + step * 0.6 && cy > f0 - step * 0.6 && cy < f1 + step * 0.6) continue;
+    pads.push([cx / S, cy / S]);
+    const gr = g.createRadialGradient(cx - r0 * 0.3, cy - r0 * 0.3, r0 * 0.1, cx, cy, r0);
+    gr.addColorStop(0, '#ffe7a0'); gr.addColorStop(0.55, '#d8a845'); gr.addColorStop(1, '#9a7028');
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r0, 0, 7); g.fill();
+    o.fillStyle = 'rgb(0,70,255)'; o.beginPath(); o.arc(cx, cy, r0, 0, 7); o.fill();
+    b.fillStyle = '#a8a8a8'; b.beginPath(); b.arc(cx, cy, r0, 0, 7); b.fill();
+  }
+  // a fine silkscreen frame round the field, and a small triangle for pin 1
+  g.strokeStyle = 'rgba(210,225,205,0.4)'; g.lineWidth = 2; g.strokeRect(f0 + 10, f0 + 10, f1 - f0 - 20, f1 - f0 - 20);
+  g.fillStyle = 'rgba(210,225,205,0.55)'; g.beginPath(); g.moveTo(f0 + 22, f1 - 22); g.lineTo(f0 + 50, f1 - 22); g.lineTo(f0 + 22, f1 - 50); g.closePath(); g.fill();
+  const tex = (c: HTMLCanvasElement, srgb = false) => { const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  return { map: tex(col, true), orm: tex(orm), bump: tex(bmp), pads };
+}
+
 function capped<M extends THREE.MeshPhysicalMaterial>(m: M, max: number) {
   m.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>\n  gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(${max.toFixed(2)}));`);
@@ -202,9 +243,68 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     bar.castShadow = true;
     chip.add(bar);
   }
-  const pad = new THREE.Mesh(new THREE.BoxGeometry(BODY * 0.55, 0.01, BODY * 0.55), tin);
-  pad.position.y = -H / 2 - 0.004;
-  chip.add(pad);
+  /* the back: turn it over and it's a processor's underside — gold contact pads across a green
+     substrate, and in the bare field at its centre a cluster of small capacitors standing proud */
+  {
+    const INNER = 0.36;
+    const back = packageBack(INNER);
+    const backMat = capped(new THREE.MeshPhysicalMaterial({
+      color: '#ffffff', map: back.map, roughness: 1, roughnessMap: back.orm, metalness: 1, metalnessMap: back.orm,
+      bumpMap: back.bump, bumpScale: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.5, envMapIntensity: 0.9,
+    }), 0.85);
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(BODY - 0.02, BODY - 0.02), backMat);
+    plate.rotation.x = Math.PI / 2; // facing down, out of the back
+    plate.position.y = -H / 2 - 0.002;
+    plate.receiveShadow = true;
+    chip.add(plate);
+    /* the pins: a gold pin standing out of every pad, as a socketed processor's are, each a slim
+       shaft with a rounded tip; one instanced mesh for all of them */
+    {
+      const PIN_L = 0.11, PIN_R = 0.0085, side = BODY - 0.02;
+      const shaft = new THREE.CylinderGeometry(PIN_R, PIN_R, PIN_L, 8, 1, true);
+      shaft.translate(0, -PIN_L / 2, 0);
+      const tip = new THREE.SphereGeometry(PIN_R, 8, 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+      tip.translate(0, -PIN_L, 0);
+      const foot = new THREE.CylinderGeometry(PIN_R * 1.9, PIN_R * 2.3, 0.008, 10);
+      foot.translate(0, -0.004, 0);
+      const pinGeo = mergeGeometries([shaft, tip, foot].map((g) => g.toNonIndexed()));
+      const gold = capped(new THREE.MeshPhysicalMaterial({ color: '#d9a94a', metalness: 1, roughness: 0.3, envMapIntensity: 1.2 }), 0.85);
+      const pins = new THREE.InstancedMesh(pinGeo, gold, back.pads.length);
+      const pm = new THREE.Matrix4();
+      back.pads.forEach(([u, v], i) => pins.setMatrixAt(i, pm.makeTranslation((u - 0.5) * side, -H / 2 - 0.002, (v - 0.5) * side)));
+      pins.castShadow = true;
+      chip.add(pins);
+    }
+    // the capacitors: tan ceramic bodies with silver ends, in rows, a few larger ones and a few turned
+    const capBody = new THREE.MeshPhysicalMaterial({ color: '#8f7c63', roughness: 0.55, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.4 });
+    const field = BODY * INNER * 0.86, rand = rng(5);
+    const caps: { x: number; z: number; w: number; d: number; h: number; turn: boolean }[] = [];
+    const cols = 6, rows = 5;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      if (rand() < 0.14) continue;
+      const big = rand() < 0.18, turn = rand() < 0.25;
+      caps.push({
+        x: -field / 2 + (c + 0.5) * (field / cols) + (rand() - 0.5) * 0.012,
+        z: -field / 2 + (r + 0.5) * (field / rows) + (rand() - 0.5) * 0.012,
+        w: big ? 0.085 : 0.062, d: big ? 0.055 : 0.038, h: big ? 0.05 : 0.034, turn,
+      });
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const bodies = new THREE.InstancedMesh(box, capBody, caps.length);
+    const ends = new THREE.InstancedMesh(box, tin, caps.length * 2);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), yAx = new THREE.Vector3(0, 1, 0);
+    caps.forEach((cp, i) => {
+      q.setFromAxisAngle(yAx, cp.turn ? Math.PI / 2 : 0);
+      const y = -H / 2 - cp.h / 2 - 0.002;
+      bodies.setMatrixAt(i, m4.compose(p.set(cp.x, y, cp.z), q, sc.set(cp.w * 0.62, cp.h, cp.d)));
+      for (const sgn of [-1, 1]) {
+        const off = new THREE.Vector3(sgn * cp.w * 0.4, 0, 0).applyQuaternion(q);
+        ends.setMatrixAt(i * 2 + (sgn > 0 ? 1 : 0), m4.compose(p.set(cp.x + off.x, y, cp.z + off.z), q, sc.set(cp.w * 0.2, cp.h * 1.04, cp.d * 1.04)));
+      }
+    });
+    bodies.castShadow = ends.castShadow = true;
+    chip.add(bodies, ends);
+  }
   /* the leads: gull-wing, each one bent strip of plated copper: out of the body's side, a rounded
      bend down, a rounded bend into the foot. Drawn as its profile and swept across the lead's width. */
   {

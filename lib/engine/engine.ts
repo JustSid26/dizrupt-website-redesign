@@ -464,15 +464,28 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const k = camKeys();
     return { pos: new THREE.CatmullRomCurve3(k.pos, false, 'centripetal'), look: new THREE.CatmullRomCurve3(k.look, false, 'centripetal') };
   })();
+  /* The scroll mapped onto the camera's path as one continuous flight, timed by distance: the camera
+     covers the path at an even pace in space (a key is wherever that pace has it, not a set point in
+     the scroll), so it never slows down or speeds up between the legs. Before, each leg was eased on
+     its own and the build-up came in fits and starts. Easing in and out of the whole flight is the
+     scroll's own (lib/stops.ts). */
+  /* The first gesture's ride ends where he stands whole in the city (intro 0.42, lib/stops.ts), and
+     that is the wide shot, the path's fourth key: the build-up covers the path to there at an even
+     pace, and the next ride carries on from it. */
+  const IP_BUILT = 0.42, KEY_BUILT = 3;
+  let builtAt = { of: null as unknown, a: 0.75 }; // how far along the path, by distance, the wide shot is
   const camPath = (ip: number, pos: THREE.Vector3, look: THREE.Vector3) => {
-    // map the scroll onto the curve so each key is reached at its own point in the scroll
-    let seg = 0;
-    while (seg < CAM_KEYS.length - 2 && ip > CAM_KEYS[seg + 1]) seg++;
-    const t = clamp01((ip - CAM_KEYS[seg]) / (CAM_KEYS[seg + 1] - CAM_KEYS[seg]));
-    const e = t * t * (3 - 2 * t);
-    const u = (seg + e) / (CAM_KEYS.length - 1);
-    paths.pos.getPoint(u, pos);
-    paths.look.getPoint(u, look);
+    if (builtAt.of !== paths.pos) {
+      const L = paths.pos.getLengths();
+      builtAt = { of: paths.pos, a: L[Math.round((KEY_BUILT / (CAM_KEYS.length - 1)) * (L.length - 1))] / L[L.length - 1] };
+    }
+    const a0 = CAM_KEYS[0], a1 = CAM_KEYS[CAM_KEYS.length - 1];
+    const a = ip <= IP_BUILT
+      ? clamp01((ip - a0) / (IP_BUILT - a0)) * builtAt.a
+      : builtAt.a + clamp01((ip - IP_BUILT) / (a1 - IP_BUILT)) * (1 - builtAt.a);
+    const t = paths.pos.getUtoTmapping(a, 0);
+    paths.pos.getPoint(t, pos);
+    paths.look.getPoint(t, look);
   };
   const camPos = new THREE.Vector3();
   const camLook = new THREE.Vector3();

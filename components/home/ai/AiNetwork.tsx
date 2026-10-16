@@ -203,6 +203,15 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
           k = Math.min(k, b);
         }
         lastP = p;
+        // sent here by the nav: be at the beat at once rather than play every page on the way
+        if (performance.now() < signals.navJumpUntil) {
+          tw?.kill();
+          held = false;
+          head.t = p > SIMPLE ? Math.min(1, p) : S[k];
+          apply();
+          if (k !== last) onBeatRef.current(k);
+          return;
+        }
         const quick = held && k !== last;
         if (k !== last) held = false;
         if (k !== last || (!held && !tw?.isActive() && head.t !== S[k])) playTo(k, quick);
