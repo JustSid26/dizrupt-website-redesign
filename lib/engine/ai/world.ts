@@ -71,15 +71,6 @@ function packageTop() {
       c.beginPath(); c.moveTo(S - 48, t); c.lineTo(S - 110, t); c.lineTo(S - 250, 170 + ((t - 120) / (S - 240)) * (S - 560)); c.stroke();
     }
   });
-  // the marking
-  const text = (str: string, px: number, x: number, y: number, a = 0.62, align: CanvasTextAlign = 'center') => {
-    ink(a);
-    both((c) => { c.font = `600 ${px}px "JetBrains Mono", Menlo, monospace`; c.textAlign = align; c.fillText(str, x, y); });
-  };
-  text('DIZRUPT', 64, S / 2, S * 0.75, 0.7);
-  text('DZ-M1  ·  NEURAL ACCELERATOR', 28, S / 2, S * 0.81, 0.45);
-  text('2026 · MUMBAI · 4K9X-A1', 24, S / 2, S * 0.855, 0.38);
-  text('e4', 22, S * 0.86, S * 0.93, 0.35, 'right');
   // a data-matrix code in the corner
   ink(0.4);
   const dm = rng(7), cx = S * 0.1, cy = S * 0.84, cell = 6;
@@ -123,9 +114,6 @@ function lidTop() {
   ink();
   both((c) => {
     c.textAlign = 'center';
-    c.font = '600 70px "JetBrains Mono", Menlo, monospace'; c.fillText('DIZRUPT', S / 2, S * 0.76);
-    c.font = '500 30px "JetBrains Mono", Menlo, monospace'; c.fillText('DZ-M1  ·  NEURAL ACCELERATOR', S / 2, S * 0.825);
-    c.font = '500 26px "JetBrains Mono", Menlo, monospace'; c.fillText('2026 · MUMBAI · 4K9X-A1  e4', S / 2, S * 0.87);
   });
   const dm = rng(7), cx = S * 0.08, cy = S * 0.8, cell = 7;
   both((c) => {
@@ -431,12 +419,12 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   const markMat = new THREE.MeshStandardMaterial({ map: markTex, color: new THREE.Color('#1c1b22'), roughness: 0.9, metalness: 0.2, transparent: true, opacity: 0.88, depthWrite: false, emissive: new THREE.Color('#8a3dff'), emissiveMap: markTex, emissiveIntensity: 0.25 });
   const mark = new THREE.Mesh(new THREE.PlaneGeometry(BODY * 0.4, BODY * 0.4), markMat);
   mark.rotation.x = -Math.PI / 2;
-  mark.position.set(0, H / 2 + LH - 0.001, -BODY * 0.1);
+  mark.position.set(0, H / 2 + LH - 0.001, 0); // in the middle of the lid: the only marking on it
   chip.add(mark);
   const markGlowMat = new THREE.MeshBasicMaterial({ map: markTex, color: new THREE.Color('#b46bff'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
   const markGlow = new THREE.Mesh(new THREE.PlaneGeometry(BODY * 0.52, BODY * 0.52), markGlowMat);
   markGlow.rotation.x = -Math.PI / 2;
-  markGlow.position.set(0, H / 2 + LH + 0.001, -BODY * 0.1);
+  markGlow.position.set(0, H / 2 + LH + 0.001, 0);
   chip.add(markGlow);
 
   /* ================= the projects: a screen each, round the chip ================= */

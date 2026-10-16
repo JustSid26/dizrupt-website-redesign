@@ -657,14 +657,16 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const v = new THREE.Vector3();
     let burstAt = -1;
     return {
-      /** progress: how far the figures have gathered (0..1); on: the count is what's showing */
-      update(time: number, progress: number, on: boolean) {
+      /** progress: how far the figures have gathered (0..1); on: the count is what's showing;
+          ip: how far through the landing the scroll is (its stop for the count is at 0.72) */
+      update(time: number, progress: number, on: boolean, ip: number) {
         /* two beats: while the figures gather (and the camera flies in) a dense ball of smoke churns
            where each will be and hides it; the moment they have formed it blows apart and the number
            punches out of it. Going back before they have formed sets it all again. */
-        // (formed, and the camera come to rest in front of them: the ride there has ended)
-        if (on && progress >= 0.985 && Math.abs(signals.scroll.velocity) < 0.4 && burstAt < 0) burstAt = time;
-        if (!on || progress < 0.9) burstAt = -1;
+        // (formed, and the scroll all but at the count's stop: it clears as you arrive, from either side,
+        // never waiting on another scroll)
+        if (on && progress >= 0.985 && ip >= 0.68 && burstAt < 0) burstAt = time;
+        if (!on || progress < 0.9 || ip < 0.6) burstAt = -1;
         const brew = on ? smooth(0.3, 0.6, progress) : 0;
         const t = burstAt < 0 ? -1 : time - burstAt;
         group.visible = (burstAt < 0 && brew > 0.004) || (t >= 0 && t < 2.6);
@@ -1212,7 +1214,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       if (m.depthTest === onTop) { m.depthTest = !onTop; m.needsUpdate = true; }
     }
     points.renderOrder = onTop ? 50 : 0;
-    smoke.update(time, key === 'stats' ? u.uProgress.value : 0, key === 'stats' && section === 'intro' && !view && !preview);
+    smoke.update(time, key === 'stats' ? u.uProgress.value : 0, key === 'stats' && section === 'intro' && !view && !preview, ip);
     if (key === 'stats') {
       statPanels.forEach((pnl, i) => {
         const out = signals.statWindows[i];
