@@ -24,13 +24,37 @@ export function SectionRail() {
     return () => gsap.ticker.remove(tick);
   }, []);
   if (!home) return <span />;
+  // the logo in the middle, the sections either side of it
+  const item = (it: (typeof ITEMS)[number]) => (
+    <button
+      key={it.id}
+      type="button"
+      aria-current={cur === it.id || undefined}
+      aria-label={it.id === "intro" ? "Dizrupt, intro" : undefined}
+      className={it.id === "intro" ? "rail-logo" : undefined}
+      onClick={(e) => {
+        goToSection(it.dom);
+        // clicked, not tabbed to: let go of focus, or the arrow keys that ride on would ring it
+        if (e.detail > 0) e.currentTarget.blur();
+      }}
+    >
+      {/* the intro is the logo itself */}
+      {it.id === "intro" ? (
+        <span aria-hidden>
+          DI<span className="flip-z">Z</span>RUPT
+        </span>
+      ) : (
+        it.label
+      )}
+    </button>
+  );
+  const [logo, ...rest] = ITEMS;
+  const half = Math.ceil(rest.length / 2);
   return (
     <nav className="rail" aria-label="Sections">
-      {ITEMS.map((it) => (
-        <button key={it.id} type="button" aria-current={cur === it.id || undefined} onClick={() => goToSection(it.dom)}>
-          {it.label}
-        </button>
-      ))}
+      <span className="rail-side is-left">{rest.slice(0, half).map(item)}</span>
+      {item(logo)}
+      <span className="rail-side is-right">{rest.slice(half).map(item)}</span>
     </nav>
   );
 }

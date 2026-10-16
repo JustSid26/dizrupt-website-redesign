@@ -15,3 +15,4 @@ next-env.d.ts
 # internal docs, kept local
 *.md
 /out/
+.env*

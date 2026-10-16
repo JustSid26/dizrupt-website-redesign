@@ -605,93 +605,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   buildStatWindows();
   addEventListener('resize', () => { if (key !== 'stats') buildStatWindows(); });
-
-  /* The count bursts out of smoke: as each number gathers, a tight, dense puff hides it, and then it
-     blows outward, the number punching out of the middle, the smoke thrown off in every direction and
-     gone in a couple of seconds. Soft puffs facing the camera, in front of the figures. */
-  const smoke = (() => {
-    const puffTex = (seed: number) => {
-      const S = 256, c = document.createElement('canvas');
-      c.width = c.height = S;
-      const g = c.getContext('2d')!;
-      let r = seed;
-      const rnd = () => ((r = (r * 16807) % 2147483647) - 1) / 2147483646;
-      // a puff is many soft blobs, thicker in the middle
-      for (let i = 0; i < 26; i++) {
-        const a = rnd() * Math.PI * 2, d = Math.pow(rnd(), 0.8) * S * 0.26;
-        const x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d, rad = S * (0.1 + rnd() * 0.16);
-        const grd = g.createRadialGradient(x, y, 0, x, y, rad);
-        grd.addColorStop(0, 'rgba(255,255,255,0.22)');
-        grd.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = grd;
-        g.fillRect(0, 0, S, S);
-      }
-      // and fades out before its edge, so no square ever shows
-      g.globalCompositeOperation = 'destination-in';
-      const edge = g.createRadialGradient(S / 2, S / 2, S * 0.18, S / 2, S / 2, S / 2);
-      edge.addColorStop(0, 'rgba(0,0,0,1)');
-      edge.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = edge;
-      g.fillRect(0, 0, S, S);
-      const t = new THREE.CanvasTexture(c);
-      t.colorSpace = THREE.SRGBColorSpace;
-      return t;
-    };
-    const texs = [puffTex(7), puffTex(31), puffTex(113)];
-    const group = new THREE.Group();
-    points.add(group);
-    const PER = isMobile ? 9 : 14;
-    let sr = 5;
-    const rnd = () => ((sr = (sr * 16807) % 2147483647) - 1) / 2147483646;
-    const puffs = Array.from({ length: 4 * PER }, (_, i) => {
-      const mat = new THREE.SpriteMaterial({ map: texs[i % 3], color: new THREE.Color(0.16, 0.145, 0.21), transparent: true, depthWrite: false, depthTest: false, opacity: 0, toneMapped: false }); // dim: smoke, not cloud lit from inside
-      const sp = new THREE.Sprite(mat);
-      sp.renderOrder = 51;
-      group.add(sp);
-      // where in its number's window, how big, how dense, which way it turns and drifts
-      // where in the one cloud over all four figures, how far it's thrown, how big, how dense, how it
-      // turns, how long it lasts
-      const ang = rnd() * Math.PI * 2, rr = Math.sqrt(rnd());
-      return { sp, mat, ux: Math.cos(ang) * rr, uy: Math.sin(ang) * rr, dx: Math.cos(ang), dy: Math.sin(ang), reach: 0.7 + rnd() * 0.8, z: (rnd() - 0.5) * 0.3, size: 0.55 + rnd() * 0.6, alpha: 0.75 + rnd() * 0.25, spin: (rnd() - 0.5) * 0.9, rot: rnd() * 6.28, life: 1.4 + rnd() * 1.1 };
-    });
-    const v = new THREE.Vector3();
-    let burstAt = -1;
-    return {
-      /** progress: how far the figures have gathered (0..1); on: the count is what's showing;
-          ip: how far through the landing the scroll is (its stop for the count is at 0.72) */
-      update(time: number, progress: number, on: boolean, ip: number) {
-        /* two beats: while the figures gather (and the camera flies in) a dense ball of smoke churns
-           where each will be and hides it; the moment they have formed it blows apart and the number
-           punches out of it. Going back before they have formed sets it all again. */
-        // (formed, and the scroll all but at the count's stop: it clears as you arrive, from either side,
-        // never waiting on another scroll)
-        if (on && progress >= 0.985 && ip >= 0.68 && burstAt < 0) burstAt = time;
-        if (!on || progress < 0.9 || ip < 0.6) burstAt = -1;
-        const brew = on ? smooth(0.3, 0.6, progress) : 0;
-        const t = burstAt < 0 ? -1 : time - burstAt;
-        group.visible = (burstAt < 0 && brew > 0.004) || (t >= 0 && t < 2.6);
-        if (!group.visible) return;
-        const out = t < 0 ? 0 : 1 - Math.exp(-4.5 * t); // a blast: fast off the mark, slowing as it spreads
-        // one cloud over the whole count: its middle and its reach, from the four windows together
-        if (statPanels.length === 0) { group.visible = false; return; }
-        let cx = 0, cy = 0;
-        for (const pn of statPanels) { cx += pn.x; cy += pn.y; }
-        cx /= statPanels.length; cy /= statPanels.length;
-        let ex = 0, ey = 0, h = 0;
-        for (const pn of statPanels) { ex = Math.max(ex, Math.abs(pn.x - cx) + pn.w / 2); ey = Math.max(ey, Math.abs(pn.y - cy) + pn.h / 2); h = Math.max(h, pn.h); }
-        const cz = statPanels[0].z;
-        for (const p of puffs) {
-          p.sp.visible = true;
-          // packed across all four figures while it brews, then blown out from the middle of them all
-          v.set(cx + p.ux * ex * 0.95 + p.dx * p.reach * out * ex * 0.7, cy + 0.1 * h + p.uy * ey * 0.85 + p.dy * p.reach * out * ey * 0.7 + Math.max(0, t) * h * 0.1, cz + p.z);
-          p.sp.position.copy(v);
-          p.sp.scale.setScalar(h * p.size * (1.35 + 0.9 * out));
-          p.mat.rotation = p.rot + time * p.spin * 0.3 + p.spin * out * 2; // it churns, then is flung
-          p.mat.opacity = t < 0 ? p.alpha * brew : p.alpha * (1 - smooth(0.05, p.life * 0.75, t));
-        }
-      },
-    };
-  })();
   const corner = new THREE.Vector3();
   let wasCase = false;
   const rideCamPos = new THREE.Vector3(), rideCamLook = new THREE.Vector3();
@@ -1214,7 +1127,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       if (m.depthTest === onTop) { m.depthTest = !onTop; m.needsUpdate = true; }
     }
     points.renderOrder = onTop ? 50 : 0;
-    smoke.update(time, key === 'stats' ? u.uProgress.value : 0, key === 'stats' && section === 'intro' && !view && !preview, ip);
     if (key === 'stats') {
       statPanels.forEach((pnl, i) => {
         const out = signals.statWindows[i];
@@ -1317,11 +1229,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       renderPass.enabled = !full;
       bloom.enabled = !full;
       if (on && aiWorld) {
-        aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.p, signals.pointer.x, signals.pointer.y);
+        aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
         aiPass.uniforms.uMix.value = ai.mix;
         aiPass.uniforms.uMode.value = ai.mode;
         aiPass.uniforms.uTime.value = time;
-      } else aiWorld?.sleep(time);
+      } else aiWorld?.sleep();
     }
     composer.render();
   }

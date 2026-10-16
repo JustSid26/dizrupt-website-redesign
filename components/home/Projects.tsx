@@ -65,7 +65,11 @@ export function Projects() {
     const apply = (landing = false) => {
       const vw = innerWidth, vh = innerHeight;
       const near = Math.round(Math.max(0, Math.min(N - 1, p)));
-      if (countRef.current) countRef.current.textContent = pad(near + 1);
+      if (countRef.current) {
+        countRef.current.textContent = pad(near + 1);
+        // how far through the tower: the counter's own progress line follows it
+        countRef.current.parentElement?.style.setProperty("--wp", String(Math.max(0, Math.min(1, p / Math.max(1, N - 1)))));
+      }
       const hidden: number[] = [];
       const gap = Math.max(20, vw * 0.025), edge = Math.max(16, vw * 0.03);
       for (let k = 0; k < N; k++) {

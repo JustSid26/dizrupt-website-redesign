@@ -6,8 +6,6 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { TECH_PROJECTS } from '@/content/techProjects';
-import { filmPage, hasFilmPage } from './filmPage';
 import { signals } from '@/lib/signals';
 
 /* =========================================================
@@ -16,18 +14,18 @@ import { signals } from '@/lib/signals';
 
    Out of the hand-over comes a microcontroller, floating on its
    own in the dark: a black LQFP package, gull-wing leads down
-   every side, laser marking on the epoxy and the Dizrupt mark
-   glowing in it, beating. Then the scroll wires it into the
-   work: from its pins a neural network runs out to each project,
-   layer by layer, and each project's screen is built by it —
-   neurons firing in, linking up, and merging into the picture. The camera visits them in
-   turn; a screen can be opened to play its film.
+   every side, the Dizrupt mark glowing in it, beating. Then the
+   scroll powers it up: a pulse of light leaves it, circuit traces
+   light up from every pin and run out across the dark, and the
+   camera pulls back until it is the hub of a network. From there
+   the page (components/home/ai) carries the network on: the
+   business it runs, drawn over this.
 
    World frame: the chip at the origin, its face towards +z.
    ========================================================= */
 
 // kept apart from the engine so the page's scroll can read them without loading three.js
-import { AI_STOPS, AI_EXIT_FROM } from '@/lib/aiStops';
+import { AI_STOPS, AI_EXIT_FROM, AI_WORLD } from '@/lib/aiStops';
 export { AI_STOPS, AI_EXIT_FROM };
 
 function rng(seed: number) {
@@ -125,175 +123,6 @@ function lidTop() {
   return { map: tex(col, true), rough: tex(rgh), bump: tex(bmp) };
 }
 
-/** A small tag for one of the capabilities beyond the featured work: an outline, a mark, its name. */
-function capabilityTexture(name: string, code: string) {
-  const c = document.createElement('canvas');
-  c.width = 640; c.height = 160;
-  const g = c.getContext('2d')!;
-  g.strokeStyle = 'rgba(124,242,255,0.55)'; g.lineWidth = 3;
-  g.beginPath(); g.moveTo(24, 6); g.lineTo(634, 6); g.lineTo(634, 136); g.lineTo(616, 154); g.lineTo(6, 154); g.lineTo(6, 24); g.closePath(); g.stroke();
-  g.fillStyle = 'rgba(124,242,255,0.07)'; g.fill();
-  g.fillStyle = 'rgba(124,242,255,0.75)'; g.font = '500 26px "JetBrains Mono", Menlo, monospace';
-  g.fillText(`${code} // CAPABILITY`, 30, 52);
-  g.fillStyle = '#e8f6ff'; g.font = '600 50px "Inter Tight", system-ui, sans-serif';
-  g.fillText(name, 30, 118);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-/** A project's screen: a system console — title bar, the project in big mono type, a node graph of
-    the system, a pane of code, an oscilloscope trace and a hex dump, all in corner brackets. */
-function screenTexture(pj: (typeof TECH_PROJECTS)[number], k: number) {
-  const { name, about, flow } = pj;
-  const W = 1280, H = 720;
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const g = c.getContext('2d')!;
-  const rand = rng(17 + k * 31);
-  const mono = (px: number, w = 500) => `${w} ${px}px "JetBrains Mono", Menlo, monospace`;
-  const sans = (px: number, w = 500) => `${w} ${px}px "Inter Tight", system-ui, sans-serif`;
-  g.fillStyle = '#02060c';
-  g.fillRect(0, 0, W, H);
-  // fine grid
-  g.strokeStyle = 'rgba(60,240,255,0.045)';
-  g.lineWidth = 1;
-  g.beginPath();
-  for (let x = 0; x < W; x += 24) { g.moveTo(x, 0); g.lineTo(x, H); }
-  for (let y = 0; y < H; y += 24) { g.moveTo(0, y); g.lineTo(W, y); }
-  g.stroke();
-  // title bar
-  g.fillStyle = 'rgba(60,240,255,0.08)';
-  g.fillRect(0, 0, W, 44);
-  g.fillStyle = 'rgba(60,240,255,0.35)';
-  g.fillRect(0, 44, W, 1);
-  ['#ff5f57', '#febc2e', '#28c840'].forEach((col, i) => { g.fillStyle = col; g.beginPath(); g.arc(26 + i * 20, 22, 6, 0, 7); g.fill(); });
-  g.font = mono(16);
-  g.fillStyle = 'rgba(189,246,255,0.75)';
-  g.fillText(`node_${String(k + 1).padStart(2, '0')}.sys — ${about.toLowerCase()}`, 96, 28);
-  g.textAlign = 'right';
-  g.fillStyle = '#3cf0ff';
-  g.fillText('● LINK ACTIVE', W - 24, 28);
-  g.textAlign = 'left';
-  // the name
-  g.fillStyle = '#eafcff';
-  g.font = mono(64, 600);
-  g.fillText(name.toUpperCase(), 40, 122);
-  g.fillStyle = '#a58bff';
-  g.font = mono(17);
-  g.fillText(`FEATURED WORK ${String(k + 1).padStart(2, '0')}  //  ${about.toUpperCase()}  //  ${pj.year}`, 42, 154);
-  g.fillStyle = 'rgba(60,240,255,0.25)';
-  g.fillRect(40, 176, W - 80, 1);
-
-  // the left column: what it does, what it changed, what it's built with
-  const L = 40, LW = 600;
-  const wrap = (text: string, x: number, y: number, maxW: number, lh: number, maxLines: number) => {
-    const words = text.split(' ');
-    let line = '', n = 0;
-    for (const w of words) {
-      const test = line ? `${line} ${w}` : w;
-      if (g.measureText(test).width > maxW && line) {
-        if (n === maxLines - 1) { while (g.measureText(`${line}…`).width > maxW) line = line.slice(0, -1); g.fillText(`${line}…`, x, y + n * lh); return y + (n + 1) * lh; }
-        g.fillText(line, x, y + n * lh); n++; line = w;
-      } else line = test;
-    }
-    g.fillText(line, x, y + n * lh);
-    return y + (n + 1) * lh;
-  };
-  const label = (t: string, y: number) => {
-    g.fillStyle = '#3cf0ff'; g.font = mono(14, 600);
-    g.fillText(t, L, y);
-    g.fillStyle = 'rgba(60,240,255,0.3)'; g.fillRect(L + g.measureText(t).width + 12, y - 5, 40, 1);
-  };
-  label('// WHAT IT DOES', 214);
-  g.fillStyle = 'rgba(234,252,255,0.92)'; g.font = sans(22, 500);
-  let y = wrap(pj.summary, L, 248, LW, 30, 4);
-  label(`// OUTCOME · ${pj.year}`, y + 26);
-  g.fillStyle = 'rgba(234,252,255,0.78)'; g.font = sans(20, 400);
-  y = wrap(pj.result, L, y + 58, LW, 28, 3);
-  label('// STACK', y + 26);
-  g.font = mono(15, 600);
-  let cx = L, cy = y + 48;
-  for (const st of pj.stack.slice(0, 8)) {
-    const w = g.measureText(st).width + 22;
-    if (cx + w > L + LW) { cx = L; cy += 38; }
-    if (cy > 640) break;
-    g.strokeStyle = 'rgba(60,240,255,0.55)'; g.lineWidth = 1.5; g.strokeRect(cx, cy, w, 28);
-    g.fillStyle = 'rgba(60,240,255,0.07)'; g.fillRect(cx, cy, w, 28);
-    g.fillStyle = '#dff9ff'; g.fillText(st, cx + 11, cy + 19);
-    cx += w + 8;
-  }
-
-  // the right column: the system in four steps, and its live signal
-  const gx = 680, gy = 196, gw = 560, gh = 250;
-  g.strokeStyle = 'rgba(60,240,255,0.25)';
-  g.lineWidth = 1;
-  g.strokeRect(gx, gy, gw, gh);
-  g.font = mono(13);
-  g.fillStyle = 'rgba(189,246,255,0.5)';
-  g.fillText('SYSTEM MAP', gx + 12, gy + 22);
-  const pts = flow.map((_, i) => [gx + 70 + i * ((gw - 140) / (flow.length - 1)), gy + 140 + (i % 2 ? -40 : 30)] as const);
-  g.strokeStyle = 'rgba(60,240,255,0.7)';
-  g.lineWidth = 2;
-  g.beginPath();
-  pts.forEach(([x, py], i) => (i ? g.lineTo(x, py) : g.moveTo(x, py)));
-  g.stroke();
-  pts.forEach(([x, py], i) => {
-    g.fillStyle = '#02060c'; g.strokeStyle = i % 2 ? '#a58bff' : '#3cf0ff'; g.lineWidth = 3;
-    g.beginPath(); g.arc(x, py, 16, 0, 7); g.fill(); g.stroke();
-    g.fillStyle = i % 2 ? '#a58bff' : '#3cf0ff';
-    g.beginPath(); g.arc(x, py, 5, 0, 7); g.fill();
-    g.fillStyle = 'rgba(234,252,255,0.85)'; g.font = mono(14); g.textAlign = 'center';
-    g.fillText(flow[i].toUpperCase(), x, py + (i % 2 ? -28 : 40));
-    g.textAlign = 'left';
-  });
-  const oy = 466, oh = 140;
-  g.strokeStyle = 'rgba(60,240,255,0.25)'; g.lineWidth = 1;
-  g.strokeRect(gx, oy, gw, oh);
-  g.fillStyle = 'rgba(189,246,255,0.5)'; g.font = mono(13);
-  g.fillText('SIGNAL', gx + 12, oy + 22);
-  g.strokeStyle = '#3cf0ff'; g.lineWidth = 2;
-  g.beginPath();
-  for (let x = 0; x <= gw - 40; x += 4) {
-    const py = oy + oh / 2 + 10 + Math.sin(x * 0.045 + k) * 24 * Math.sin(x * 0.006 + k * 2) + (rand() - 0.5) * 8;
-    if (x) g.lineTo(gx + 20 + x, py); else g.moveTo(gx + 20 + x, py);
-  }
-  g.stroke();
-  // footer: status line and the way in
-  g.fillStyle = 'rgba(189,246,255,0.55)';
-  g.font = mono(14);
-  g.fillText(`> node_${String(k + 1).padStart(2, '0')} ready · 16/16 lanes · awaiting input_`, 42, 690);
-  g.fillStyle = '#3cf0ff';
-  g.fillRect(W - 250, 640, 210, 48);
-  g.fillStyle = '#021016';
-  g.font = mono(18, 700);
-  g.fillText('OPEN PROJECT →', W - 232, 671);
-  // corner brackets
-  g.strokeStyle = '#3cf0ff';
-  g.lineWidth = 4;
-  for (const [x, by, dx, dy] of [[8, 52, 1, 1], [W - 8, 52, -1, 1], [8, H - 8, 1, -1], [W - 8, H - 8, -1, -1]] as const) {
-    g.beginPath(); g.moveTo(x, by + dy * 28); g.lineTo(x, by); g.lineTo(x + dx * 28, by); g.stroke();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
-}
-
-/** The plate under a screen: its node number and kind. */
-function plateTexture(text: string) {
-  const c = document.createElement('canvas');
-  c.width = 1024;
-  c.height = 64;
-  const g = c.getContext('2d')!;
-  g.font = '500 30px "JetBrains Mono", Menlo, monospace';
-  g.fillStyle = '#7cf2ff';
-  g.fillText(text, 4, 42);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
 
 /* Metal can't outshine the neon: its highlight is held under the bloom's threshold, so the leads and
    the lid keep a metal sheen as the chip turns but never flare into a white halo. */
@@ -427,383 +256,107 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   markGlow.position.set(0, H / 2 + LH + 0.001, 0);
   chip.add(markGlow);
 
-  /* ================= the projects: a screen each, round the chip ================= */
-  const projects = TECH_PROJECTS.slice(0, 4);
-  const PW = 4.2, PH = PW * 0.5625;
-  // at slightly different depths, so they read as launched out into space rather than pinned to a wall
-  const slots = [new THREE.Vector3(-7.2, 3.3, -2.6), new THREE.Vector3(7.2, 3.3, -3.3), new THREE.Vector3(-7.2, -3.3, -3.2), new THREE.Vector3(7.2, -3.3, -2.7)];
-  const bezel = new THREE.MeshPhysicalMaterial({ color: '#1a1c21', metalness: 0.7, roughness: 0.35, clearcoat: 0.4 });
-  const panels = projects.map((pj, k) => {
-    const at = slots[k];
-    const group = new THREE.Group();
-    group.position.copy(at);
-    group.rotation.y = -Math.sign(at.x) * 0.22; // turned a little in, towards the chip
-    scene.add(group);
-    const frameMat = bezel.clone();
-    frameMat.transparent = true;
-    frameMat.opacity = 0;
-    const frame = new THREE.Mesh(new RoundedBoxGeometry(PW + 0.16, PH + 0.16, 0.1, 3, 0.04), frameMat);
-    frame.position.z = -0.06;
-    frame.castShadow = true;
-    group.add(frame);
-    // a project with a film gets its page in the product's own look, with the film playing in it
-    const live = hasFilmPage(pj) ? filmPage(pj, k) : null;
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {
-        map: { value: live ? live.tex : (screenTexture(pj, k) as THREE.Texture) }, uOn: { value: 0 }, uTime, uFocus: { value: 0 },
-        uSide: { value: at.x < 0 ? 1 : 0 }, // the network plugs into the edge nearest the chip: build from there
-        uGlitch: { value: 0 }, uSeed: { value: 0 }, uDissolve: { value: 0 },
-        uLight: { value: live ? 1 : 0 }, // a page in a product's light look: no heavy scanlines or glow on it
-      },
-      vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: /* glsl */ `
-        uniform sampler2D map; uniform float uOn, uTime, uFocus, uSide, uGlitch, uSeed, uDissolve, uLight; varying vec2 vUv;
-        float h2(vec2 p) { return fract(sin(dot(mod(p, 97.0), vec2(127.1, 311.7))) * 43758.5453); }
-        void main(){
-          /* built by a neural network: a grid of neurons fires in from the edge the network plugs
-             into, a lattice of connections links them, and then they swell until they merge into
-             the picture */
-          vec2 grid = vec2(32.0, 18.0);
-          vec2 gp = vUv * grid;
-          vec2 id = floor(gp);
-          vec2 f = fract(gp) - 0.5;
-          float order = mix(vUv.x, 1.0 - vUv.x, uSide) * 0.65 + h2(id) * 0.35;
-          float fire = smoothstep(order * 0.55, order * 0.55 + 0.06, uOn);
-          float grow = smoothstep(0.58, 1.0, uOn);
-          float r = mix(0.1, 0.78, grow);
-          float node = 1.0 - smoothstep(r - 0.04, r, max(abs(f.x), abs(f.y)) * (1.0 - grow) + length(f) * grow * 0.9);
-          node = mix(node, 1.0, smoothstep(0.92, 1.0, uOn));
-          // the lattice: each neuron wired to its right and upper neighbours while it builds
-          float lat = (1.0 - smoothstep(0.0, 0.035, abs(f.y))) * step(0.0, f.x) + (1.0 - smoothstep(0.0, 0.035, abs(f.x))) * step(0.0, f.y);
-          lat *= fire * (1.0 - grow);
-          // a signal runs along the lattice as it fires
-          float spark = pow(fract(order * 3.0 - uTime * 1.5), 12.0) * (1.0 - grow);
-          /* the signal drops now and then: rows tear sideways, the channels split, blocks of the
-             picture jump or freeze, and the whole frame jolts */
-          vec2 guv = vUv;
-          float gl = uGlitch;
-          if (gl > 0.0) {
-            float row = floor(vUv.y * 22.0);
-            float tear = step(0.62, h2(vec2(row, uSeed)));
-            guv.x += tear * (h2(vec2(row, uSeed + 3.0)) - 0.5) * 0.22 * gl;
-            vec2 blk = floor(vUv * vec2(12.0, 8.0));
-            float jump = step(0.86, h2(blk + uSeed));
-            guv += jump * (vec2(h2(blk + uSeed + 1.0), h2(blk + uSeed + 2.0)) - 0.5) * 0.12 * gl;
-            guv.y += (h2(vec2(uSeed, 9.0)) - 0.5) * 0.04 * gl;
-          }
-          /* RGB: the three channels come apart, each band of rows splitting its own way, the red
-             and blue ghosts torn further than the picture */
-          float band = floor(vUv.y * 14.0);
-          float bs = (h2(vec2(band, uSeed + 5.0)) - 0.5) * 2.0;
-          vec2 ca = vec2(0.012 + 0.03 * abs(bs), (h2(vec2(band, uSeed + 7.0)) - 0.5) * 0.01) * gl;
-          vec3 c = vec3(texture2D(map, guv + ca * sign(bs + 0.001)).r, texture2D(map, guv).g, texture2D(map, guv - ca * sign(bs + 0.001)).b);
-          if (gl > 0.0) {
-            // whole bands tinted to one channel, the way a failing signal drops the others
-            float tint = step(0.8, h2(vec2(band, uSeed + 11.0)));
-            float which = h2(vec2(band, uSeed + 13.0));
-            vec3 chan = which < 0.33 ? vec3(1.0, 0.18, 0.3) : which < 0.66 ? vec3(0.2, 1.0, 0.45) : vec3(0.25, 0.4, 1.0);
-            c = mix(c, c * chan * 1.6, tint * gl);
-            c *= 1.0 - 0.15 * gl * step(0.5, fract(vUv.y * 180.0));                            // scanlines
-          }
-          c *= mix(0.9 + 0.1 * sin(vUv.y * 600.0), 0.985 + 0.015 * sin(vUv.y * 600.0), uLight); // scanlines
-          float scan = 1.0 - smoothstep(0.0, 0.012, abs(vUv.y - (1.0 - fract(uTime * 0.25))));
-          c += vec3(0.2, 0.8, 1.0) * scan * 0.25 * grow * (1.0 - uLight * 0.8);
-          c *= 0.97 + 0.03 * sin(vUv.y * 8.0 - uTime * 3.0);
-          vec3 neuron = vec3(0.35, 0.9, 1.0);
-          vec3 outc = c * node * fire * (0.35 + 0.65 * grow)
-                    + neuron * node * fire * (1.0 - grow) * (0.7 + spark * 2.0)
-                    + neuron * lat * (0.3 + spark * 1.5);
-          outc *= mix(0.8 + uFocus * 0.35, 0.78 + uFocus * 0.2, uLight);
-          // handing over: the picture breaks back into neurons, cell by cell, each flashing as it goes
-          if (uDissolve > 0.0) {
-            float gone = h2(id + 31.0) * 0.85 + 0.1;
-            float edge = smoothstep(gone - 0.12, gone, uDissolve) * (1.0 - smoothstep(gone, gone + 0.04, uDissolve));
-            outc *= 1.0 - step(gone, uDissolve);
-            outc += vec3(0.4, 0.9, 1.0) * node * edge * 2.0;
-          }
-          gl_FragColor = vec4(outc, 1.0);
-        }`,
-    });
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat);
-    screen.position.z = 0.002;
-    group.add(screen);
-    // a lit edge round the bezel, like a hologram's frame
-    const edgeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.85, 1.0).multiplyScalar(1.6), toneMapped: false, transparent: true, opacity: 0 });
-    for (const [w, h, x, y] of [[PW + 0.2, 0.018, 0, PH / 2 + 0.1], [PW + 0.2, 0.018, 0, -PH / 2 - 0.1], [0.018, PH + 0.2, PW / 2 + 0.1, 0], [0.018, PH + 0.2, -PW / 2 - 0.1, 0]] as const) {
-      const e = new THREE.Mesh(new THREE.PlaneGeometry(w, h), edgeMat);
-      e.position.set(x, y, 0.005);
-      group.add(e);
-    }
-    // and its plate, under it
-    const plate = new THREE.Mesh(
-      new THREE.PlaneGeometry(PW * 0.62, (PW * 0.62) / 16),
-      new THREE.MeshBasicMaterial({ opacity: 0, map: plateTexture(`FEATURED WORK ${String(k + 1).padStart(2, '0')} // ${pj.about.toUpperCase()} // ${pj.slug}`), transparent: true, toneMapped: false }),
-    );
-    plate.position.set(-PW * 0.19, -PH / 2 - 0.26, 0);
-    group.add(plate);
-    // a poster, if the project has one, replaces the mock
-    if (pj.poster) new THREE.TextureLoader().load(pj.poster, (t) => ((t.colorSpace = THREE.SRGBColorSpace), (mat.uniforms.map.value = t)));
-    group.visible = false; // nothing of it exists until its network reaches it
 
-    // what it does, what it's built with and what it changed are on the screen itself now
-    const cloudU = { uTime, uReveal: { value: 0 } };
-    const clouds: { mat: THREE.ShaderMaterial; mesh: THREE.Mesh }[] = [];
-
-    return { group, mat, live, frameMat, edgeMat, clouds, cloudU, cloudOn: 0, plateMat: plate.material as THREE.MeshBasicMaterial, burst: { next: 2 + k * 1.3, until: 0, strength: 0, reseed: 0 } };
-  });
-
-  /* ================= the hand-over's particles: each screen's picture, as it breaks up ================= */
-  const burst = (() => {
-    const n = 900 * panels.length;
-    const start = new Float32Array(n * 3), vel = new Float32Array(n * 3), seed = new Float32Array(n);
-    panels.forEach((pn, k) => {
-      pn.group.updateMatrixWorld(true);
-      const v = new THREE.Vector3();
-      for (let i = 0; i < 900; i++) {
-        const idx = k * 900 + i;
-        v.set((Math.random() - 0.5) * PW, (Math.random() - 0.5) * PH, 0.05).applyMatrix4(pn.group.matrixWorld);
-        start.set([v.x, v.y, v.z], idx * 3);
-        // out towards the camera and away from the middle, so the stream leaves the frame
-        const dir = new THREE.Vector3(v.x * 0.35, v.y * 0.35, 6 + Math.random() * 6);
-        vel.set([dir.x + (Math.random() - 0.5) * 3, dir.y + (Math.random() - 0.5) * 3, dir.z], idx * 3);
-        seed[idx] = Math.random();
+  /* ================= powering up: a pulse, then the traces =================
+     On the board behind the chip, a trace runs out of every one of its 64 pins: straight out, a 45°
+     fan so the side's traces spread without crossing, then long and straight into the dark. They
+     light up from the pins outwards as the chip powers on; after that, data keeps running out
+     along them. A via sits at the end of each, where the page's own network picks up. */
+  const traces = (() => {
+    const geos: THREE.BufferGeometry[] = [];
+    const ends: number[] = [], endD: number[] = [];
+    const rand = rng(17);
+    const Z = -0.21, FOOT = BODY / 2 + 0.36, MAXLEN = 14;
+    const dirs = [new THREE.Vector2(1, 0), new THREE.Vector2(-1, 0), new THREE.Vector2(0, 1), new THREE.Vector2(0, -1)];
+    dirs.forEach((d, side) => {
+      const perp = new THREE.Vector2(-d.y, d.x);
+      const run1 = 0.35 + side * 0.04, fan = 1.6;
+      for (let i = 0; i < N_PIN; i++) {
+        const t = (i - (N_PIN - 1) / 2) * PITCH;
+        const a = d.clone().multiplyScalar(FOOT).addScaledVector(perp, t);
+        const b = a.clone().addScaledVector(d, run1);
+        // the fan: out and sideways at 45°, further the further the pin is from the middle
+        const c = b.clone().addScaledVector(d, Math.abs(t) * fan).addScaledVector(perp, t * fan);
+        const len3 = 2.2 + rand() * 7.5 * (0.45 + 0.55 * Math.abs(d.x)); // longer across the wide screen
+        const e = c.clone().addScaledVector(d, len3);
+        const pts = [a, b, c, e].map((v) => new THREE.Vector3(v.x, v.y, Z));
+        const path = new THREE.CurvePath<THREE.Vector3>();
+        for (let k = 0; k < 3; k++) path.add(new THREE.LineCurve3(pts[k], pts[k + 1]));
+        const len = path.getLength();
+        const g = new THREE.TubeGeometry(path, 36, 0.011, 3, false);
+        const n = g.attributes.position.count, uv = g.attributes.uv;
+        const dist = new Float32Array(n), seed = new Float32Array(n).fill(rand());
+        for (let v = 0; v < n; v++) dist[v] = (uv.getX(v) * len) / MAXLEN;
+        g.setAttribute('aD', new THREE.BufferAttribute(dist, 1));
+        g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+        g.deleteAttribute('normal');
+        g.deleteAttribute('uv');
+        geos.push(g);
+        ends.push(e.x, e.y, Z);
+        endD.push(len / MAXLEN);
       }
     });
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(start, 3));
-    geo.setAttribute('aVel', new THREE.BufferAttribute(vel, 3));
-    geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-    const mat = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-      uniforms: { uT: { value: 0 }, uViewH: { value: innerHeight * pixelRatio } },
-      vertexShader: /* glsl */ `
-        attribute vec3 aVel; attribute float aSeed; uniform float uT, uViewH; varying float vA;
-        void main(){
-          float t = clamp((uT - aSeed * 0.35) / 0.65, 0.0, 1.0);
-          vec3 p = position + aVel * t * t;
-          vA = step(0.001, t) * (1.0 - t);
-          vec4 mv = modelViewMatrix * vec4(p, 1.0);
-          gl_Position = projectionMatrix * mv;
-          gl_PointSize = vA * min(0.16 * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z, uViewH * 0.02);
-        }`,
+    const u = { uTime, uReveal: { value: 0 }, uDim: { value: 1 }, uFire: { value: 0 }, uViewH: { value: innerHeight * pixelRatio } };
+    const lineMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, uniforms: u,
+      vertexShader: /* glsl */ `attribute float aD; attribute float aSeed; varying float vD; varying float vSeed;
+        void main(){ vD = aD; vSeed = aSeed; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        varying float vA;
-        void main(){ float d = length(gl_PointCoord - 0.5); if (vA <= 0.0) discard;
-          gl_FragColor = vec4(vec3(0.45, 0.9, 1.0) * smoothstep(0.5, 0.0, d) * 1.6, vA); }`,
+        uniform float uTime, uReveal, uDim, uFire; varying float vD; varying float vSeed;
+        void main(){
+          float front = uReveal * 1.15;
+          if (vD > front || uReveal <= 0.001) discard;
+          float head = exp(-(front - vD) * 30.0) * (1.0 - smoothstep(0.95, 1.15, front));   // the light running out
+          float pulse = pow(fract(vD * 2.2 - uTime * (0.22 + vSeed * 0.2) + vSeed * 7.0), 22.0); // data, after
+          vec3 c = mix(vec3(0.3, 0.86, 1.0), vec3(0.7, 0.42, 1.0), step(0.66, vSeed));
+          float fade = 1.0 - smoothstep(0.35, 1.0, vD);                                       // into the dark
+          float a = (0.16 + pulse * 1.3 * smoothstep(0.5, 1.0, uReveal) + head * 1.8 + uFire * 0.9) * mix(0.25, 1.0, fade);
+          gl_FragColor = vec4(c * a * uDim, min(1.0, a * uDim));
+        }`,
     });
-    const pts = new THREE.Points(geo, mat);
-    pts.frustumCulled = false;
-    pts.visible = false;
-    scene.add(pts);
-    return { pts, mat };
+    const lines = new THREE.Mesh(mergeGeometries(geos), lineMat);
+    lines.frustumCulled = false;
+    geos.forEach((g) => g.dispose());
+    scene.add(lines);
+    // the vias at their ends
+    const viaGeo = new THREE.BufferGeometry();
+    viaGeo.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3));
+    viaGeo.setAttribute('aD', new THREE.Float32BufferAttribute(endD, 1));
+    const viaMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, uniforms: u,
+      vertexShader: /* glsl */ `attribute float aD; uniform float uReveal, uViewH; varying float vOn;
+        void main(){ vOn = smoothstep(aD, aD + 0.05, uReveal * 1.15);
+          vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
+          gl_PointSize = vOn * min(0.09 * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z, uViewH * 0.012); }`,
+      fragmentShader: /* glsl */ `uniform float uDim; varying float vOn;
+        void main(){ float d = length(gl_PointCoord - 0.5); if (vOn <= 0.0) discard;
+          float ring = smoothstep(0.5, 0.36, d) * smoothstep(0.18, 0.3, d), core = smoothstep(0.16, 0.06, d);
+          gl_FragColor = vec4(vec3(0.5, 0.92, 1.0) * (ring * 0.7 + core) * uDim * vOn, (ring * 0.7 + core) * uDim * vOn); }`,
+    });
+    const vias = new THREE.Points(viaGeo, viaMat);
+    vias.frustumCulled = false;
+    scene.add(vias);
+    return { u };
   })();
 
-  /* ================= the networks: chip → neurons → screen, one per project =================
-     Layers of neurons between the chip and each screen — four at the chip's pins, then five, six,
-     and four along the screen's edge — every one wired to every one in the next layer. The signal
-     fires forward a layer at a time; after that, pulses keep running through the weights. */
-  const nets: { edgeMat: THREE.ShaderMaterial; nodeMat: THREE.ShaderMaterial; delay: number }[] = [];
-  {
-    const edgeMatFor = () =>
-      new THREE.ShaderMaterial({
-        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        uniforms: { uTime, uReveal: { value: 0 }, uDim: { value: 1 } },
-        vertexShader: /* glsl */ `
-          attribute float aLayer; attribute float aSeed; varying float vT; varying float vLayer; varying float vSeed;
-          void main(){ vT = uv.x; vLayer = aLayer; vSeed = aSeed; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: /* glsl */ `
-          uniform float uTime, uReveal, uDim; varying float vT; varying float vLayer; varying float vSeed;
-          void main(){
-            // this layer's connections draw out as the signal crosses it
-            float front = uReveal * 3.0 - vLayer;
-            if (vT > front || uReveal <= 0.001) discard;
-            float lead = exp(-(front - vT) * 6.0) * step(front, 1.0);
-            float pulse = pow(fract(vT - uTime * (0.5 + vSeed * 0.7) + vSeed * 5.0), 14.0);
-            vec3 c = mix(vec3(0.3, 0.85, 1.0), vec3(0.72, 0.4, 1.0), step(0.62, vSeed));
-            // near the chip the links bunch up: keep them faint there so the pins don't bloom white
-            float near = mix(0.06, 1.0, smoothstep(0.0, 0.6, vT + vLayer)); // twenty links meet at every pin
-            float a = (0.12 + pulse * 1.1 + lead * 1.1) * near;
-            gl_FragColor = vec4(c * a * uDim, a * uDim);
-          }`,
-      });
-    const nodeMatFor = () =>
-      new THREE.ShaderMaterial({
-        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        uniforms: { uTime, uReveal: { value: 0 }, uDim: { value: 1 }, uSize: { value: 0.12 }, uViewH: { value: innerHeight * pixelRatio } },
-        vertexShader: /* glsl */ `
-          attribute float aLayer; uniform float uReveal, uSize, uViewH, uTime; varying float vOn; varying float vFire;
-          void main(){
-            float front = uReveal * 3.0 - aLayer;
-            vOn = step(0.001, front) * step(0.001, uReveal) * step(0.5, aLayer); // the chip's pins are the input layer
-            vFire = exp(-max(front, 0.0) * 4.0) * vOn + 0.25 * (0.5 + 0.5 * sin(uTime * 3.0 + aLayer * 1.7 + position.y));
-            vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            gl_Position = projectionMatrix * mv;
-            // capped: up close to the chip they'd otherwise swell into white blots
-            gl_PointSize = vOn * min(uSize * (1.0 + vFire * 0.5) * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z, uViewH * 0.018);
-          }`,
-        fragmentShader: /* glsl */ `
-          uniform float uDim; varying float vOn; varying float vFire;
-          void main(){
-            if (vOn < 0.5) discard;
-            float d = length(gl_PointCoord - 0.5);
-            float core = smoothstep(0.22, 0.12, d), ring = smoothstep(0.5, 0.3, d) * smoothstep(0.26, 0.34, d);
-            vec3 c = vec3(0.45, 0.92, 1.0);
-            gl_FragColor = vec4(c * (core * (0.8 + vFire * 0.8) + ring * 0.45) * uDim, max(core, ring * 0.7) * uDim);
-          }`,
-      });
-    projects.forEach((_, k) => {
-      const at = slots[k];
-      const sx = Math.sign(at.x), sy = Math.sign(at.y);
-      const layers: THREE.Vector3[][] = [];
-      // the input layer: four of the chip's pins on the side facing the screen
-      layers.push(
-        Array.from({ length: 4 }, (_, j) => {
-          const pinIndex = sy > 0 ? 1 + j * 2 : N_PIN - 2 - j * 2;
-          return new THREE.Vector3(sx * (BODY / 2 + 0.3), -(pinIndex - (N_PIN - 1) / 2) * PITCH, -0.2);
-        }),
-      );
-      // hidden layers, stepping out towards the screen
-      const hidden = (n: number, f: number, spread: number, z: number) =>
-        Array.from({ length: n }, (_, j) => new THREE.Vector3(sx * (1.6 + f * (Math.abs(at.x) - 1.6 - PW / 2)), at.y * f + (j - (n - 1) / 2) * spread, z));
-      layers.push(hidden(5, 0.33, 0.55, -0.9), hidden(6, 0.66, 0.5, -1.9));
-      // the output layer: along the screen's near edge
-      const ex = at.x - sx * (PW / 2) * Math.cos(0.22);
-      layers.push(Array.from({ length: 4 }, (_, j) => new THREE.Vector3(ex, at.y + (j - 1.5) * (PH / 4.5), at.z - 0.05)));
-
-      const geos: THREE.BufferGeometry[] = [];
-      const rand = rng(90 + k);
-      for (let l = 0; l < layers.length - 1; l++)
-        for (const a of layers[l])
-          for (const b of layers[l + 1]) {
-            const g = new THREE.TubeGeometry(new THREE.LineCurve3(a, b), 8, 0.012, 5, false);
-            const n = g.attributes.position.count, seed = rand();
-            g.setAttribute('aLayer', new THREE.Float32BufferAttribute(new Array(n).fill(l), 1));
-            g.setAttribute('aSeed', new THREE.Float32BufferAttribute(new Array(n).fill(seed), 1));
-            geos.push(g);
-          }
-      const edgeMat = edgeMatFor();
-      // (the networks out of the chip's sides are retired: the pages come out of the beam now)
-      void mergeGeometries; void geos;
-      geos.forEach((g) => g.dispose());
-      const nodeGeo = new THREE.BufferGeometry();
-      nodeGeo.setAttribute('position', new THREE.Float32BufferAttribute(layers.flat().flatMap((v) => [v.x, v.y, v.z]), 3));
-      nodeGeo.setAttribute('aLayer', new THREE.Float32BufferAttribute(layers.flatMap((ly, l) => ly.map(() => l)), 1));
-      const nodeMat = nodeMatFor();
-      void nodeGeo;
-      nets.push({ edgeMat, nodeMat, delay: k * 0.06 });
-    });
-  }
-
-  /* ================= the launch: each project flies out of the chip along a curve ================= */
-  // from the chip's edge, out towards the camera in an arc, round to where the screen settles
-  /* the beam: a column of light standing off the whole silver lid, out towards the camera; the
-     pages come up out of it. Light at its foot, thinning to nothing at its far end, with fine
-     scanlines running up it and an edge glow down its sides. */
-  const beamU = { uTime, uOn: { value: 0 } };
-  const BEAM_L = 7;
-  const beam = new THREE.Mesh(
-    new THREE.BoxGeometry(BODY * 0.74, BEAM_L, BODY * 0.74, 1, 1, 1).translate(0, BEAM_L / 2, 0),
-    new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide,
-      uniforms: beamU,
-      vertexShader: /* glsl */ `varying vec3 vP; varying vec3 vN; varying vec3 vV;
-        void main(){ vP = position; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: /* glsl */ `
-        uniform float uTime, uOn; varying vec3 vP; varying vec3 vN; varying vec3 vV;
-        void main(){
-          if (uOn <= 0.001) discard;
-          float h = vP.y / ${BEAM_L.toFixed(1)};
-          // it rises: its top edge climbs as it comes on
-          float top = smoothstep(0.0, 1.0, uOn * 1.6);
-          if (h > top) discard;
-          float fall = pow(1.0 - h, 2.2) * (1.0 - smoothstep(top - 0.25, top, h) * 0.6);
-          float edge = pow(1.0 - abs(dot(vN, vV)), 2.0); // brighter where seen edge-on: a volume of light
-          float scan = 0.75 + 0.25 * sin(vP.y * 40.0 - uTime * 6.0);
-          vec3 c = mix(vec3(0.55, 0.85, 1.0), vec3(0.75, 0.55, 1.0), h);
-          float a = (0.9 + edge * 2.2) * fall * scan * min(1.0, uOn * 3.0);
-          gl_FragColor = vec4(c * a * 2.4, min(1.0, a));
-        }`,
-    }),
-  );
-  beam.position.y = H / 2 + 0.045;
-  chip.add(beam);
-  // where it stands on the lid, the whole silver square lights up
-  const beamFoot = new THREE.Mesh(new THREE.PlaneGeometry(BODY * 0.78, BODY * 0.78), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, uniforms: beamU,
+  // the pulse: one ring of light leaves the chip as it powers on
+  const pulseMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+    uniforms: { uT: { value: 0 } },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */ `uniform float uOn, uTime; varying vec2 vUv;
-      void main(){ vec2 d = abs(vUv - 0.5) * 2.0; float sq = 1.0 - smoothstep(0.8, 1.0, max(d.x, d.y));
-        float a = sq * (1.6 + 0.3 * sin(uTime * 9.0)) * min(1.0, uOn * 2.0);
-        gl_FragColor = vec4(vec3(0.75, 0.92, 1.0) * a * 2.0, min(1.0, a)); }`,
-  }));
-  beamFoot.rotation.x = -Math.PI / 2;
-  beamFoot.position.y = H / 2 + 0.05;
-  chip.add(beamFoot);
-
-  const launches = slots.map((at, k) => {
-    /* out of the beam: first straight up off the lid inside the column of light, stacked with the
-       others; then each breaks out of it on its own curve to where it settles */
-    const top = new THREE.Vector3(0, 0, 3.4 + k * 0.35);
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0, 0.35), new THREE.Vector3(0, 0, 1.8 + k * 0.18), top,
-      new THREE.Vector3(at.x * 0.45, at.y * 0.55, (top.z + at.z) * 0.55), at.clone(),
-    ], false, 'centripetal');
-    const geo = new THREE.TubeGeometry(curve, 80, 0.022, 6, false);
-    const mat = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-      uniforms: { uTime, uLaunch: { value: 0 }, uDim: { value: 1 }, uSeed: { value: k * 0.37 } },
-      vertexShader: /* glsl */ `varying float vT; void main(){ vT = uv.x; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: /* glsl */ `
-        uniform float uTime, uLaunch, uDim, uSeed; varying float vT;
-        void main(){
-          // drawn out behind the screen as it flies; a hot head where it is, a faint trail behind
-          if (vT > uLaunch + 0.002 || uLaunch <= 0.001) discard;
-          float head = exp(-(uLaunch - vT) * 14.0) * (1.0 - smoothstep(0.95, 1.0, uLaunch));
-          float pulse = pow(fract(vT * 1.5 - uTime * 0.45 + uSeed), 18.0) * smoothstep(0.9, 1.0, uLaunch);
-          vec3 c = mix(vec3(0.3, 0.88, 1.0), vec3(0.72, 0.42, 1.0), vT);
-          float a = (0.16 + head * 2.2 + pulse * 1.4) * mix(0.25, 1.0, smoothstep(0.0, 0.15, vT));
-          gl_FragColor = vec4(c * a * uDim, a * uDim);
-        }`,
-    });
-    scene.add(new THREE.Mesh(geo, mat));
-    return { curve, mat, t: 0 };
+    fragmentShader: /* glsl */ `uniform float uT; varying vec2 vUv;
+      void main(){
+        if (uT <= 0.001 || uT >= 0.999) discard;
+        float r = length(vUv - 0.5) * 2.0;           // 0 at the chip, 1 at the ring's full reach
+        float at = uT;                                // where the wave front is
+        float w = exp(-pow((r - at) / 0.035, 2.0)) + 0.35 * exp(-pow((r - at * 0.82) / 0.06, 2.0));
+        float a = w * (1.0 - uT) * smoothstep(0.08, 0.16, r);
+        gl_FragColor = vec4(vec3(0.62, 0.9, 1.0) * a * 1.6, a);
+      }`,
   });
-
-  /* ================= what else it runs: the capabilities beyond the featured work =================
-     Small, dim tags on a bus above the chip, each tied back to it by a thin line. They are not work
-     to visit: they say the four screens are examples, not the whole of it. */
-  const CAPS: [string, string][] = [['Voice AI', 'C1'], ['Workflow Automation', 'C2'], ['Document Processing', 'C3'], ['Custom AI Solutions', 'C4']];
-  const caps = CAPS.map(([name, code], c) => {
-    const at = new THREE.Vector3((c - 1.5) * 2.75, 4.55 + (c % 2) * 0.32, -4.2);
-    const tag = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.3, 2.3 / 4),
-      new THREE.MeshBasicMaterial({ map: capabilityTexture(name, code), transparent: true, opacity: 0, depthWrite: false, toneMapped: false }),
-    );
-    tag.position.copy(at);
-    scene.add(tag);
-    // its line back to the chip: up out of the top edge and over
-    const from = new THREE.Vector3((c - 1.5) * 0.45, BODY / 2 + 0.3, -0.2);
-    const curve = new THREE.CubicBezierCurve3(from, from.clone().add(new THREE.Vector3(0, 1.6, -0.6)), at.clone().add(new THREE.Vector3(0, -1.6, 0.4)), at.clone().add(new THREE.Vector3(0, -0.3, 0)));
-    const line = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, 40, 0.008, 4, false),
-      new THREE.ShaderMaterial({
-        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-        uniforms: { uTime, uOn: { value: 0 }, uSeed: { value: c * 0.29 } },
-        vertexShader: /* glsl */ `varying float vT; void main(){ vT = uv.x; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: /* glsl */ `
-          uniform float uTime, uOn, uSeed; varying float vT;
-          void main(){
-            if (vT > uOn * 1.02) discard;
-            float dash = step(0.5, fract(vT * 26.0 - uTime * 0.6));
-            float pulse = pow(fract(vT - uTime * 0.3 + uSeed), 20.0);
-            float a = (0.08 + 0.1 * dash + pulse * 0.8) * uOn;
-            gl_FragColor = vec4(vec3(0.45, 0.9, 1.0) * a, a);
-          }`,
-      }),
-    );
-    scene.add(line);
-    return { tag, tagMat: tag.material as THREE.MeshBasicMaterial, lineMat: line.material as THREE.ShaderMaterial, delay: c * 0.07 };
-  });
+  const pulse = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), pulseMat);
+  pulse.position.z = -0.25;
+  scene.add(pulse);
 
   // dust in the light
   const dust = (() => {
@@ -848,7 +401,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   composer.setPixelRatio(pixelRatio);
   composer.setSize(innerWidth, innerHeight);
   composer.addPass(new RenderPass(scene, camera));
-  // between two projects the whole picture loses the signal: rows tear, the channels split, blocks jump
+  // when the power surges the whole picture loses the signal: rows tear, the channels split, blocks jump
   const glitchPass = new ShaderPass({
     uniforms: { tDiffuse: { value: null }, uAmt: { value: 0 }, uSeed: { value: 0 }, uWhite: { value: 0 } },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -882,15 +435,13 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.2, 1.4);
   composer.addPass(bloom);
 
-  /* ================= the camera: a pose per stop ================= */
+  /* ================= the camera: up close, then pulled back to the network ================= */
   const poses = [
-    { pos: new THREE.Vector3(0.9, 0.6, 5.2), look: new THREE.Vector3(0, 0, 0) },
-    // a little from below and to one side, so the beam off the chip reads as a column, not a square
-    { pos: new THREE.Vector3(1.8, -3.2, 21.5), look: new THREE.Vector3(0, 0, -1.5) },
-    // each screen in the middle, close enough that what's written on it reads
-    // the pages come to the camera: it holds on the chip and its beam while they do
-    ...slots.map(() => ({ pos: new THREE.Vector3(1.4, -2.4, 17), look: new THREE.Vector3(0, 0, -0.5) })),
+    { pos: new THREE.Vector3(1.1, 0.7, 8.6), look: new THREE.Vector3(0, 0, 0) }, // the chip, close (clear of the nav and the captions)
+    { pos: new THREE.Vector3(0.6, -1.4, 17), look: new THREE.Vector3(0, 0, 0) }, // powered on: the traces
+    { pos: new THREE.Vector3(0, -1.2, 30), look: new THREE.Vector3(0, 0, 0) }, // the hub of it all
   ];
+  const away = new THREE.Vector3(0, -0.8, 46); // leaving: further back still, as the hand-back runs
   const pos = new THREE.Vector3(), look = new THREE.Vector3(), tgtPos = new THREE.Vector3(), tgtLook = new THREE.Vector3();
   let first = true;
 
@@ -900,7 +451,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     camera.updateProjectionMatrix();
     composer.setSize(innerWidth, innerHeight);
     bloom.setSize(innerWidth, innerHeight);
-    nets?.forEach((n) => (n.nodeMat.uniforms.uViewH.value = innerHeight * pixelRatio));
+    traces.u.uViewH.value = innerHeight * pixelRatio;
   };
   resize();
 
@@ -908,220 +459,101 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     const x = Math.min(1, Math.max(0, (t - a) / (b - a)));
     return x * x * (3 - 2 * x);
   };
-  let wired = 0, capOn = 0, wasPast = false;
-  const fillAt = new THREE.Vector3(), beamA = new THREE.Vector3(), beamB = new THREE.Vector3();
-  const tmpExit = new THREE.Vector3(), tmpExit2 = new THREE.Vector3(), camFwd = new THREE.Vector3();
-  const corner = new THREE.Vector3();
+  const { wire: WIRE, chaos: CHAOS, order: ORDER, sortFrom: SORT, asideFrom: ASIDE0, asideTo: ASIDE1 } = AI_WORLD;
+  const centre = new THREE.Vector3(), edge = new THREE.Vector3();
+  // the pointer's own turn of the chip, on top of its float: dragged, it spins and carries on a little
+  // when let go; left alone a moment, it eases back the shortest way round into its float
+  const grab = { x: 0, y: 0, vx: 0, vy: 0 };
+  const wrap = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 
   return {
     scene,
     camera,
     resize,
+    /** Off screen: nothing runs on its own here. */
+    sleep() {},
     /** p: 0..1 through the section; px, py: the pointer (-1..1) */
-    /** Off screen: the films on its pages stop. */
-    sleep(time: number) { panels.forEach((pn) => pn.live?.tick(time, false)); },
     render(dt: number, time: number, p: number, px: number, py: number) {
       uTime.value = time;
       const q = Math.min(1, Math.max(0, p));
-      // which two stops we're between, eased so the camera holds at each
-      let i = 0;
-      while (i < AI_STOPS.length - 1 && q > AI_STOPS[i + 1]) i++;
-      const j = Math.min(AI_STOPS.length - 1, i + 1);
-      const f = j === i ? 0 : smooth(0.25, 0.75, (q - AI_STOPS[i]) / (AI_STOPS[j] - AI_STOPS[i]));
-      // from one project to the next the picture glitches: hardest in the middle of the move
-      const travelGlitch = i >= 2 && j !== i ? Math.pow(Math.sin(Math.PI * f), 0.6) : 0;
-      glitchPass.uniforms.uAmt.value = travelGlitch * 0.9;
-      if (travelGlitch > 0.01 && Math.random() < 0.35) glitchPass.uniforms.uSeed.value = Math.random() * 90;
-      tgtPos.lerpVectors(poses[i].pos, poses[j].pos, f);
-      tgtLook.lerpVectors(poses[i].look, poses[j].look, f);
-      /* the way out, past the last stop (signals.ai.exit):
-         0 the network hands the work over — back to the whole board, it fires, the screens break into particles
-         1 out through the chip — into the Dizrupt mark, the reverse of the dive in
-         2 the screens become the cards — they fly out at the camera one after another
-         3 a plain hand-back — nothing here; the glitch itself is a different one */
+      // powering on: the second half of the scroll from the chip to its first beat (the first half it
+      // just floats there, turning, so it can be seen before anything happens to it)
+      const act = smooth(WIRE * 0.5, WIRE * 0.95, q);
+      const back = smooth(WIRE, CHAOS, q); // then the pull back to the whole network
       const xp = smooth(AI_EXIT_FROM, 0.97, q);
-      const ex = signals.ai.exit;
-      if (xp > 0) {
-        if (ex === 0 || ex === 2) {
-          const w = smooth(0, 0.3, xp);
-          tgtPos.lerp(poses[1].pos, w);
-          tgtLook.lerp(poses[1].look, w);
-        } else if (ex === 1) {
-          const w = smooth(0, 1, xp);
-          tgtPos.lerp(tmpExit.set(0, 0, 0.9), w);
-          tgtLook.lerp(tmpExit2.set(0, 0, 0), w);
-        }
-      }
-      const reach = tgtPos.length() * 0.05;
-      tgtPos.x += Math.sin(time * 0.15) * reach * 0.4 + px * (0.2 + reach);
-      tgtPos.y += py * (0.1 + reach * 0.5);
-      /* overview → page 1: straight into the beam's light, down on to the lid, until the frame burns
-         white; page 1 comes up out of the white, and the camera is quietly back at the page view */
-      const intoLight = i === 1 && j === 2 ? f : 0;
-      const dive = smooth(0, 0.58, intoLight);
-      if (intoLight > 0 && intoLight < 0.6) {
-        tgtPos.lerpVectors(poses[1].pos, tmpExit.set(0, 0, 1.1), dive * dive);
-        tgtLook.lerpVectors(poses[1].look, tmpExit2.set(0, 0, 0), dive);
-      }
-      const snap = (intoLight >= 0.6) !== wasPast;
-      wasPast = intoLight >= 0.6;
-      glitchPass.uniforms.uWhite.value = smooth(0.25, 0.58, intoLight) * (1 - smooth(0.6, 0.92, intoLight));
-      const k = first || snap ? 1 : 1 - Math.exp(-3.2 * dt);
+      tgtPos.lerpVectors(poses[0].pos, poses[1].pos, act).lerp(poses[2].pos, back).lerp(away, xp);
+      tgtLook.lerpVectors(poses[0].look, poses[1].look, act).lerp(poses[2].look, back);
+      /* for the method and the statement the camera pans, so the core and its network slide aside and
+         leave the text clear: to 70% across on a wide screen (the text is on the left), up to 32% down
+         on a phone (it's below), whatever the screen's shape */
+      const aside = smooth(ASIDE0, ASIDE1, q) * (1 - xp);
+      const half = poses[2].pos.z * Math.tan((camera.fov * Math.PI) / 360); // half the height in view, at the hub
+      if (camera.aspect >= 1) { const d = 0.4 * half * camera.aspect * aside; tgtPos.x -= d; tgtLook.x -= d; }
+      else { const d = 0.36 * half * aside; tgtPos.y -= d; tgtLook.y -= d; }
+      // the cursor moves it a little, less once it is the hub the page's network hangs off
+      const sway = 1 - 0.75 * back;
+      tgtPos.x += (Math.sin(time * 0.15) * 0.25 + px * 0.6) * sway;
+      tgtPos.y += py * 0.3 * sway;
+      const k = first ? 1 : 1 - Math.exp(-3.2 * dt);
       first = false;
       pos.lerp(tgtPos, k);
       look.lerp(tgtLook, k);
       camera.position.copy(pos);
       camera.lookAt(look);
 
-      // wiring it in: the traces run out from the pins, then each screen powers on
-      const want = smooth(0.03, 0.2, q);
-      wired += (want - wired) * (1 - Math.exp(-2.2 * dt));
-      nets.forEach((n) => {
-        const r = Math.min(1, Math.max(0, (wired - n.delay) / 0.5));
-        n.edgeMat.uniforms.uReveal.value = r;
-        n.nodeMat.uniforms.uReveal.value = r;
-      });
-      // exit 0: every network fires at once, then the screens break up into particles that stream out
-      const fire = ex === 0 ? smooth(0.25, 0.45, xp) * (1 - smooth(0.75, 1, xp)) : 0;
-      const dissolve = ex === 0 ? smooth(0.4, 0.8, xp) : 0;
-      burst.pts.visible = dissolve > 0.001;
-      burst.mat.uniforms.uT.value = smooth(0.4, 1, xp);
-      camera.getWorldDirection(camFwd);
-      const focus = f < 0.5 ? i - 2 : j - 2; // the screen being visited, if any
-      // which page is up: the first comes out of the beam on the way from the overview (stop 1 → 2)
-      const emerge = i >= 2 ? 1 : i === 1 && j === 2 && f >= 0.6 ? 1 : 0;
-      const curPage = i >= 2 ? Math.min(panels.length - 1, f < 0.5 ? i - 2 : j - 2) : i === 1 && j === 2 && f >= 0.6 ? 0 : -1;
-      const pageMode = i >= 2 ? 1 : i === 1 && j === 2 ? f : 0;
-      const tanFov = 2 * Math.tan((camera.fov * Math.PI) / 360);
-      // the whole page across the screen: its width fills the frame, nothing of it cropped
-      const fillD = (PW / (tanFov * camera.aspect)) * 1.02;
-      panels.forEach((pn, k2) => {
-        /* One page at a time, filling the screen. The first comes up out of the beam as the scroll
-           leaves the overview: small inside the column of light at the lid, rising up it, then out to
-           the camera until it fills the frame. After that, each scroll glitches it out into the next. */
-        const shown = k2 === curPage;
-        const em = k2 === 0 ? emerge : shown ? 1 : 0;
-        // page 1 builds out of the white as it clears
-        const on = k2 === 0 && i === 1 ? smooth(0.6, 0.9, f) : shown ? 1 : 0;
-        pn.mat.uniforms.uOn.value = on;
-        pn.live?.tick(time, shown && on > 0.5);
-        pn.group.visible = shown && em > 0.001;
-        const keep = 1 - (ex === 0 ? smooth(0.5, 0.85, xp) : 0);
-        pn.edgeMat.opacity = (shown ? 1 : 0) * keep;
-        pn.frameMat.opacity = (shown ? smooth(0.2, 0.6, em) : 0) * keep;
-        pn.plateMat.opacity = 0;
-        launches[k2].mat.uniforms.uLaunch.value = 0;
-        // glitch bursts: every few seconds, short and stuttering, some heavy
-        const gb = pn.burst;
-        if (time > gb.next) {
-          gb.until = time + 0.12 + Math.random() * 0.35;
-          gb.strength = Math.random() < 0.35 ? 1 : 0.4 + Math.random() * 0.3;
-          gb.next = gb.until + 1.8 + Math.random() * 3.5;
-        }
-        const glitching = on > 0.95 && time < gb.until;
-        if (glitching && time > gb.reseed) {
-          pn.mat.uniforms.uSeed.value = Math.random() * 90;
-          gb.reseed = time + 0.05;
-        }
-        // and between two projects: the one being left glitches out, the next one glitches in
-        const leaving = (i - 2 === k2 || j - 2 === k2) && i >= 2 && j !== i ? travelGlitch : 0;
-        // up full screen its own idle faults are only a flicker; the heavy glitch is for changing page
-        pn.mat.uniforms.uGlitch.value = Math.max(glitching ? 0.22 * gb.strength * (Math.floor(time * 20) % 3 === 1 ? 0.6 : 1) : 0, leaving);
-        if (!(ex === 2 && xp > 0)) {
-          // full screen: square to the camera, at the distance where it covers the frame both ways
-          fillAt.copy(camera.position).addScaledVector(camFwd, fillD);
-          if (em >= 1) {
-            pn.group.position.copy(fillAt);
-            pn.group.quaternion.copy(camera.quaternion);
-            pn.group.scale.setScalar(1);
-          } else {
-            // up the beam off the lid, then out to the camera
-            chipRoot.updateMatrixWorld();
-            beamA.set(0, 0, 0.4); beamB.set(0, 0, 4.2);
-            if (em < 0.4) pn.group.position.lerpVectors(beamA, beamB, em / 0.4);
-            else pn.group.position.lerpVectors(beamB, fillAt, 1 - Math.pow(1 - (em - 0.4) / 0.6, 2.4));
-            pn.group.quaternion.identity().slerp(camera.quaternion, smooth(0.3, 1, em));
-            pn.group.scale.setScalar(em < 0.4 ? 0.12 : 0.12 + 0.88 * smooth(0.4, 1, em));
-          }
-          if (glitching) pn.group.position.x += (Math.random() - 0.5) * 0.04 * gb.strength;
-        }
-        // its clouds, when the camera has come in close to it: links grow out, then the clouds build
-        const close = ((i - 2 === k2 ? 1 - f : 0) + (j - 2 === k2 && j !== i ? f : 0)) * (1 - smooth(0, 0.2, xp));
-        void close;
-        pn.cloudOn = 0;
-        pn.cloudU.uReveal.value = Math.min(1, pn.cloudOn * 1.7);
-        // while its thoughts are up, the network feeding it steps back so the clouds read clean
-        nets[k2].edgeMat.uniforms.uDim.value = nets[k2].nodeMat.uniforms.uDim.value = (1 - pageMode) * (1 + fire * 2.5);
-        launches[k2].mat.uniforms.uDim.value = 0;
-        pn.mat.uniforms.uDissolve.value = dissolve;
-        // exit 2: each screen flies out at the camera in turn, the last filling the frame
-        if (ex === 2 && xp > 0) {
-          // each flies up to fill the frame; all but the last then swing away, and the last one stays
-          const t0 = 0.08 + k2 * 0.2;
-          const t = smooth(t0, t0 + 0.22, xp);
-          const away = k2 < panels.length - 1 ? smooth(t0 + 0.22, t0 + 0.34, xp) : 0;
-          const fill = PW / (2 * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect) * 1.02; // distance where it fills the width
-          tmpExit.copy(camera.position).addScaledVector(camFwd, fill);
-          tmpExit.x += (k2 % 2 ? 1 : -1) * away * 9;
-          pn.group.position.lerpVectors(slots[k2], tmpExit, t);
-          pn.group.rotation.set(0, -Math.sign(slots[k2].x) * 0.22 * (1 - t) + (k2 % 2 ? -1 : 1) * away * 0.6, Math.sin(t * Math.PI) * (k2 % 2 ? 0.25 : -0.25));
-          pn.group.renderOrder = Math.round(t * 10) + k2;
-        }
-        // the callouts float at their own depths, tilted in towards the window, and drift with the cursor
-        pn.clouds.forEach((cl, ci) => {
-          const o = Math.sign(slots[k2].x);
-          cl.mesh.rotation.y = -o * 0.28 + px * 0.12;
-          cl.mesh.rotation.x = -py * 0.1 + (ci - 1) * 0.06;
-          cl.mesh.position.z = 0.4 + ci * 0.18 + Math.sin(time * 0.8 + ci) * 0.05;
-        });
-        pn.clouds.forEach((cl, ci) => (cl.mat.uniforms.uOn.value = Math.min(1, Math.max(0, (pn.cloudOn - 0.35 - ci * 0.08) / 0.5))));
-        pn.mat.uniforms.uFocus.value += ((k2 === focus ? 1 : 0) - pn.mat.uniforms.uFocus.value) * Math.min(1, dt * 4);
-      });
+      // the pulse leaves as it powers on, the traces light up behind it
+      pulseMat.uniforms.uT.value = smooth(0.08, 0.75, act);
+      traces.u.uReveal.value = smooth(0.18, 1, act);
+      // they step back while the page's own picture is up over them, and fire as it hands back
+      traces.u.uDim.value = 1 - 0.5 * smooth(WIRE, CHAOS, q) - 0.2 * smooth(CHAOS, ORDER, q);
+      traces.u.uFire.value = Math.sin(Math.PI * xp);
+      // a controlled fault as the power comes up, and a flicker as the chaos is put in order
+      const surge = Math.exp(-Math.pow((act - 0.42) / 0.07, 2));
+      const sort = Math.sin(Math.PI * smooth(SORT, ORDER, q)) * (q > SORT && q < ORDER ? 1 : 0);
+      const fault = Math.max(surge * 0.5, sort * 0.06, xp > 0 && xp < 1 ? 0.2 * Math.sin(Math.PI * xp) : 0);
+      glitchPass.uniforms.uAmt.value = fault;
+      if (fault > 0.02 && Math.random() < 0.35) glitchPass.uniforms.uSeed.value = Math.random() * 90;
+      glitchPass.uniforms.uWhite.value = 0;
 
-      // the capabilities: up on the whole board, once everything is launched; away when visiting a project
-      const board = ((i === 1 ? 1 - f : 0) + (j === 1 && j !== i ? f : 0)) * (1 - smooth(0, 0.3, xp));
-      const landed = launches.every((l, k3) => l.t - k3 * 0.22 > 0.98);
-      capOn += ((landed ? board : 0) - capOn) * Math.min(1, dt * 2.4);
-      caps.forEach((c) => {
-        const v = Math.min(1, Math.max(0, (capOn - c.delay) / 0.6));
-        c.tagMat.opacity = v * 0.85;
-        c.lineMat.uniforms.uOn.value = v;
-        c.tag.visible = v > 0.001;
-        c.tag.position.y += (Math.sin(time * 0.7 + c.delay * 20) * 0.0015);
-      });
-
-      // the chip floats and turns on its own, then holds still once it's wired in
-      const free = 1 - smooth(0.0, 0.25, wired);
+      // the chip floats and turns on its own, then holds still, square on, once it is powered
+      const free = 1 - smooth(0, 0.55, act);
       chipRoot.position.set(0, Math.sin(time * 0.9) * 0.06 * free, 0);
       chipRoot.rotation.set(Math.sin(time * 0.5) * 0.35 * free - 0.3 * free, Math.sin(time * 0.37) * 0.5 * free + 0.4 * free, Math.sin(time * 0.29) * 0.08 * free);
-      // the beam: up as the pages launch, down once they have all landed (or fallen back in)
-      const beaming = q > AI_STOPS[1] * 0.6 && xp < 0.4;
-      beamU.uOn.value += ((beaming ? 1 : 0) - beamU.uOn.value) * Math.min(1, dt * (beaming ? 2.5 : 1.4));
-      beam.visible = beamFoot.visible = beamU.uOn.value > 0.002;
+      {
+        const g = signals.aiGrab, step = Math.max(dt, 1 / 240);
+        if (g.dx || g.dy) {
+          const kx = g.dy * 0.009, ky = g.dx * 0.009;
+          grab.x += kx; grab.y += ky;
+          grab.vx = kx / step; grab.vy = ky / step;
+          g.dx = g.dy = 0;
+        } else if (g.down) {
+          grab.vx = grab.vy = 0; // held still
+        } else {
+          grab.x += grab.vx * dt; grab.y += grab.vy * dt;
+          const f = Math.exp(-3.5 * dt);
+          grab.vx *= f; grab.vy *= f;
+        }
+        if (!g.down && performance.now() - g.at > 900) {
+          const r = Math.exp(-2.4 * dt);
+          grab.x = wrap(grab.x) * r; grab.y = wrap(grab.y) * r;
+        }
+        chipRoot.rotation.x += grab.x * free;
+        chipRoot.rotation.y += grab.y * free;
+      }
       const bt = beatAt(time % 1);
-      // lasered into the ceramic and lit from within: a restrained glow that beats, not a lamp
-      markMat.emissiveIntensity = 0.18 + bt * 0.4;
-      markGlowMat.opacity = 0.02 + bt * 0.07 + (ex === 1 ? smooth(0.5, 1, xp) * 0.8 : 0);
+      // lasered into the ceramic and lit from within: a restrained glow that beats, flaring as it powers on
+      markMat.emissiveIntensity = 0.18 + bt * 0.4 + surge * 1.2;
+      markGlowMat.opacity = 0.02 + bt * 0.07 + surge * 0.5 + 0.08 * act;
+      rimC.intensity = 3 + 4 * act;
       dust.rotation.y = time * 0.01;
 
-      // the screen being visited: where it is on screen, for its click target
-      const out = signals.aiPanel;
-      out.on = xp <= 0 && focus >= 0 && focus < panels.length && Math.abs(f - 0.5) > 0.35 && panels[focus].mat.uniforms.uOn.value > 0.95;
-      out.index = focus;
-      if (out.on) {
-        const g = panels[focus].group;
-        g.updateMatrixWorld();
-        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-        for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          corner.set((cx * PW) / 2, (cy * PH) / 2, 0).applyMatrix4(g.matrixWorld).project(camera);
-          const sx = (corner.x * 0.5 + 0.5) * innerWidth, sy = (-corner.y * 0.5 + 0.5) * innerHeight;
-          x0 = Math.min(x0, sx);
-          x1 = Math.max(x1, sx);
-          y0 = Math.min(y0, sy);
-          y1 = Math.max(y1, sy);
-        }
-        Object.assign(out, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
-      }
+      // where the chip is on screen: the page's network grows out of it
+      centre.set(0, 0, 0).project(camera);
+      edge.set(BODY / 2, 0, 0).project(camera);
+      const out = signals.aiChip;
+      out.x = (centre.x * 0.5 + 0.5) * innerWidth;
+      out.y = (-centre.y * 0.5 + 0.5) * innerHeight;
+      out.size = Math.abs(edge.x - centre.x) * innerWidth;
 
       composer.render(dt);
       return composer.readBuffer.texture;

@@ -8,7 +8,16 @@ export const setLenis = (l: Lenis | null) => {
 };
 export const getLenis = () => instance;
 
+// A ride between scroll stops under way (SmoothScroll.tsx) is dropped when the page is sent somewhere
+// else: the jump replaces its scroll, so the ride would never hear that it ended, and would keep
+// swallowing every gesture after it while it waited.
+let cancelRide: (() => void) | null = null;
+export const setRideCanceller = (fn: (() => void) | null) => {
+  cancelRide = fn;
+};
+
 export const scrollToTarget = (target: string | number | HTMLElement, immediate = false) => {
+  cancelRide?.();
   if (instance) {
     // the page may have just changed height (a route change); measure before clamping to it
     instance.resize();

@@ -1,6 +1,6 @@
 import { SOLUTIONS } from "@/content/solutions";
 import { clients } from "@/content/projects";
-import { AI_STOPS } from "@/lib/aiStops";
+import { AI_CHAPTERS, AI_STOPS } from "@/lib/aiStops";
 
 /* The train's stops, as scroll positions: the start station at the end of the landing, then each
    billboard. Between them the scroll doesn't wander — one gesture carries you to the next stop. */
@@ -43,7 +43,12 @@ const introRaw = (p: number) =>
    `train` is the stop the train drives itself to, or null while it is still in the intro. */
 export type ScrollStop = { y: number; dur: number; train: number | null; pass?: boolean }; // pass: a waypoint the ride carries on through, either way
 
-const TRAIN_PACE = 1.2;
+/** The one pace of the site: every gesture from one stop to the next takes this long, wherever it is.
+    Only the two longer stretches of the landing (the city building itself, the figure turning into the
+    count) take a set multiple of it, because each plays a whole scene. */
+export const STEP = 3.4;
+/** Seconds the page takes to glide from one AI beat to the next (its animation runs on its own clock). */
+const AI_GLIDE = 1.4;
 
 export function scrollStops(): ScrollStop[] {
   const intro = document.getElementById("intro");
@@ -52,32 +57,24 @@ export function scrollStops(): ScrollStop[] {
   if (!intro || !lp || ys.length < 2) return [];
   const top = intro.getBoundingClientRect().top + scrollY;
   const span = intro.offsetHeight - innerHeight;
-  const bridge = document.getElementById("bridge"), ai = document.getElementById("ai"), work = document.getElementById("work");
+  const bridge = document.getElementById("bridge"), ai = document.getElementById("ai");
   return [
     { y: lp.start, dur: 0, train: null }, // DIZRUPT
-    { y: lp.built, dur: 5.5, train: null }, // the city built, him standing in it
+    { y: lp.built, dur: STEP * 1.6, train: null }, // the city built, him standing in it
     // the count, in its windows: late in it, so the ride on starts where the camera does (0.76)
-    { y: top + span * introRaw(0.72), dur: 2.6, train: null },
-    { y: ys[0], dur: 2.8, train: 0 }, // the station built, the train at it
+    { y: top + span * introRaw(0.72), dur: STEP * 1.5, train: null }, // slow: the figure dissolving into the count is worth watching
+    { y: ys[0], dur: STEP, train: 0 }, // the station built, the train at it
     // pulling out of the station is the first ride: slower than the hops between billboards
-    // (TRAIN_PACE: the train's speed; 1.2 = a fifth faster than the 4.35s / 3.5s it was set at)
-    ...ys.slice(1).map((y, i) => ({ y, dur: (i === 0 ? 4.35 : 3.5) / TRAIN_PACE, train: i + 1 })), // each billboard
+    ...ys.slice(1).map((y, i) => ({ y, dur: STEP, train: i + 1 })), // each billboard
     // on to AI & Automation in two: him whole again, the line read (Bridge.tsx: its progress runs from
     // its top at the middle of the screen to its bottom there; the line is up at 0.28–0.42) …
-    ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, dur: 3.6, train: null }] : []),
-    // … then into his heart and through the glitch to the chip
-    ...(ai ? [{ y: ai.offsetTop + 2, dur: 3.8, train: null }] : []),
-    // AI & Automation's own stops: the whole board, then each of its projects (AiAutomation.tsx) …
-    ...(ai ? AI_STOPS.slice(1).map((st, i) => ({ y: ai.offsetTop + (ai.offsetHeight - innerHeight) * st, dur: i === 0 ? 3 : 2.6, train: null })) : []),
-    /* … then one swipe out to the work, played in three legs, each at its own pace, so it can be
-       followed: the AI world's way out (the network fires, the screens break up) …; the glitch back to
-       the city (it plays in time, 2s, as the section's end passes) and the tower's wide shot …; then
-       the camera in to the first window. Then the work, window by window. */
-    ...(ai && work ? [
-      { y: ai.offsetTop + (ai.offsetHeight - innerHeight) * 0.97, dur: 3.2, train: null, pass: true },
-      { y: work.offsetTop + 2, dur: 2.4, train: null, pass: true },
-    ] : []),
-    ...workStops().map((w, k) => (k === 0 ? { ...w, dur: 5.5 } : w)),
+    ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, dur: STEP, train: null }] : []),
+    // … then into his heart and through the glitch to the chip, floating in the dark …
+    ...(ai ? [{ y: ai.offsetTop + 2, dur: STEP, train: null }] : []),
+    /* … and one gesture per beat of AI & Automation: powered on, the business as it is, in order, said
+       plainly. The page glides to each; the beat's animation plays in time at its own pace
+       (AiNetwork.tsx), whatever the gesture was. */
+    ...(ai ? AI_CHAPTERS.slice(1).filter((c) => !c.through).map((c) => ({ y: ai.offsetTop + (ai.offsetHeight - innerHeight) * c.at, dur: AI_GLIDE, train: null })) : []),
   ];
 }
 
@@ -89,19 +86,33 @@ export const workP = (progress: number) => -WORK_LEAD + progress * (clients.leng
 export const workProgress = (p: number) => (p + WORK_LEAD) / (clients.length - 1 + WORK_LEAD * 2);
 
 /** Seconds for the camera to fly from one project's window to the next. */
-const WORK_STEP = 5;
+const WORK_STEP = STEP;
 
 export function workStops(): ScrollStop[] {
   const work = document.getElementById("work");
   if (!work) return [];
   const top = work.getBoundingClientRect().top + scrollY, span = work.offsetHeight - innerHeight;
   const stops: ScrollStop[] = clients.map((_, k) => ({ y: top + span * workProgress(k), dur: k ? WORK_STEP : 0, train: null }));
+  /* led in from AI & Automation's statement: from there one gesture plays the whole way out at its
+     own pace, however far you scroll — the network clears and the glitch hands back to the city
+     (it plays in time as the section's end passes), the tower's wide shot, then in to the first
+     window — in three legs that carry on through each other */
+  const ai = document.getElementById("ai");
+  if (ai) {
+    const at = (p: number) => ai.getBoundingClientRect().top + scrollY + (ai.offsetHeight - innerHeight) * p;
+    stops[0].dur = STEP;
+    stops.unshift(
+      { y: at(AI_STOPS[AI_STOPS.length - 1]), dur: 0, train: null },
+      { y: at(0.97), dur: STEP * 0.6, train: null, pass: true },
+      { y: top + 2, dur: STEP * 0.4, train: null, pass: true },
+    );
+  }
   /* and from the last project, one gesture all the way out: the camera pulls back from the tower and
      the contact comes up, landing at the foot of the page where it has fully arrived */
   const contact = document.getElementById("contact");
   if (contact) {
     const end = Math.min(contact.offsetTop + contact.offsetHeight - innerHeight, document.documentElement.scrollHeight - innerHeight);
-    if (end > stops[stops.length - 1].y + 1) stops.push({ y: end, dur: 3.6, train: null });
+    if (end > stops[stops.length - 1].y + 1) stops.push({ y: end, dur: STEP, train: null });
   }
   return stops;
 }

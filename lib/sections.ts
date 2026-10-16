@@ -1,6 +1,6 @@
 import { scrollToTarget } from "@/lib/scroll";
 import { SOLUTIONS } from "@/content/solutions";
-import { workProgress } from "@/lib/stops";
+import { stopPositions, workProgress } from "@/lib/stops";
 
 // Where each named place on the home page is, as a scroll position. Pinned sections are taller
 // than the screen, so "the second solution" is a point partway through one of them.
@@ -8,6 +8,8 @@ export function sectionTop(id: string) {
   const top = (el: Element | null) => (el ? el.getBoundingClientRect().top + scrollY : 0);
   const span = (el: Element | null) => (el ? (el as HTMLElement).offsetHeight - innerHeight : 0);
   if (id === "intro") return 0;
+  // Solutions: the first billboard, where the train stands (its top would leave it between stations)
+  if (id === "solutions") return stopPositions()[1] ?? top(document.getElementById(id));
   if (id.startsWith("solution-")) {
     const el = document.getElementById("solutions");
     const i = Number(id.slice(9));

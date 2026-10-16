@@ -1,0 +1,81 @@
+/* PARKED with Demos.tsx: the service demonstrations' styles. Import this file (or move it into
+   app/globals.css) when the demos come back. */
+.aid { border: 1px solid rgba(124, 242, 255, 0.22); border-radius: 8px; background: rgba(6, 9, 15, 0.94); overflow: hidden; box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55); pointer-events: auto; }
+.aid-bar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-family: var(--mono); font-size: 11px; }
+.aid-bar strong { flex: 1; font-weight: 500; }
+.aid-run { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7cf2ff; padding: 5px 9px; border: 1px solid rgba(124, 242, 255, 0.35); border-radius: 3px; }
+.aid-run:hover, .aid-run:focus-visible { background: rgba(60, 240, 255, 0.12); }
+.aid-stage { position: relative; height: 300px; padding: 16px; font-size: 12px; color: #dfe8f0; }
+.aid-steps { display: flex; list-style: none; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.aid-steps li { flex: 1; padding: 9px 12px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); border-top: 2px solid transparent; transition: color 0.3s, border-color 0.3s; }
+.aid-steps li span { color: var(--violet-soft); margin-right: 6px; }
+.aid-steps li[data-on] { color: #bdf6ff; }
+.aid-steps li[data-now] { border-color: #3cf0ff; }
+
+/* Lead Engine */
+.ld-search { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; font-size: 14px; }
+.ld-icon { width: 12px; height: 12px; border: 1.5px solid #7cf2ff; border-radius: 50%; }
+.ld-caret { width: 1px; height: 16px; background: #7cf2ff; animation: ai-blink 1s steps(2) infinite; }
+.ld-table { margin-top: 12px; display: grid; gap: 6px; }
+.ld-row { --hot: 0; display: grid; grid-template-columns: 1.4fr 1.3fr 1fr 28px; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 4px; background: rgba(255, 255, 255, 0.03); box-shadow: inset 0 0 0 1px rgba(111, 242, 181, calc(0.5 * var(--hot))); }
+.ld-name { display: grid; } .ld-name small { color: var(--dim); font-family: var(--mono); font-size: 10px; }
+.ld-mail { font-family: var(--mono); font-size: 10.5px; color: #bdf6ff; }
+.ld-bar { height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; }
+.ld-bar i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #3cf0ff, #8f6bff); transform-origin: left; }
+.ld-score { font-family: var(--mono); color: #6ff2b5; text-align: right; }
+.ld-draft { position: absolute; right: 16px; bottom: 16px; width: 56%; padding: 10px 12px; border-radius: 6px; background: rgba(20, 28, 40, 0.96); border: 1px solid rgba(124, 242, 255, 0.25); display: grid; gap: 6px; }
+.ld-draft p { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+.ld-line { display: block; height: 5px; border-radius: 3px; background: rgba(223, 232, 240, 0.18); transform-origin: left; }
+.ld-status { display: grid; margin-left: auto; }
+.ld-status em { grid-area: 1 / 1; font-style: normal; font-family: var(--mono); font-size: 9.5px; color: #6ff2b5; }
+
+/* Payment Recon */
+.rc-cols { display: grid; grid-template-columns: 1fr 60px 1fr; align-items: start; }
+.rc-col { list-style: none; }
+.rc-col li { display: grid; grid-template-columns: 1fr auto 70px; gap: 8px; align-items: center; height: 34px; padding: 0 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 11px; }
+.rc-col li span { font-family: var(--mono); font-size: 10px; color: rgba(223, 232, 240, 0.7); }
+.rc-col .rc-h { display: block; height: 26px; line-height: 26px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #8aa3ad; }
+.rc-wires { width: 60px; }
+.rc-wire { fill: none; stroke: #6ff2b5; stroke-width: 1.2; stroke-dasharray: 1; }
+.rc-wire.is-warn { stroke: #ffd166; }
+.rc-ok { justify-self: end; font-style: normal; font-family: var(--mono); font-size: 9.5px; color: #6ff2b5; }
+.rc-ok.is-warn { color: #ffd166; }
+.rc-foot { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; font-family: var(--mono); font-size: 10.5px; color: rgba(223, 232, 240, 0.7); }
+.rc-fee.is-warn { color: #ffd166; }
+.rc-net b { margin-left: 6px; font-family: var(--sans); font-size: 18px; font-weight: 500; color: #fff; }
+.rc-done { color: #6ff2b5; }
+
+/* PostStack */
+.ps-board { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+.ps-colh { padding: 0 10px 8px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #8aa3ad; border-left: 1px dashed rgba(255, 255, 255, 0.08); }
+.ps-lane { grid-column: 1 / -1; height: 150px; position: relative; }
+.ps-card { position: absolute; left: 0; top: 4px; width: 25%; padding: 8px; }
+.ps-card > * { display: block; }
+.ps-img { height: 64px; border-radius: 4px; background: linear-gradient(135deg, #8f6bff, #3cf0ff); }
+.ps-cap { margin-top: 8px; font-size: 11px; display: grid; gap: 4px; }
+.ps-cap i { height: 4px; border-radius: 2px; background: rgba(223, 232, 240, 0.16); transform-origin: left; }
+.ps-when { margin-top: 6px; width: max-content; font-family: var(--mono); font-size: 9.5px; color: #7cf2ff; border: 1px solid rgba(124, 242, 255, 0.35); padding: 2px 6px; border-radius: 2px; }
+.ps-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 8px; }
+.ps-chat { font-size: 11px; padding: 6px 10px; border-radius: 10px 10px 10px 2px; background: rgba(111, 242, 181, 0.12); }
+.ps-chans { display: flex; gap: 6px; list-style: none; }
+.ps-ch { --on: 0; font-family: var(--mono); font-size: 9.5px; padding: 3px 7px; border-radius: 2px; border: 1px solid rgba(124, 242, 255, calc(0.15 + 0.5 * var(--on))); color: rgba(189, 246, 255, calc(0.35 + 0.65 * var(--on))); background: rgba(60, 240, 255, calc(0.12 * var(--on))); }
+.ps-live { font-family: var(--mono); font-size: 10px; color: #6ff2b5; }
+
+/* Try-On */
+.to-scene { height: 100%; }
+.to-svg { width: 100%; height: 100%; }
+.to-card { fill: rgba(255, 255, 255, 0.04); stroke: rgba(124, 242, 255, 0.3); }
+.to-cap { fill: var(--dim); font-family: var(--mono); font-size: 8px; text-anchor: middle; text-transform: uppercase; letter-spacing: 0.1em; }
+.to-thumb { fill: rgba(223, 232, 240, 0.25); }
+.to-skin { fill: #c9a58a; }
+.to-cloth { fill: #2a2f3d; }
+.to-bone { fill: none; stroke: #7cf2ff; stroke-width: 1; stroke-dasharray: 1; }
+.to-mark { fill: #041016; stroke: #3cf0ff; stroke-width: 1.5; }
+.to-chain { fill: none; stroke: #e9c46a; stroke-width: 2; }
+.to-gem { fill: #bdf6ff; stroke: #e9c46a; stroke-width: 1; }
+.to-split line { stroke: rgba(255, 255, 255, 0.7); stroke-width: 1; }
+.to-split text { fill: rgba(255, 255, 255, 0.7); font-family: var(--mono); font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; }
+.to-range { display: flex; gap: 12px; align-items: center; margin-top: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); pointer-events: auto; }
+.to-range input { flex: 1; accent-color: #3cf0ff; }
+
+@media (prefers-reduced-motion: reduce) { .ld-caret { animation: none; } }

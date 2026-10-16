@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import Lenis from "lenis";
 import { usePathname } from "next/navigation";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
-import { setLenis } from "@/lib/scroll";
+import { setLenis, setRideCanceller } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { scrollStops, workStops, type ScrollStop } from "@/lib/stops";
@@ -73,11 +73,11 @@ export function SmoothScroll() {
       if (glide) return true;
       const y = window.scrollY;
       // the run of stops this point is in: the landing and the train, or the work's tower
-      const stops = [scrollStops(), workStops()].find((g) => g.length > 1 && y >= g[0].y - TOL && y <= g[g.length - 1].y + TOL);
-      if (!stops) { signals.rideTarget = null; return false; }
-      const first = stops[0].y, last = stops[stops.length - 1].y;
-      if (dir > 0 && y >= last - TOL) return false; // off the last stop: free again
-      if (dir < 0 && y <= first + TOL) return false;
+      // (two runs can share a stop, the AI statement: take the one there's somewhere to go in, this way)
+      const stops = [scrollStops(), workStops()].find(
+        (g) => g.length > 1 && y >= g[0].y - TOL && y <= g[g.length - 1].y + TOL && (dir > 0 ? y < g[g.length - 1].y - TOL : y > g[0].y + TOL),
+      );
+      if (!stops) { signals.rideTarget = null; return false; } // off the end of a run: free again
       if (!fresh) return true; // one gesture, one stop
       // just landed: what arrives now is the last gesture's momentum, however it looks
       if (performance.now() - landedAt < 1000) return true;
@@ -127,11 +127,21 @@ export function SmoothScroll() {
     const onKey = (e: KeyboardEvent) => {
       // → and ↓ ride forward to the next stop, ← and ↑ back to the last
       if (e.metaKey || e.ctrlKey || e.altKey || useStore.getState().menuOpen || useStore.getState().macOpen) return;
+      // a focused control keeps its own keys: Space presses a button, arrows move a slider or a caret
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable]") || (e.key === " " && t?.closest("button, a, [role=button]"))) return;
       const dir = ["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key) ? -1 : 0;
       if (dir && ride(dir, !e.repeat)) e.preventDefault();
     };
     addEventListener("keydown", onKey);
     setLenis(lenis);
+    // sent somewhere else mid-ride (the nav, a button): the ride is over, the train follows the scroll
+    setRideCanceller(() => {
+      seq++;
+      glide = null;
+      landedAt = 0;
+      signals.rideTarget = null;
+    });
     lenis.on("scroll", (l: Lenis) => {
       signals.scroll.velocity = l.velocity;
       ScrollTrigger.update();
@@ -142,6 +152,7 @@ export function SmoothScroll() {
     return () => {
       gsap.ticker.remove(raf);
       removeEventListener("keydown", onKey);
+      setRideCanceller(null);
       lenis.destroy();
       setLenis(null);
     };

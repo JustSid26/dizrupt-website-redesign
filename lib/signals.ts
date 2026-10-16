@@ -38,9 +38,12 @@ export const signals = {
   socials: Array.from({ length: 5 }, () => ({ x: 0, y: 0, w: 0, h: 0, on: false })),
   night: 1, // 0 blue hour, 1 full night (the nav's switch)
   // AI & Automation: its own world, handed over to through a transition (lib/engine/ai)
-  ai: { mix: 0, p: 0, mode: 0, warm: false, exit: 0 }, // exit: the way out to the work (0 network, 1 chip, 2 screens, 3 plain)
-  // the AI world's project screen being visited, on screen (the engine writes it, AiAutomation links it)
-  aiPanel: { x: 0, y: 0, w: 0, h: 0, on: false, index: -1 },
+  ai: { mix: 0, p: 0, play: 0, mode: 0, warm: false }, // p: the scroll through it; play: where its animation is
+  // the AI world's chip on screen: its centre and half its width in px (the engine writes it; the
+  // section's network grows out of it)
+  aiChip: { x: 0, y: 0, size: 0 },
+  // the pointer turning the chip (AiAutomation.tsx): movement since the world last read it, held or not, and when it last moved
+  aiGrab: { dx: 0, dy: 0, down: false, at: 0 },
   // where the Mac should grow from when something other than a billboard opens it
   macFrom: null as null | { x: number; y: number; w: number; h: number },
   workApply: null as null | (() => void), // the work's tower: draw this scroll position's frame now

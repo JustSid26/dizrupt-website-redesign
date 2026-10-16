@@ -1,66 +1,80 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { useSection } from "@/components/home/useSection";
 import { TRANSITIONS } from "@/lib/engine/ai/transition";
-import { AI_STOPS } from "@/lib/aiStops";
-import { TECH_PROJECTS } from "@/content/techProjects";
-import { goToSection } from "@/lib/sections";
-
-// what it runs beyond the featured work (the same four the chip's bus shows, plus the core)
-const SOLUTIONS = [
-  { name: "Voice AI", line: "Agents that answer, book and follow up on the phone." },
-  { name: "Workflow automation", line: "The repetitive steps between your tools, done for you." },
-  { name: "Document processing", line: "Invoices, contracts and forms read, checked and filed." },
-  { name: "Custom AI solutions", line: "Models and tools built around your own data." },
-  { name: "Agents & integrations", line: "Wired into the CRM, inbox and stack you already run." },
-];
+import { AI_CHAPTERS } from "@/lib/aiStops";
+import { AiNetwork } from "@/components/home/ai/AiNetwork";
 
 /* AI & Automation: not a seventh solution but its own world. Past the last billboard the page loses
    its signal and hands over — on the real pixels, in the engine (lib/engine/ai) — to a
-   microcontroller floating in the dark, the Dizrupt mark glowing on it. The scroll wires it into the
-   work: traces run from its pins out to a screen per project, and the camera visits each; a screen
-   opens its project's page. Leaving hands back. Four hand-overs to choose from; the picker remembers yours. */
-type Chapter = { no: string; kicker: string; title: string; line: string; chips: string[]; project?: string };
-const CHAPTERS: Chapter[] = [
-  {
+   microcontroller floating in the dark, the Dizrupt mark glowing on it. Four stops: the chip; it
+   powers on and steps aside for what we do; how we do it, the three stages played one after another
+   on the network round it (components/home/ai); and how it makes life simple, the same business
+   running, inside and out. Leaving hands back to the city. */
+/* place: where it sits — "left" at the left edge, centred top to bottom (clear of the chip at its
+   biggest); "col" the column beside the network once the chip has stepped aside (a phone keeps them
+   all at the bottom). note: a short highlighted line under it; sides: the two kinds of workflow */
+type Caption = {
+  no: string; kicker: string; title: string; line: string; chips?: string[]; place: "left" | "col";
+  note?: { k: string; items: string[] }; sides?: { side: string; name: string; areas: string }[];
+};
+const CAPTIONS: Record<string, Caption> = {
+  core: {
     no: "00",
     kicker: "Exclusive",
     title: "AI & Automation",
-    line: "Agents, automations and custom AI tools, wired into the way your business already runs.",
-    chips: ["Agents", "Workflows", "Integrations", "Custom tools"],
+    place: "left",
+    line: "We optimise internal and external workflows through intelligent automation.",
+    chips: ["In-depth audit", "Viability report", "Design & implementation"],
   },
+  simple: {
+    no: "03",
+    kicker: "How it makes life simple",
+    title: "We optimise how your business works.",
+    place: "col",
+    line: "We analyse internal and external workflows to uncover inefficiencies, eliminate repetitive tasks, and identify opportunities for intelligent automation. By connecting systems and streamlining processes, we help businesses operate more efficiently, improve productivity, and scale with confidence.",
+    sides: [
+      { side: "external", name: "External workflows", areas: "Customer enquiries · Lead management · Client communication" },
+      { side: "internal", name: "Internal workflows", areas: "Operations · Administration · Reporting · Data handling" },
+    ],
+    note: { k: "Built to improve", items: ["Cost efficiency", "Time efficiency"] },
+  },
+};
+
+/* How we do it: the three stages on one page, beside the network as one gesture plays them
+   (AiNetwork.tsx writes which is up onto the section, --h0..--h2: the one playing opens out) */
+type Stage = { no: string; name: string; title: string; line: string; points: string[] };
+const STAGES: Stage[] = [
   {
     no: "01",
-    kicker: "Wired in",
-    title: "One chip, everything connected",
-    line: "Every system we build runs on one brain, wired into the tools you already use. The four here are featured work, a sample of what it powers.",
-    chips: [],
+    name: "Audit",
+    title: "Understand before you automate.",
+    line: "We examine existing workflows, systems, dependencies, and operational bottlenecks to uncover where time and money are lost.",
+    points: ["Workflow mapping", "Bottlenecks found", "Systems reviewed", "Opportunities identified"],
   },
-  ...TECH_PROJECTS.slice(0, 4).map((pj, i) => ({
-    no: String(i + 2).padStart(2, "0"),
-    kicker: pj.about,
-    title: pj.name,
-    line: pj.summary,
-    chips: [],
-    project: pj.slug,
-  })),
+  {
+    no: "02",
+    name: "Evaluate · Viability report",
+    title: "Know what is worth automating.",
+    line: "Each opportunity weighed on feasibility, suitability, complexity, dependencies, and business value, then prioritised.",
+    points: ["Feasibility", "Dependencies", "Prioritised recommendations", "Risks considered"],
+  },
+  {
+    no: "03",
+    name: "Implement",
+    title: "Turn insight into intelligent operations.",
+    line: "Tailored automation designed around your systems, integrated, tested, and refined with you.",
+    points: ["Workflow redesign", "Integrations", "AI where suitable", "Testing & support"],
+  },
 ];
 
-const BOOT = [
-  "DZ-OS 4.2 · neural accelerator DZ-A1",
-  "POST ........................ ok",
-  "HBM3 6 × 24GB ............... ok",
-  "loading agents .............. 12/12",
-  "linking integrations ........ 9/9",
-  "handing over ▌",
-];
+const CAPTION_LIST = Object.entries(CAPTIONS);
+
 const pad = (n: number) => String(n).padStart(2, "0");
-const EXITS = 4; // the ways out to the work (world.ts): the network hand-over unless ?x=1..4 asks for another
 const NOISE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#%&$@";
 
 /** A title that decodes out of noise whenever it comes on. */
@@ -88,85 +102,64 @@ export function AiAutomation() {
   const section = useRef<HTMLElement>(null);
   const tween = useRef<gsap.core.Tween | null>(null);
   const [chapter, setChapter] = useState(0);
+  // set by AiNetwork: go to one of the three steps of how we do it
+  const seek = useRef<((step: number) => void) | null>(null);
+  const grabAt = useRef<{ x: number; y: number } | null>(null);
+  const [grabbed, setGrabbed] = useState(false); // the hint goes once it's been tried
   const readout = useRef<HTMLParagraphElement>(null);
   const depth = useRef<HTMLParagraphElement>(null);
+  const [on, setOn] = useState(false);
+  const reduce = useStore((s) => s.reducedMotion);
+  // read when the hand-over starts, not when the section mounted (the preference can change)
+  const reduceRef = useRef(reduce);
+  reduceRef.current = reduce;
+  useSection(section, "ai");
+
   useEffect(() => {
     const f = (v: number) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(3)}`;
     const tick = () => {
+      if (signals.scroll.section !== "ai") return;
       if (readout.current) readout.current.textContent = `X ${f(signals.pointer.x)}  Y ${f(signals.pointer.y)}`;
-      if (depth.current) depth.current.textContent = `Z ${signals.ai.p.toFixed(3)}`;
+      if (depth.current) depth.current.textContent = `Z ${signals.ai.play.toFixed(3)}`;
     };
     gsap.ticker.add(tick);
     return () => gsap.ticker.remove(tick);
   }, []);
-  const [on, setOn] = useState(false);
-  const [explore, setExplore] = useState(false);
-  const reduce = useStore((s) => s.reducedMotion);
-  const boot = useRef<HTMLDivElement>(null);
-  useSection(section, "ai");
-
-  // the hand-over, played in time rather than scrubbed: once it starts, it runs
-  const play = (to: 0 | 1) => {
-    tween.current?.kill();
-    const ai = signals.ai;
-    const T = TRANSITIONS[ai.mode] ?? TRANSITIONS[0];
-    const dist = Math.abs(to - ai.mix);
-    if (reduce) {
-      ai.mix = to;
-      return;
-    }
-    tween.current = gsap.to(ai, { mix: to, duration: T.duration * dist, ease: ai.mode === 1 ? "power1.inOut" : "none" });
-  };
 
   useEffect(() => {
-    // locked in: signal loss on the way in; the way out is the network hand-over (?x=1..4 to try another)
-    signals.ai.mode = 0;
-    let x = 0;
-    try {
-      const q = Number(new URLSearchParams(location.search).get("x"));
-      if (q >= 1 && q <= EXITS) x = q - 1;
-    } catch {}
-    signals.ai.exit = x;
-  }, []);
-
-  useEffect(() => {
+    // the hand-over, played in time rather than scrubbed: once it starts, it runs
+    const play = (to: 0 | 1) => {
+      tween.current?.kill();
+      const ai = signals.ai;
+      const T = TRANSITIONS[ai.mode] ?? TRANSITIONS[0];
+      if (reduceRef.current) {
+        ai.mix = to;
+        return;
+      }
+      tween.current = gsap.to(ai, { mix: to, duration: T.duration * Math.abs(to - ai.mix), ease: "none" });
+    };
+    signals.ai.mode = 0; // signal loss, both ways
     const el = section.current!;
     const sts = [
       // build the world well before it's needed, so the hand-over doesn't hitch
       ScrollTrigger.create({ trigger: el, start: "top bottom+=250%", onEnter: () => (signals.ai.warm = true) }),
-      ScrollTrigger.create({
-        trigger: el,
-        start: "top 60%",
-        onEnter: () => ((signals.ai.mode = 0), play(1)),
-        onLeaveBack: () => ((signals.ai.mode = 0), play(0)),
-      }),
-      ScrollTrigger.create({
-        trigger: el,
-        start: "bottom bottom",
-        // the plain way out hands back through a different glitch (ASCII decode); the rest, signal loss
-        onEnter: () => ((signals.ai.mode = signals.ai.exit === 3 ? 2 : 0), play(0)),
-        onLeaveBack: () => play(1),
-      }),
+      ScrollTrigger.create({ trigger: el, start: "top 60%", onEnter: () => play(1), onLeaveBack: () => play(0) }),
+      ScrollTrigger.create({ trigger: el, start: "bottom bottom", onEnter: () => play(0), onLeaveBack: () => play(1) }),
       ScrollTrigger.create({
         trigger: el,
         start: "top top",
         end: "bottom bottom",
-        onUpdate: (self) => {
-          signals.ai.p = self.progress;
-          // the chapter whose stop is nearest (the camera holds at each one)
-          const p = self.progress;
-          let best = 0;
-          AI_STOPS.forEach((s, i) => Math.abs(s - p) < Math.abs(AI_STOPS[best] - p) && (best = i));
-          setChapter(Math.min(CHAPTERS.length - 1, best));
-          if (best !== 1) setExplore(false);
-        },
+        // (the chapter is the beat the animation is playing to: AiNetwork says which)
+        onUpdate: (self) => void (signals.ai.p = self.progress),
       }),
     ];
     if (sts[0].isActive || el.getBoundingClientRect().top < innerHeight * 3.5) signals.ai.warm = true;
     // arriving mid-section (a reload, the menu): be there already
     if (sts[1].progress > 0 && !sts[2].progress) signals.ai.mix = 1;
-    return () => sts.forEach((s) => s.kill());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      sts.forEach((s) => s.kill());
+      tween.current?.kill();
+    };
   }, []);
 
   // the page itself glitches while the hand-over runs; the HUD comes up once the world is there
@@ -177,7 +170,7 @@ export function AiAutomation() {
       const m = signals.ai.mix;
       const shifting = m > 0.001 && m < 0.999;
       root.classList.toggle("ai-shifting", shifting);
-      if (shifting && signals.ai.mode !== 1) {
+      if (shifting) {
         root.style.setProperty("--ai-jx", `${((Math.random() - 0.5) * 24 * Math.sin(Math.PI * m)).toFixed(1)}px`);
         root.style.setProperty("--ai-cl", `${(Math.random() * 60).toFixed(0)}%`);
       }
@@ -186,8 +179,6 @@ export function AiAutomation() {
         last = nowOn ? 1 : 0;
         setOn(nowOn);
       }
-      // the CRT's boot log, in the dark between power-off and power-on
-      boot.current?.classList.toggle("is-on", signals.ai.mode === 3 && m > 0.34 && m < 0.6);
     };
     gsap.ticker.add(tick);
     return () => {
@@ -196,57 +187,93 @@ export function AiAutomation() {
     };
   }, []);
 
-
-
-
-
-  // a project opens its own page; coming back puts you where you were
-  const router = useRouter();
-  const openProject = (slug: string | undefined) => {
-    if (!slug) return;
-    sessionStorage.setItem("home-scroll", String(scrollY));
-    router.push(`/ai/${slug}`, { scroll: false });
-  };
-  // a click target riding on the project screen the camera is at
-  const screenHit = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const tick = () => {
-      const el = screenHit.current, b = signals.aiPanel;
-      if (!el) return;
-      const on = b.on && signals.ai.mix > 0.98;
-      el.style.visibility = on ? "visible" : "hidden";
-      if (!on) return;
-      el.style.transform = `translate3d(${b.x.toFixed(1)}px, ${b.y.toFixed(1)}px, 0)`;
-      el.style.width = `${b.w.toFixed(1)}px`;
-      el.style.height = `${b.h.toFixed(1)}px`;
-      el.dataset.index = String(b.index);
-    };
-    gsap.ticker.add(tick);
-    return () => gsap.ticker.remove(tick);
-  }, []);
-
-  return (
-    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} aria-labelledby="ai-title" style={{ height: "660svh" }}>
-      <div className="ai-pin">
-        <div ref={boot} className="ai-boot" aria-hidden>
-          {BOOT.map((l, i) => (
-            <p key={i} style={{ "--i": i } as React.CSSProperties}>
-              {l}
-            </p>
+  const id = AI_CHAPTERS[chapter].id;
+  const caption = ([key, c]: [string, Caption], i: number) => (
+    <article key={key} className={`ai-ch${key !== "core" ? " is-compact" : ""} is-${c.place}`} data-on={key === id || undefined} aria-hidden={key !== id}>
+      <p className="ai-kicker">
+        <span>{c.no}</span> {c.kicker}
+      </p>
+      {key === "core" ? (
+        <h2 id="ai-title" className="ai-title" aria-label={c.title}>
+          <Decode text={c.title} on={key === id} reduce={reduce} />
+        </h2>
+      ) : (
+        <h3 className="ai-title" aria-label={c.title}>
+          <Decode text={c.title} on={key === id} reduce={reduce} />
+        </h3>
+      )}
+      <p className="ai-line">{c.line}</p>
+      {c.sides && (
+        <dl className="ai-sides">
+          {c.sides.map((sd) => (
+            <div key={sd.side} className={`is-${sd.side}`}>
+              <dt>
+                <i /> {sd.name}
+              </dt>
+              <dd>{sd.areas}</dd>
+            </div>
           ))}
-        </div>
-
-        <button
-          ref={screenHit}
-          type="button"
-          className="ai-screen-hit"
-          aria-label="Open this project"
-          onClick={() => openProject(TECH_PROJECTS[Number(screenHit.current?.dataset.index ?? 0)]?.slug)}
-        >
-          <span>Open the project →</span>
-        </button>
+        </dl>
+      )}
+      {c.note && (
+        <p className="ai-note">
+          <span>{c.note.k}</span>
+          {c.note.items.map((it) => (
+            <b key={it}>{it}</b>
+          ))}
+        </p>
+      )}
+      {c.chips && (
+        <ul className="ai-chips">
+          {c.chips.map((ch) => (
+            <li key={ch}>{ch}</li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+  return (
+    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} data-chapter={id} aria-labelledby="ai-title" style={{ height: "380svh", "--h0": 0, "--h1": 0, "--h2": 0 } as React.CSSProperties}>
+      <div className="ai-pin">
+        {/* the business the core runs, the method played on it, and what it adds up to */}
+        <AiNetwork section={section} chapter={id} onBeat={setChapter} seek={seek} />
 
         {/* the instrument frame over the world: brackets, rulers, readouts, a scan sweeping down */}
+        {/* the chip, at first: drag it round; left alone it goes back to floating (lib/engine/ai/world.ts) */}
+        <div
+          className="ai-grab"
+          aria-hidden
+          onPointerDown={(e) => {
+            const g = signals.aiGrab;
+            g.down = true;
+            g.at = performance.now();
+            grabAt.current = { x: e.clientX, y: e.clientY };
+            e.currentTarget.setPointerCapture(e.pointerId);
+            setGrabbed(true);
+          }}
+          onPointerMove={(e) => {
+            const g = signals.aiGrab, last = grabAt.current;
+            if (!g.down || !last) return;
+            g.dx += e.clientX - last.x;
+            g.dy += e.clientY - last.y;
+            g.at = performance.now();
+            grabAt.current = { x: e.clientX, y: e.clientY };
+          }}
+          onPointerUp={() => {
+            signals.aiGrab.down = false;
+            signals.aiGrab.at = performance.now();
+            grabAt.current = null;
+          }}
+          onPointerCancel={() => {
+            signals.aiGrab.down = false;
+            grabAt.current = null;
+          }}
+        >
+          <p className="ai-grab-hint" data-gone={grabbed || undefined}>
+            Drag to turn the chip
+          </p>
+        </div>
+
         <div className="ai-frame" aria-hidden>
           <i className="ai-br tl" />
           <i className="ai-br tr" />
@@ -260,7 +287,7 @@ export function AiAutomation() {
             ))}
           </div>
           <p className="ai-read ai-read-tr">
-            SYS DZ-M1 <b>·</b> CH {pad(chapter)}/{pad(CHAPTERS.length - 1)} <b>·</b> BUS 16× <b>·</b> <span className="ai-ok">LINK OK</span>
+            SYS DZ-M1 <b>·</b> CH {pad(chapter)}/{pad(AI_CHAPTERS.length - 1)} <b>·</b> BUS 16× <b>·</b> <span className="ai-ok">LINK OK</span>
           </p>
           <p className="ai-read ai-read-br" ref={readout}>
             X +0.000 Y +0.000
@@ -278,73 +305,42 @@ export function AiAutomation() {
             </span>
           </p>
 
-          <div className="ai-chapters">
-            {CHAPTERS.map((c, i) => (
-              <article key={c.no} className={`ai-ch${c.project ? " sr-only" : ""}${i === 1 && explore ? " is-exploring" : ""}`} data-on={i === chapter || undefined} aria-hidden={i !== chapter}>
-                {i === 1 && (
-                  <p className="ai-featured">
-                    <i /> Featured work <b>· {pad(Math.min(4, TECH_PROJECTS.length))} case studies on the board</b>
-                  </p>
-                )}
-                <p className="ai-kicker">
-                  <span>{c.no}</span> {c.kicker}
-                </p>
-                {i === 0 ? (
-                  <h2 id="ai-title" className="ai-title" aria-label={c.title}>
-                    <Decode text={c.title} on={i === chapter} reduce={reduce} />
-                  </h2>
-                ) : (
-                  <h3 className="ai-title" aria-label={c.title}>
-                    <Decode text={c.title} on={i === chapter} reduce={reduce} />
-                  </h3>
-                )}
-                <p className="ai-line">{c.line}</p>
-                {i === 1 && (
-                  <div className="ai-explore">
-                    <button type="button" className="ai-explore-btn" aria-expanded={explore} onClick={() => setExplore((v) => !v)} tabIndex={i === chapter ? 0 : -1}>
-                      <span>Explore our solutions</span>
-                      <i aria-hidden>{explore ? "−" : "+"}</i>
-                    </button>
-                    <div className="ai-solutions" data-open={explore || undefined} aria-hidden={!explore}>
-                      <ul>
-                        {SOLUTIONS.map((sl, k) => (
-                          <li key={sl.name} title={sl.line} style={{ "--k": k } as React.CSSProperties}>
-                            {sl.name}
-                          </li>
-                        ))}
-                      </ul>
-                      <button type="button" className="ai-solutions-cta" onClick={() => goToSection("contact")} tabIndex={explore ? 0 : -1}>
-                        Start a project <span aria-hidden>→</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {c.chips.length > 0 && (
-                  <ul className="ai-chips">
-                    {c.chips.map((ch) => (
-                      <li key={ch}>{ch}</li>
-                    ))}
-                  </ul>
-                )}
-                {c.project && (
-                  <button type="button" className="ai-cta" onClick={() => openProject(c.project)} tabIndex={i === chapter ? 0 : -1}>
-                    <span>Open the project</span>
-                    <span aria-hidden>→</span>
+          <div className="ai-placed">{CAPTION_LIST.map(caption)}</div>
+
+          {/* how we do it: the three stages together, the one playing opened out */}
+          <div className="ai-how" data-on={id === "how" || undefined} aria-hidden={id !== "how"}>
+            <p className="ai-kicker">
+              How we do it <em className="ai-how-hint">· Select a step</em>
+            </p>
+            <ol className="ai-how-list">
+              {STAGES.map((s, i) => (
+                <li key={s.no} className="ai-hw" style={{ "--h": `var(--h${i})` } as React.CSSProperties}>
+                  {/* a step opens on its own, as the network plays it; or pick one, and the network goes to it */}
+                  <button type="button" className="ai-hw-head" tabIndex={id === "how" ? 0 : -1} onClick={() => seek.current?.(i)}>
+                    <span className="ai-hw-name">{s.name}</span>
+                    <span className="ai-hw-title">{s.title}</span>
                   </button>
-                )}
-              </article>
-            ))}
+                  <div className="ai-hw-more">
+                    <p className="ai-hw-line">{s.line}</p>
+                    <ul className="ai-hw-points">
+                      {s.points.map((pt) => (
+                        <li key={pt}>{pt}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
 
           <ol className="ai-steps" aria-hidden>
-            {CHAPTERS.map((c, i) => (
-              <li key={c.no} data-on={i === chapter || undefined}>
-                {c.no}
+            {AI_CHAPTERS.map((c, i) => (
+              <li key={c.id} data-on={i === chapter || undefined}>
+                {pad(i)} <span>{c.label}</span>
               </li>
             ))}
           </ol>
         </div>
-
       </div>
     </section>
   );

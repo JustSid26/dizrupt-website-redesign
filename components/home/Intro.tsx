@@ -361,11 +361,6 @@ export function Intro() {
             </div>
           ))}
         </dl>
-        <div className="intro-profile">
-          <p className="profile-mark">{site.profile.mark}</p>
-          <h2 className="profile-line">{site.profile.line}</h2>
-          <p className="profile-body">{site.profile.body}</p>
-        </div>
         <p className="intro-meter">
           <span ref={meter}>0</span>
         </p>
