@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COUNT, TRANSITION_MS } from './config';
+import { COUNT, TRANSITION_MS, isMobile } from './config';
 import { vertexShader, fragmentShader } from './fieldShaders';
 import { SHAPES } from './shapes';
 
@@ -57,6 +57,8 @@ export class ParticleField {
       uFill: { value: 0 },
       uSolid: { value: 0 },
       uSize: { value: 22 },
+      uKeep: { value: isMobile ? 0.6 : 1 }, // a phone draws 60% of them, each brighter: the same light for less work
+      uMaxPoint: { value: isMobile ? 56 : 1e4 }, // and none of them huge (each pixel of a sprite is paid for, ten deep)
       uPixelRatio: { value: pixelRatio },
       uMouse: { value: new THREE.Vector3(99, 99, 0) },
       uMouseStrength: { value: 0 },

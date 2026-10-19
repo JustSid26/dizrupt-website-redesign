@@ -75,6 +75,9 @@ attribute float aHead;    // >0: weighted neck/head turn; <0: full head turn for
 uniform float uDisperse;
 uniform float uBeam, uBeamOn;
 uniform float uFill;
+uniform float uKeep; // the share of the points drawn (a phone draws fewer, each brighter)
+uniform float uMaxPoint; // the largest a point may be drawn, in pixels (a phone's: up close they get huge)
+varying float vCapGain; // what a capped point makes up in brightness for the area it lost
 uniform float uSolid; // a built object (the train), not a figure of light
 uniform float uSize;
 uniform float uPixelRatio;
@@ -87,6 +90,13 @@ varying float vRandom;
 varying float vAlpha;
 ${NOISE}
 void main() {
+  // not one of the share drawn: off the clip volume, nothing to rasterise (picked by a hash of its
+  // random, not the random itself, so the ones kept are as varied in size and brightness as the rest)
+  if (fract(aRandom * 91.7) >= uKeep) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
   // Per-particle progress: staggered start, quintic ease in and out.
   // Keep in sync with particleAt() in main.js, which replays this on the CPU.
   float t = clamp((uProgress - aRandom * 0.35) / 0.65, 0.0, 1.0);
@@ -233,7 +243,9 @@ void main() {
      softness will save them. */
   // only the rim is drawn, so only the rim is swollen; the inside stays small and unlit
   float swollen = 1.0 + vAurora * vEdge * (2.6 + vRay * 1.4);
-  gl_PointSize = uSize * uPixelRatio * swollen * (0.4 + aRandom + sparkle) / -mv.z;
+  float want = uSize * uPixelRatio * swollen * (0.4 + aRandom + sparkle) / -mv.z;
+  gl_PointSize = min(want, uMaxPoint);
+  vCapGain = min(4.0, (want * want) / (gl_PointSize * gl_PointSize));
 
   vRandom = aRandom;
   vAlpha = 0.16 + 0.32 * fract(aRandom * 7.13) + sparkle * 0.2;
@@ -263,6 +275,8 @@ uniform float uBodyReveal;
 uniform float uEyeReveal;
 uniform float uKindle;
 uniform float uFill;
+uniform float uKeep;
+varying float vCapGain;
 void main() {
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
@@ -333,5 +347,5 @@ void main() {
   vec3 channel = uGlitchLayer < 0.5 ? vec3(0.0, 1.0, 0.0) : uGlitchLayer < 1.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
   col *= mix(vec3(1.0), channel, split);
   alpha *= 1.0 - vDrop * split; // the slices that dropped out
-  gl_FragColor = vec4(col, alpha * uOpacity * reveal);
+  gl_FragColor = vec4(col, alpha * uOpacity * reveal * vCapGain / uKeep); // (the same light from fewer, smaller ones)
 }`;

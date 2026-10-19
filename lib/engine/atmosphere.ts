@@ -1,5 +1,6 @@
 // @ts-nocheck — ported from the original site.
 import * as THREE from 'three';
+import { PIXEL_RATIO } from './config';
 
 /* =========================================================
    Background atmosphere: a slow dark colour gradient behind everything,
@@ -82,7 +83,7 @@ const dustShaders = {
 };
 
 export function createAtmosphere({ scene, camera, colorA, colorB }) {
-  const pixelRatio = Math.min(devicePixelRatio, 2);
+  const pixelRatio = PIXEL_RATIO;
   // uFade holds the whole backdrop back: the intro starts on flat black and only lets the
   // dust and the gradient in once the field starts moving.
   const shared = { uTime: { value: 0 }, uColorA: { value: colorA }, uColorB: { value: colorB }, uFade: { value: 1 }, uDrift: { value: 0 } };

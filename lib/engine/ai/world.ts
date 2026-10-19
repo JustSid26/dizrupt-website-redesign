@@ -8,6 +8,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signals } from '@/lib/signals';
 import { applyFrame } from '../frame';
+import { isMobile } from '../config';
 
 const REST = { lift: 0, shift: 0, zoom: 1 };
 
@@ -476,7 +477,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   const key = new THREE.DirectionalLight('#fff4e8', 1.05);
   key.position.set(3, 4, 6);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.mapSize.setScalar(isMobile ? 512 : 1024);
   key.shadow.camera.left = key.shadow.camera.bottom = -2.5;
   key.shadow.camera.right = key.shadow.camera.top = 2.5;
   key.shadow.bias = -0.0004;
@@ -498,7 +499,8 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   scene.add(rimC, rimV);
 
   /* ================= its own buffers and bloom ================= */
-  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+  // (a phone goes without the multisampling: four samples a pixel, twice over, is ~100 MB it can't spare)
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile ? 0 : 4 });
   const composer = new EffectComposer(renderer, rt);
   composer.renderToScreen = false;
   composer.setPixelRatio(pixelRatio);
@@ -572,9 +574,30 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   return {
     scene,
     camera,
+    bloom,
     resize,
     /** Off screen: nothing runs on its own here. */
     sleep() {},
+    /** Gone for good (a phone frees it once the page is well past it): everything it put on the GPU. */
+    dispose() {
+      const textures = new Set<THREE.Texture>();
+      scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        m.geometry?.dispose();
+        for (const mat of ([] as THREE.Material[]).concat(m.material ?? [])) {
+          for (const v of Object.values(mat)) if (v instanceof THREE.Texture) textures.add(v);
+          const uni = (mat as THREE.ShaderMaterial).uniforms;
+          if (uni) for (const u of Object.values(uni)) if (u.value instanceof THREE.Texture) textures.add(u.value);
+          mat.dispose();
+        }
+      });
+      textures.forEach((t) => t.dispose());
+      scene.environment?.dispose();
+      key.dispose(); // (its shadow map)
+      bloom.dispose();
+      composer.dispose();
+      rt.dispose();
+    },
     /** p: 0..1 through the section; px, py: the pointer (-1..1) */
     render(dt: number, time: number, p: number, px: number, py: number) {
       uTime.value = time;

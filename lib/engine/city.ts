@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bannerTexture } from './bannerTexture';
 import { isMobile } from './config';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 import { FACADE_GLSL, lightingUniforms, setMode } from './facade';
@@ -694,12 +695,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   }
   /* ---- what the Times Square screens show: the clients' banners, and ads of ours ---- */
   const adTextures: THREE.Texture[] = [];
-  const loader = new THREE.TextureLoader();
-  for (const url of Object.values(BANNERS)) {
-    const t = loader.load(url);
-    t.colorSpace = THREE.SRGBColorSpace;
-    adTextures.push(t);
-  }
+  for (const url of Object.values(BANNERS)) adTextures.push(bannerTexture(url));
   const ads: [string, string, string][] = [['DIZRUPT', '#a310e7', '#1a0633'], ['SOLUTIONS FOR WHAT’S NEXT', '#58c4ff', '#051a2e'], ['HAVE A PROJECT?', '#ff3d8b', '#2a0616'], ['MUMBAI · NYC · LONDON', '#ffd27a', '#221400']];
   for (const [text, fg, bg] of ads) {
     const c = document.createElement('canvas');

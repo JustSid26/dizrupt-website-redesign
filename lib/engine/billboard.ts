@@ -115,6 +115,8 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
   let boardNext = 3, boardUntil = 0;
   const snap = document.createElement('canvas');
   let nextBurst = 0;
+  let snowImg: ImageData | null = null;
+  let snowPx = new Uint32Array(0);
   let burstUntil = 0;
   let tear: null | { jx: number; jy: number; rx: number; ry: number; bx: number; by: number; band: number[] | null } = null;
   // text: false while the landing's own DOM word is up, so the cursor's hole in the veil shows
@@ -125,13 +127,13 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
     // the snow: coarse, screen-blended at the page's strength
-    const img = sctx.createImageData(snow.width, snow.height);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const v = Math.random() * 255;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-      img.data[i + 3] = 255;
+    // (one buffer, kept: a new one each frame was most of what the page threw away)
+    if (snowImg?.width !== snow.width || snowImg.height !== snow.height) {
+      snowImg = sctx.createImageData(snow.width, snow.height);
+      snowPx = new Uint32Array(snowImg.data.buffer);
     }
-    sctx.putImageData(img, 0, 0);
+    for (let i = 0; i < snowPx.length; i++) snowPx[i] = 0xff000000 | (((Math.random() * 256) | 0) * 0x010101); // grey, opaque
+    sctx.putImageData(snowImg, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = 0.1;
     ctx.globalCompositeOperation = 'screen';
@@ -217,5 +219,5 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
   /** The camera distance at which the board exactly fills a view of this field of view. */
   const fillDistance = (fov: number) => BOARD_HEIGHT / 2 / Math.tan(THREE.MathUtils.degToRad(fov / 2));
 
-  return { group, measure, draw, fillDistance, material };
+  return { group, plane, measure, draw, fillDistance, material };
 }

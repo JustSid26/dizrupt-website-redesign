@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bannerTexture } from './bannerTexture';
 
 /* =========================================================
    The work's building: one of the city's own, just behind the
@@ -282,7 +283,6 @@ export function createWorkTower(opts: { box: Box; banners: (string | null)[]; co
   const local = (k: number) => { const gr = grids[faceOf[k]]; return new THREE.Vector3(gr.origin.x + (cells[k].x + 0.5) * gr.cellW, gr.origin.y + (cells[k].y + 0.5) * CELL_H, 0.002); };
 
   // the work in its windows: the banner on the glass in a plain dark frame, like the rest of the city's
-  const loader = new THREE.TextureLoader();
   const panels = cells.map((_, k) => {
     const c = local(k), gr = grids[faceOf[k]];
     const frame = new THREE.Mesh(
@@ -294,8 +294,7 @@ export function createWorkTower(opts: { box: Box; banners: (string | null)[]; co
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.42, 0.38, 0.33), toneMapped: false });
     const url = opts.banners[k];
     if (url) {
-      const t = loader.load(url);
-      t.colorSpace = THREE.SRGBColorSpace;
+      const t = bannerTexture(url);
       const a = 2574 / 894, w = gr.winW / gr.winH; // the banner is wider than the window: its middle
       t.repeat.set(w / a, 1); t.offset.set((1 - w / a) / 2, 0);
       mat.map = t;

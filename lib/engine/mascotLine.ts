@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bannerTexture } from './bannerTexture';
 import { createBrandingFilm } from './brandingFilm';
 
 // the films drawn in code, by the name a solution asks for
@@ -694,12 +695,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       im.onload = () => { texs[0] = compose(im); if (screenMat.map === first) screenMat.map = texs[0]; };
       im.src = photo;
     }
-    const loader = new THREE.TextureLoader();
-    for (const url of work) {
-      const t = loader.load(url);
-      t.colorSpace = THREE.SRGBColorSpace;
-      texs.push(t);
-    }
+    for (const url of work) texs.push(bannerTexture(url));
     banners.push({ mat: screenMat, texs, i: 0, next: 5 + k });
     /* A film instead of the slideshow: it takes the screen once it can play, cropped to fill it,
        and starts from the top each time the train pulls in, so its story is seen from the start. */

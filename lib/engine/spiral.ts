@@ -1,6 +1,8 @@
 // @ts-nocheck — ported from the original site.
 import * as THREE from 'three';
 import { bannerFor, BANNER_ASPECT } from '@/content/banners';
+import { PIXEL_RATIO } from './config';
+import { bannerTexture } from './bannerTexture';
 
 /* =========================================================
    Index view: every project on a spiral that winds around the
@@ -341,7 +343,7 @@ export function createIndex({ projects, scene, camera, isMobile, onSelect, conta
   const branchGeo = buildBranchGeometry();
   let branchesOn = false;
   let solidBacking = false; // a lit model behind the cards needs fully opaque panels
-  const pixelRatio = Math.min(devicePixelRatio, 2);
+  const pixelRatio = PIXEL_RATIO;
 
   let scroll = 0; // which project is at the front (fractional while moving)
   let driven = null; // when the page's scroll sets the spiral directly, the spring stands aside
@@ -456,9 +458,7 @@ export function createIndex({ projects, scene, camera, isMobile, onSelect, conta
       document.fonts.load('700 118px "Bricolage Grotesque"').finally(draw);
     }
     if (bannerUrl) {
-      new THREE.TextureLoader().load(bannerUrl, (texture) => {
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = 8;
+      bannerTexture(bannerUrl, (texture) => {
         const cover = (CARD_W / CARD_H) / BANNER_ASPECT;
         panelMaterial.uniforms.uMapScale.value.set(cover, 1);
         panelMaterial.uniforms.uMapOffset.value.set((1 - cover) / 2, 0);
