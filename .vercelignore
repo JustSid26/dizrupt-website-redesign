@@ -6,6 +6,7 @@ Website banners 2/
 node_modules/
 # raw footage and render output kept at the root; the site only serves public/
 /*.mp4
+vids/
 brag-output-*/
 out/
 .next-analyse/
