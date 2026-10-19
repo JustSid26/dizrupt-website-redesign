@@ -8,7 +8,8 @@ export function sectionTop(id: string) {
   const top = (el: Element | null) => (el ? el.getBoundingClientRect().top + scrollY : 0);
   const span = (el: Element | null) => (el ? (el as HTMLElement).offsetHeight - innerHeight : 0);
   if (id === "intro") return 0;
-  // Solutions: the first billboard, where the train stands (its top would leave it between stations)
+  // Solutions: the first billboard, where the train stands (its top would leave it between stations);
+  // on a phone, the cards
   if (id === "solutions") return stopPositions()[1] ?? top(document.getElementById(id));
   if (id.startsWith("solution-")) {
     const el = document.getElementById("solutions");

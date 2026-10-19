@@ -7,6 +7,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signals } from '@/lib/signals';
+import { applyFrame } from '../frame';
+
+const REST = { lift: 0, shift: 0, zoom: 1 };
 
 /* =========================================================
    AI & Automation: its own world, drawn by the same renderer
@@ -584,12 +587,11 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       tgtPos.lerpVectors(poses[0].pos, poses[1].pos, act).lerp(poses[2].pos, back).lerp(away, xp);
       tgtLook.lerpVectors(poses[0].look, poses[1].look, act).lerp(poses[2].look, back);
       /* for the method and the statement the camera pans, so the core and its network slide aside and
-         leave the text clear: to 70% across on a wide screen (the text is on the left), up to 32% down
-         on a phone (it's below), whatever the screen's shape */
+         leave the text clear: to 70% across on a wide screen (the text is on the left). A phone keeps
+         the text below instead, and the page fits the picture into the room above it (signals.frame) */
       const aside = smooth(ASIDE0, ASIDE1, q) * (1 - xp);
       const half = poses[2].pos.z * Math.tan((camera.fov * Math.PI) / 360); // half the height in view, at the hub
       if (camera.aspect >= 1) { const d = 0.4 * half * camera.aspect * aside; tgtPos.x -= d; tgtLook.x -= d; }
-      else { const d = 0.36 * half * aside; tgtPos.y -= d; tgtLook.y -= d; }
       // the cursor moves it a little, less once it is the hub the page's network hangs off
       const sway = 1 - 0.75 * back;
       tgtPos.x += (Math.sin(time * 0.15) * 0.25 + px * 0.6) * sway;
@@ -647,6 +649,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       rimC.intensity = 3 + 4 * act;
       dust.rotation.y = time * 0.01;
 
+      applyFrame(camera, camera.aspect < 1 ? signals.frame.ai : REST);
       // where the chip is on screen: the page's network grows out of it
       centre.set(0, 0, 0).project(camera);
       edge.set(BODY / 2, 0, 0).project(camera);

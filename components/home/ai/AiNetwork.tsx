@@ -19,6 +19,10 @@ const HEADLINE = ["Less friction.", "Smarter workflows.", "Greater potential."];
 const BODY =
   "From identifying inefficiencies to implementing tailored automation solutions, we help businesses create more efficient, connected ways of working. Every solution begins with understanding the process, evaluating the opportunity, and designing an approach around real operational needs.";
 const METHOD = ["Audit", "Evaluate", "Implement"];
+/** A portrait screen: the least room the picture is given over the words (px), and the share of the
+    screen's height the chip takes at its closest when it has the whole screen. */
+const MIN_STAGE = 96;
+const CHIP = 0.38;
 
 /* What the audit flags on each panel, and what it is once connected. The leads carry the workflow
    followed through all three stages. Not everything goes hands-off: exceptions stay with a person. */
@@ -67,6 +71,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
   onBeatRef.current = onBeat;
   const root = useRef<HTMLDivElement>(null);
   const hub = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const tall = useTall();
   const places = placesFor(tall);
   const ids = panelsFor(tall);
@@ -257,18 +262,49 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
 
   // the core rides on the chip wherever the camera has it, and the network moves with it
   useEffect(() => {
-    const tick = () => {
-      const h = hub.current, el = root.current;
-      if (!h || !el || signals.scroll.section !== "ai") return;
-      const c = signals.aiChip;
-      h.style.translate = `${c.x.toFixed(1)}px ${c.y.toFixed(1)}px`;
-      el.style.setProperty("--sx", `${(c.x - innerWidth / 2).toFixed(1)}px`);
-      el.style.setProperty("--sy", `${(c.y - innerHeight / 2).toFixed(1)}px`);
+    /* A portrait screen: the words take the bottom, and the picture (the chip, the network, the
+       report) is fitted into the room between the HUD's tag and the top of whatever words are up —
+       the stage, which follows them as they change from beat to beat. */
+    const portrait = matchMedia("(max-aspect-ratio: 1/1)");
+    const room = { top: -1, bottom: -1 };
+    const tick = (_: number, dtMs: number) => {
+      const h = hub.current, el = root.current, st = stage.current, sec = section.current;
+      if (!h || !el || !st || !sec || signals.scroll.section !== "ai") return;
+      const f = signals.frame.ai;
+      if (portrait.matches) {
+        const top = (sec.querySelector(".ai-tag")?.getBoundingClientRect().bottom ?? 80) + 10;
+        const words = sec.querySelector(".ai-ch[data-on], .ai-how[data-on], .ai-say:not([inert])");
+        const bottom = (words ? words.getBoundingClientRect().top : innerHeight * 0.55) - 18;
+        const k = room.top < 0 ? 1 : 1 - Math.exp((-6 * Math.min(dtMs, 50)) / 1000);
+        room.top += (top - room.top) * k;
+        room.bottom += (bottom - room.bottom) * k;
+        const height = Math.max(MIN_STAGE, room.bottom - room.top);
+        st.style.top = `${room.top.toFixed(1)}px`;
+        st.style.height = `${height.toFixed(1)}px`;
+        // the panels are drawn to the stage's size
+        el.style.setProperty("--ms", Math.min(0.6, height / 420).toFixed(3));
+        f.lift = innerHeight / 2 - (room.top + height / 2);
+        f.zoom = Math.min(1, Math.max(0.3, (height * 0.85) / (innerHeight * CHIP)));
+      } else if (room.top >= 0) {
+        room.top = room.bottom = -1;
+        st.style.top = st.style.height = "";
+        el.style.removeProperty("--ms");
+        f.lift = 0;
+        f.zoom = 1;
+      }
+      const c = signals.aiChip, r = st.getBoundingClientRect();
+      h.style.translate = `${(c.x - r.left).toFixed(1)}px ${(c.y - r.top).toFixed(1)}px`;
+      el.style.setProperty("--sx", `${(c.x - r.left - r.width / 2).toFixed(1)}px`);
+      el.style.setProperty("--sy", `${(c.y - r.top - r.height / 2).toFixed(1)}px`);
       h.style.setProperty("--r", `${Math.max(24, c.size * 1.5).toFixed(1)}px`);
     };
     gsap.ticker.add(tick);
-    return () => gsap.ticker.remove(tick);
-  }, []);
+    return () => {
+      gsap.ticker.remove(tick);
+      signals.frame.ai.lift = 0;
+      signals.frame.ai.zoom = 1;
+    };
+  }, [section]);
 
   const say = chapter === "what";
   return (
@@ -278,82 +314,85 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       data-tall={tall || undefined}
       style={{ "--dim": 0, "--map": 1, "--scan": 0, "--scanO": 0, "--v": 0, "--mx": 0, "--rk": 0, "--tl": 0, "--sm": 0 } as React.CSSProperties}
     >
-      <svg className="ain-wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-        <g className="ain-map">
-          <g className="ain-map-v">
-            {map.lines.map((d) => (
+      {/* the picture: on a portrait screen it is fitted into the room over the words */}
+      <div ref={stage} className="ain-stage">
+        <svg className="ain-wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+          <g className="ain-map">
+            <g className="ain-map-v">
+              {map.lines.map((d) => (
+                <path key={d} pathLength={1} d={d} />
+              ))}
+            </g>
+          </g>
+          {links.map((l) => (
+            <path key={`l-${l.id}`} className="ain-link" pathLength={1} d={l.d} />
+          ))}
+          <g className="ain-flows">
+            {links.map((l, i) => (
+              <path key={`f-${l.id}`} pathLength={1} d={l.d} style={{ "--i": i } as React.CSSProperties} />
+            ))}
+          </g>
+          <g className="ain-thread">
+            {thread.map((d) => (
               <path key={d} pathLength={1} d={d} />
             ))}
           </g>
-        </g>
-        {links.map((l) => (
-          <path key={`l-${l.id}`} className="ain-link" pathLength={1} d={l.d} />
-        ))}
-        <g className="ain-flows">
-          {links.map((l, i) => (
-            <path key={`f-${l.id}`} pathLength={1} d={l.d} style={{ "--i": i } as React.CSSProperties} />
+          <g className="ain-thread-flow">
+            {thread.map((d, i) => (
+              <path key={d} pathLength={1} d={d} style={{ "--i": i } as React.CSSProperties} />
+            ))}
+          </g>
+        </svg>
+        <div className="ain-faults" aria-hidden>
+          {map.faults.map((f) => (
+            <i key={`${f.x}-${f.y}`} style={{ "--x": f.x, "--y": f.y } as React.CSSProperties} />
           ))}
-        </g>
-        <g className="ain-thread">
-          {thread.map((d) => (
-            <path key={d} pathLength={1} d={d} />
-          ))}
-        </g>
-        <g className="ain-thread-flow">
-          {thread.map((d, i) => (
-            <path key={d} pathLength={1} d={d} style={{ "--i": i } as React.CSSProperties} />
-          ))}
-        </g>
-      </svg>
-      <div className="ain-faults" aria-hidden>
-        {map.faults.map((f) => (
-          <i key={`${f.x}-${f.y}`} style={{ "--x": f.x, "--y": f.y } as React.CSSProperties} />
-        ))}
-      </div>
-      <div className="ain-scan" aria-hidden />
+        </div>
+        <div className="ain-scan" aria-hidden />
 
-      {/* made simple: the two sides of the business, framed and named */}
-      <div className="ain-groups" aria-hidden>
-        {GROUPS.map((g) => (
-          <div key={g.side} className={`ain-group is-${g.side}`} style={{ "--x0": g.x0, "--x1": g.x1 } as React.CSSProperties}>
-            <p>
-              <i /> {g.name}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div ref={hub} className="ain-hub" aria-hidden>
-        <span className="ain-hub-label">
-          DZ core <b>· online</b>
-        </span>
-      </div>
-
-      <div className="ain-panels" aria-hidden>
-        {ids.map((id) => {
-          const P = places[id];
-          const View = PANEL_VIEWS[id];
-          return (
-            <div
-              key={id}
-              className={`ain-panel ain-${id} is-${SIDE[id]}${id === "leads" ? " is-thread" : ""}`}
-              data-id={id}
-              style={{ "--cx": P.x, "--cy": P.y, "--cr": 0, "--ox": P.x, "--oy": P.y, "--e": 0, "--k": 0, "--f": 0, "--a": 0 } as React.CSSProperties}
-            >
-              <p className="ain-tag">
-                <span className="is-find">{TAGS[id].find}</span>
-                <span className="is-done">{TAGS[id].done}</span>
+        {/* made simple: the two sides of the business, framed and named */}
+        <div className="ain-groups" aria-hidden>
+          {GROUPS.map((g) => (
+            <div key={g.side} className={`ain-group is-${g.side}`} style={{ "--x0": g.x0, "--x1": g.x1 } as React.CSSProperties}>
+              <p>
+                <i /> {g.name}
               </p>
-              <div className="ain-body">
-                <View />
-              </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      <div className="ain-matrix">
-        <Matrix />
+        <div ref={hub} className="ain-hub" aria-hidden>
+          <span className="ain-hub-label">
+            DZ core <b>· online</b>
+          </span>
+        </div>
+
+        <div className="ain-panels" aria-hidden>
+          {ids.map((id) => {
+            const P = places[id];
+            const View = PANEL_VIEWS[id];
+            return (
+              <div
+                key={id}
+                className={`ain-panel ain-${id} is-${SIDE[id]}${id === "leads" ? " is-thread" : ""}`}
+                data-id={id}
+                style={{ "--cx": P.x, "--cy": P.y, "--cr": 0, "--ox": P.x, "--oy": P.y, "--e": 0, "--k": 0, "--f": 0, "--a": 0 } as React.CSSProperties}
+              >
+                <p className="ain-tag">
+                  <span className="is-find">{TAGS[id].find}</span>
+                  <span className="is-done">{TAGS[id].done}</span>
+                </p>
+                <div className="ain-body">
+                  <View />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="ain-matrix">
+          <Matrix />
+        </div>
       </div>
 
       <div className="ai-say" inert={!say}>

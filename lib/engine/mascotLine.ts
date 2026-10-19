@@ -4,6 +4,7 @@ import { createBrandingFilm } from './brandingFilm';
 // the films drawn in code, by the name a solution asks for
 const LIVE_FILMS = { branding: createBrandingFilm };
 import { COUNT, isMobile } from './config';
+import { isPhoneLayout } from '@/lib/layout';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
 /* =========================================================
@@ -606,6 +607,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const screens: THREE.Mesh[] = [];
   const lives: { film: { tex: THREE.Texture; draw: (t: number) => void; stop?: () => void }; k: number; mat: THREE.MeshBasicMaterial; start: number; on: boolean }[] = [];
   const films: { video: HTMLVideoElement; k: number; mat: THREE.MeshBasicMaterial; tex: THREE.Texture; on: boolean; start: number }[] = [];
+  const unloaded: { video: HTMLVideoElement; k: number }[] = []; // films not fetched yet
   stations.forEach((st, k) => {
     const u = stops[k + 1];
     curve.getPointAt(u, P);
@@ -708,9 +710,11 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       screenMat.color.setScalar(0.5); // the films run darker than the photographs
       lives.push({ film, k, mat: screenMat, start: 0, on: false });
     }
-    if (st.film) {
+    // (a phone has no train and never sees the billboards: no films to fetch)
+    if (st.film && !isPhoneLayout()) {
       const v = document.createElement('video');
-      Object.assign(v, { src: st.film, muted: true, loop: true, playsInline: true, preload: 'auto', crossOrigin: 'anonymous' });
+      // fetched only once the train is on its way to this station (update(), below), not all at once
+      Object.assign(v, { src: st.film, muted: true, loop: true, playsInline: true, preload: 'none', crossOrigin: 'anonymous' });
       v.addEventListener('loadeddata', () => {
         const vt = new THREE.VideoTexture(v);
         vt.colorSpace = THREE.SRGBColorSpace;
@@ -721,7 +725,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         screenMat.map = vt;
         screenMat.color.setScalar(0.3); // footage runs brighter than the photographs: the bloom would wash it out
       }, { once: true });
-      v.load();
+      unloaded.push({ video: v, k });
     }
     } else {
       /* Tech & Automation: a silver MacBook Pro, giant, standing open beside the line on a steel
@@ -959,6 +963,14 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     /* A film waits on its opening frame while the train comes in and starts once it has pulled in,
        so its story is seen from the start; it stops once the train has gone. */
     const ARRIVED = 0.04;
+    // a film starts downloading as the train sets off for its station (from the one before)
+    for (let i = unloaded.length - 1; i >= 0; i--) {
+      const u = unloaded[i];
+      if (Math.abs(s - (u.k + 1)) > 1.6) continue;
+      u.video.preload = 'auto';
+      u.video.load();
+      unloaded.splice(i, 1);
+    }
     for (const f of films) {
       const d = Math.abs(s - (f.k + 1)), near = d < 0.9 && reveal > 0.001;
       if (near && !f.on) { f.video.pause(); f.video.currentTime = 0; f.start = -1; }

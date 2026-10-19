@@ -1,6 +1,7 @@
 import { SOLUTIONS } from "@/content/solutions";
 import { clients } from "@/content/projects";
 import { AI_CHAPTERS, AI_STOPS } from "@/lib/aiStops";
+import { isPhoneLayout } from "@/lib/layout";
 
 /* The train's stops, as scroll positions: the start station at the end of the landing, then each
    billboard. Between them the scroll doesn't wander — one gesture carries you to the next stop. */
@@ -13,6 +14,8 @@ export function stopPositions() {
   const intro = document.getElementById("intro");
   const sol = document.getElementById("solutions");
   if (!intro || !sol) return [];
+  // a phone: no train; the intro's end, then the cards (the section's top)
+  if (isPhoneLayout()) return [intro.offsetTop + intro.offsetHeight - innerHeight, sol.getBoundingClientRect().top + scrollY];
   const iSpan = intro.offsetHeight - innerHeight;
   // Solutions' ride runs from its top reaching the bottom of the screen (see Solutions.tsx)
   const sTop = sol.getBoundingClientRect().top + scrollY - innerHeight;
@@ -50,7 +53,9 @@ export const STEP = 3.4;
 /** Seconds the page takes to glide from one AI beat to the next (its animation runs on its own clock). */
 const AI_GLIDE = 1.4;
 
-export function scrollStops(): ScrollStop[] {
+/** The runs of stops from the DIZRUPT screen to AI & Automation's last beat. On a phone the train is
+    gone and Solutions is a carousel scrolled through freely, so there are two runs either side of it. */
+export function scrollRuns(): ScrollStop[][] {
   const intro = document.getElementById("intro");
   const lp = landingPositions();
   const ys = stopPositions();
@@ -58,14 +63,13 @@ export function scrollStops(): ScrollStop[] {
   const top = intro.getBoundingClientRect().top + scrollY;
   const span = intro.offsetHeight - innerHeight;
   const bridge = document.getElementById("bridge"), ai = document.getElementById("ai");
-  return [
+  const landing: ScrollStop[] = [
     { y: lp.start, dur: 0, train: null }, // DIZRUPT
     { y: lp.built, dur: STEP * 1.6, train: null }, // the city built, him standing in it
     // the count, in its windows: late in it, so the ride on starts where the camera does (0.76)
     { y: top + span * introRaw(0.72), dur: STEP * 1.5, train: null }, // slow: the figure dissolving into the count is worth watching
-    { y: ys[0], dur: STEP, train: 0 }, // the station built, the train at it
-    // pulling out of the station is the first ride: slower than the hops between billboards
-    ...ys.slice(1).map((y, i) => ({ y, dur: STEP, train: i + 1 })), // each billboard
+  ];
+  const onward: ScrollStop[] = [
     // on to AI & Automation in two: him whole again, the line read (Bridge.tsx: its progress runs from
     // its top at the middle of the screen to its bottom there; the line is up at 0.28–0.42) …
     ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, dur: STEP, train: null }] : []),
@@ -76,6 +80,15 @@ export function scrollStops(): ScrollStop[] {
        (AiNetwork.tsx), whatever the gesture was. */
     ...(ai ? AI_CHAPTERS.slice(1).filter((c) => !c.through).map((c) => ({ y: ai.offsetTop + (ai.offsetHeight - innerHeight) * c.at, dur: AI_GLIDE, train: null })) : []),
   ];
+  // a phone: from the count one gesture to the cards, then the page is free until the bridge
+  if (isPhoneLayout()) return [[...landing, { y: ys[1], dur: STEP, train: null }], onward];
+  return [[
+    ...landing,
+    { y: ys[0], dur: STEP, train: 0 }, // the station built, the train at it
+    // pulling out of the station is the first ride: slower than the hops between billboards
+    ...ys.slice(1).map((y, i) => ({ y, dur: STEP, train: i + 1 })), // each billboard
+    ...onward,
+  ]];
 }
 
 /* The work: a camera through a tower of windows (Projects.tsx). Its scroll runs p from -WORK_LEAD

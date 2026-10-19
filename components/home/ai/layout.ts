@@ -25,14 +25,15 @@ const WIDE: Record<PanelId, Spot> = {
   tasks: { x: 70, y: 79 },
 };
 
-// a phone keeps four of them: the two external ones above the core, the two internal ones below
+/* a phone keeps four of them: the two external ones above the core, the two internal ones below, out
+   at the stage's top and bottom (the stage is the room over the words, AiNetwork.tsx) */
 const TALL_IDS: PanelId[] = ["inbox", "leads", "sheet", "tasks"];
 const TALL: Record<PanelId, Spot> = {
   ...WIDE,
-  inbox: { x: 26, y: 37 },
-  leads: { x: 74, y: 37 },
-  sheet: { x: 26, y: 63 },
-  tasks: { x: 74, y: 63 },
+  inbox: { x: 26, y: 24 },
+  leads: { x: 74, y: 24 },
+  sheet: { x: 26, y: 76 },
+  tasks: { x: 74, y: 76 },
 };
 
 export const placesFor = (tall: boolean) => (tall ? TALL : WIDE);
@@ -66,8 +67,8 @@ export function linksFor(tall: boolean): { id: PanelId; d: string }[] {
 export function mapFor(tall: boolean): { lines: string[]; faults: Spot[] } {
   if (tall)
     return {
-      lines: ["M37 39 H63", "M37 63 H63", "M74 42.5 V57.5"],
-      faults: [{ x: 50, y: 63 }, { x: 74, y: 50 }],
+      lines: ["M37 26 H63", "M37 74 H63", "M74 42.5 V57.5"],
+      faults: [{ x: 50, y: 74 }, { x: 74, y: 50 }],
     };
   return {
     lines: ["M30 30.5 V44", "M30 70 V56", "M70 27 V35", "M70 47 V55", "M70 65 V73.5", "M37 80 H63"],
@@ -78,7 +79,7 @@ export function mapFor(tall: boolean): { lines: string[]; faults: Spot[] } {
 /** The workflow followed through all three stages: an enquiry in the inbox (external), qualified as a
     lead, on into the records (internal). Found in the audit, ranked first, the first to run. */
 export function threadFor(tall: boolean): string[] {
-  if (tall) return ["M37 35 H63", "M16 42.5 V57.5"];
+  if (tall) return ["M37 22 H63", "M16 42.5 V57.5"];
   return ["M33 30.5 V44", "M37 47 H41 V13.5 H70 V16.5"];
 }
 

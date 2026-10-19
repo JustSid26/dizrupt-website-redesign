@@ -56,6 +56,10 @@ export const signals = {
   workHidden: [] as number[],
   onWorkFrame: null as null | (() => void),
   ready: false, // the engine has built everything it needs
+  /* a portrait screen keeps its lower part for the copy: the AI world's picture is moved up (lift, px),
+     across (shift, px) and drawn smaller (zoom) so it sits in the room left above the words
+     (AiNetwork.tsx writes it). 0, 0, 1: the full screen. */
+  frame: { ai: { lift: 0, shift: 0, zoom: 1 } },
   /* scenes still playing out on their own clock after the scroll has landed: while any is, a gesture
      doesn't ride on to the next stop (SmoothScroll.tsx), so every beat is seen whole */
   busy: {

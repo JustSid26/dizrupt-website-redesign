@@ -1835,6 +1835,8 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: 0.5
   .ai-hw-more { max-height: calc(var(--h) * 130px); }
 }
 
+.ain-stage { position: absolute; inset: 0; container-type: size; }
+.ain[data-tall] .ain-stage { bottom: auto; overflow: hidden; } /* AiNetwork.tsx sets its top and height */
 .ain { position: absolute; inset: 0; container-type: size; visibility: hidden; --dim: 0; --ms: 0.82; --ss: var(--ms); --z0: 20; --zw: 58; }
 .ain[data-tall] { --ms: 0.6; --z0: 4; --zw: 92; }
 /* a short wide screen: the map drawn smaller, so it clears the frame's readouts */
@@ -2121,13 +2123,13 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: 0.5
 /* on a phone the statement takes the lower half: the network clears out of it entirely */
 .ain[data-tall] .ain-panel { opacity: calc(var(--e) * (1 - 0.85 * var(--v)) * (1 - var(--dim))); }
 .ain[data-tall] .ain-tag { font-size: 8.5px; }
-.ain[data-tall] .ain-matrix { width: 94cqw; }
+.ain[data-tall] .ain-matrix { width: 94cqw; --rh: clamp(18px, calc((100cqh - 84px) / 6), 34px); } /* the rows share the stage's height */
 .ain[data-tall] .aim-cols, .ain[data-tall] .aim-row { grid-template-columns: 18px minmax(0, 1fr) 46px 112px; gap: 0 8px; padding: 0 12px; }
 .ain[data-tall] :is(.aim-c0, .aim-c1, .aim-c2, .aim-c3, .aim-foot) { display: none; }
 .ain[data-tall] .aim-meter i { width: 12px; }
 .ain[data-tall] .aim-rec { font-size: 8px; padding: 3px 5px; }
-.ain[data-tall] .aim-rows { height: calc(6 * 34px); }
-.ain[data-tall] .aim-row { height: 34px; top: calc((var(--from) * (1 - var(--rk)) + var(--to) * var(--rk)) * 34px); }
+.ain[data-tall] .aim-rows { height: calc(6 * var(--rh)); }
+.ain[data-tall] .aim-row { height: var(--rh); top: calc((var(--from) * (1 - var(--rk)) + var(--to) * var(--rk)) * var(--rh)); }
 .ain[data-tall] .aim-name { font-size: 11px; }
 .ain[data-tall] .aim-name em { display: none; }
 .ain[data-tall] .aim-head-n { display: none; }
@@ -2321,4 +2323,77 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: 0.5
   .ai-how > .ai-kicker { margin-bottom: 6px; }
   .ai-hw { padding: 8px 0 8px 16px; }
   .ai-hw-title { font-size: calc(clamp(15px, 4vw, 20px) + var(--h) * 6px); margin-top: 4px; }
+}
+
+/* =========================== Portrait: copy below, picture above ===========================
+   On a phone the words and the 3D picture can't share the screen: the copy takes a panel along the
+   bottom and the picture is fitted into the room left above it (signals.frame, lib/engine/frame.ts),
+   so nothing is ever drawn under the words. Wide screens are untouched. */
+@media (max-aspect-ratio: 1/1) {
+  /* the screen as it is now: a phone's toolbar shrinking makes it taller than the smallest one (svh) */
+  .ai-pin { height: 100dvh; }
+}
+
+/* ---------- Solutions on a phone: six cards side by side, swiped across (SolutionCards.tsx) ---------- */
+.solc {
+  position: relative; min-height: 100svh; display: flex; flex-direction: column; justify-content: center; gap: 18px;
+  padding: calc(var(--gutter) * 3.4) 0 calc(var(--gutter) * 1.6);
+  background: linear-gradient(180deg, rgba(5, 5, 9, 0), rgba(5, 5, 9, 0.88) 12%, rgba(5, 5, 9, 0.88) 88%, rgba(5, 5, 9, 0));
+}
+.solc-head .eyebrow { font-size: 12px; }
+.solc-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--gutter); }
+.solc-count { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; color: var(--dim); }
+.solc-count strong { color: var(--fg); font-weight: 500; }
+.solc-track {
+  display: flex; gap: 12px; list-style: none; margin: 0; padding: 0 var(--gutter);
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter);
+  touch-action: pan-x pan-y; /* across moves the cards, up and down still moves the page */
+  scrollbar-width: none;
+}
+.solc-track::-webkit-scrollbar { display: none; }
+.solc-track:focus-visible { outline: 1px solid var(--violet-soft); outline-offset: 4px; }
+.solc-card {
+  flex: 0 0 calc(100% - 28px); scroll-snap-align: start; display: flex; flex-direction: column;
+  border-radius: 14px; overflow: hidden; background: #0b0b12; border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.solc-media { position: relative; aspect-ratio: 16 / 10; background: linear-gradient(120deg, var(--a), var(--b)); }
+.solc-media :is(video, img) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.solc-media::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 60%, #0b0b12); }
+.solc-body { flex: 1; display: flex; flex-direction: column; padding: 16px 18px 20px; }
+.solc .sol-title { margin-top: 10px; font-size: clamp(28px, 8.6vw, 40px); }
+.solc .sol-desc { margin-top: 10px; font-size: 15px; line-height: 1.45; }
+.solc .sol-proof { margin: 12px 0 18px; font-size: 12px; line-height: 1.7; }
+.solc-card.glitching .sol-title { filter: drop-shadow(6px 0 rgba(255, 45, 79, 0.8)) drop-shadow(-6px 0 rgba(47, 107, 255, 0.8)); transform: translateX(4px); }
+.solc-cta {
+  align-self: flex-start; margin-top: auto; /* the cards are as tall as the tallest: the button sits on the foot */
+  display: inline-flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 20px; border-radius: 999px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #fff;
+  border: 1px solid color-mix(in srgb, var(--b) 45%, rgba(255, 255, 255, 0.2)); background: color-mix(in srgb, var(--a) 16%, rgba(255, 255, 255, 0.04));
+}
+.solc-cta:focus-visible { outline: 1px solid var(--violet-soft); outline-offset: 4px; }
+.solc-dial { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0 var(--gutter); }
+.solc-dial li { flex: 1; }
+.solc-dial button { position: relative; display: block; width: 100%; height: 44px; }
+.solc-dial button span { position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--line); transition: background 0.3s, box-shadow 0.3s; }
+.solc-dial button[aria-current] span { background: var(--a); box-shadow: 0 0 10px var(--a); }
+.solc-dial button:focus-visible { outline: 1px solid var(--violet-soft); outline-offset: 2px; }
+@media (max-aspect-ratio: 1/1) {
+  .ai-ruler { display: none; }
+}
+/* a short phone: the words come down to what fits under the picture */
+@media (max-aspect-ratio: 1/1) and (max-height: 720px) {
+  .ai-say-title { font-size: clamp(28px, 8.4vw, 40px); }
+  .ai-say-body { margin-top: 16px; font-size: 14.5px; line-height: 1.5; }
+  .ai-say-method { margin-top: 14px; }
+  .ai-hw-points { display: none; }
+  .ai-hw-more { max-height: calc(var(--h) * 110px); }
+  .ai-ch.is-left .ai-title { font-size: clamp(28px, 8vw, 38px); }
+  .ai-ch.is-left .ai-line { font-size: 15px; }
+  .ai-ch.is-left .ai-chips { margin-top: 14px; gap: 6px; }
+  .ai-ch.is-col .ai-line { font-size: 14px; }
+}
+/* little room over the words (a short phone): the report keeps its rows and drops its heading */
+@container (max-height: 230px) {
+  .ain[data-tall] :is(.aim-head, .aim-cols) { display: none; }
+  .ain[data-tall] .ain-matrix { --rh: clamp(16px, calc((100cqh - 16px) / 6), 34px); }
 }

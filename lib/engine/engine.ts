@@ -22,6 +22,7 @@ import { site } from '@/content/site';
 import { createAiWorld, type AiWorld } from './ai/world';
 import { createTransitionPass } from './ai/transition';
 import { createWorkTower } from './workTower';
+import { isPhoneLayout } from '@/lib/layout';
 import { workP, WORK_LEAD } from '@/lib/stops';
 import { bannerFor } from '@/content/banners';
 
@@ -648,6 +649,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        or comes up again on the way back, the city behind it is already where the work begins */
     const section = s.section === 'ai' ? (signals.ai.p > 0.5 ? 'projects' : 'bridge') : s.section;
     const ip = s.intro;
+    // a phone has no train: Solutions is a carousel of cards there, and he stays himself behind it
+    const phone = isPhoneLayout();
 
     /* ---- what the field should be ---- */
     let want = key;
@@ -661,10 +664,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     } else if (section === 'intro') {
       // whole in the city → comes apart into the four windows of the count → back into him for the profile
       // whole in the city → four windows of the count → the bullet train at its start station
-      want = ip >= 0.785 ? (ride.s > 0.001 ? 'train' : 'train:station') : ip >= 0.44 ? 'stats' : 'mascot:full';
+      want = ip >= 0.785 ? (phone ? 'mascot:full' : ride.s > 0.001 ? 'train' : 'train:station') : ip >= 0.44 ? 'stats' : 'mascot:full';
     } else if (section === 'solutions') {
       // he stands whole in the city for a moment, then becomes his train
-      want = 'train';
+      want = phone ? 'mascot:full' : 'train';
     } else if (section === 'projects') {
       want = key; // hidden: its particles are out being the cards
     } else {
@@ -908,7 +911,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const upright = onIntro || section === 'contact' || section === 'projects' || section === 'solutions';
     field.group.rotation.x = damp(field.group.rotation.x, upright ? 0 : -p.y * 0.2, 2, dt);
     field.group.rotation.z = damp(field.group.rotation.z, upright ? 0 : -p.x * 0.08, 2, dt);
-    if (onIntro && ip > 0.76 && ride.s <= 0.001) {
+    if (onIntro && ip > 0.76 && ride.s <= 0.001 && !phone) {
       // out of the count: back over the city, then down onto the plaza where the station is going up
       const k = smooth(0.76, 0.9, ip);
       const up = Math.sin(k * Math.PI) * 6;
@@ -969,7 +972,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       camera.position.lerp(tmpA, 1 - Math.exp(-2.2 * dt));
       contactLook.lerp(tmpB, 1 - Math.exp(-2.2 * dt));
       camera.lookAt(contactLook);
-    } else if ((section === 'solutions' || (onIntro && ride.s > 0.001)) && !view && !preview) {
+    } else if ((section === 'solutions' || (onIntro && ride.s > 0.001)) && !view && !preview && !phone) {
       const sp = s.solutions;
       const a = 0, b = smooth(0.0, 0.35, ride.s); // leaves the station view as the train does
       void sp;
@@ -1099,7 +1102,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    cityDim = damp(cityDim, section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
+    cityDim = damp(cityDim, section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview && !phone) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     // the board's rig goes up first, as the camera pulls back from its screen
@@ -1107,7 +1110,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     skyLight.intensity = 0.55 - 0.3 * night;
     dusk.intensity = 0.75 - 0.6 * night;
     billboard.material.opacity = Math.min(1, cityDim * 1.5);
-    const stationTarget = section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
+    const stationTarget = phone ? 0 : section === 'intro' ? smooth(0.77, 0.92, ip) : section === 'solutions' ? 1 : 0;
     stationT = section === 'intro' ? stationTarget : damp(stationT, stationTarget, 3, dt);
     const at0 = line.stops[0] + 0.012;
     // laid a metre and a half ahead of the train's nose from the moment it leaves the station
@@ -1115,7 +1118,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const lineReveal = ride.s > 0.001 ? Math.max(at0, ahead)
       : section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, ahead) : 1.02;
     line.update(time, lineReveal, cityDim, ride.s, stationT);
-    if (wasIsolating) line.group.visible = false; // the work's tower alone: the line and its stations go with the city
+    if (wasIsolating || phone) line.group.visible = false; // the work's tower alone: the line and its stations go with the city (a phone never has them)
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
     if (billboard.material.opacity > 0.05) billboard.draw(time, !landing);

@@ -7,7 +7,7 @@ import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { setLenis, setRideCanceller } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
-import { scrollStops, STEP, workStops, type ScrollStop } from "@/lib/stops";
+import { scrollRuns, STEP, workStops, type ScrollStop } from "@/lib/stops";
 
 // One Lenis instance for the whole site, ticking with GSAP so ScrollTriggers stay in step.
 export function SmoothScroll() {
@@ -89,9 +89,10 @@ export function SmoothScroll() {
       // so one gesture is always exactly one stop
       if (glide) return true;
       const y = window.scrollY;
-      // the run of stops this point is in: the landing and the train, or the work's tower
+      // the run of stops this point is in: the landing and the train (a phone: the landing, then the
+      // bridge and AI, with the cards free between them), or the work's tower
       // (two runs can share a stop, the AI statement: take the one there's somewhere to go in, this way)
-      const stops = [scrollStops(), workStops()].find(
+      const stops = [...scrollRuns(), workStops()].find(
         (g) => g.length > 1 && y >= g[0].y - TOL && y <= g[g.length - 1].y + TOL && (dir > 0 ? y < g[g.length - 1].y - TOL : y > g[0].y + TOL),
       );
       if (!stops) { signals.rideTarget = null; return false; } // off the end of a run: free again
