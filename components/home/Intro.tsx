@@ -6,6 +6,7 @@ import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { site } from "@/content/site";
 import { useSection } from "@/components/home/useSection";
+import { T } from "@/lib/motion";
 
 /* The landing. One pinned stretch of scroll, read in beats:
      landing  DIZRUPT on black; the Z keeps losing the signal; the cursor opens a hole in the black
@@ -38,7 +39,10 @@ const STAT_TONGUES: Record<string, { text: string; latin: boolean }[]> = {
 };
 // where each number is, as a place for him to look (the cursor's own left-right, up-down)
 const STAT_CORNER: [number, number][] = [[0, 0], [0, 0], [0, 0], [0, 0]]; // he is the windows now; nothing to look at
-const STAT_STEP = 280;
+// the numbers come up one after another, three staggers apart, all four read inside a ui reveal's time
+const STAT_STEP = T.stagger * 3 * 1000;
+// (glitch timings, the count's own: he glances at a number as it lands, its label faults into another
+// language a moment later)
 const STAT_LOOK = 160;
 const STAT_TONGUE = 560;
 const ENCODE = "0123456789ABCDEF";
@@ -62,7 +66,7 @@ export function Intro() {
     const start = performance.now();
     let raf = 0;
     const step = () => {
-      const t = Math.min((performance.now() - start) / 1600, 1);
+      const t = Math.min((performance.now() - start) / 1600, 1); // (the loader's own count: 1.6 s at least, longer if the scene isn't ready)
       if (meter.current) meter.current.textContent = String(Math.round((1 - (1 - t) ** 3) * 100));
       if (t < 1 || !signals.ready) raf = requestAnimationFrame(step);
       else set({ loaded: true });
@@ -164,7 +168,7 @@ export function Intro() {
       const scramble = () => {
         if (n.dataset.resolved === "1" || beat !== "stats") return;
         drawStat(n, Array.from({ length: width }, () => ENCODE[(Math.random() * 16) | 0]).join(""));
-        later(65 + Math.random() * 50, scramble);
+        later(65 + Math.random() * 50, scramble); // (ambient: the digits churn until each resolves)
       };
       scramble();
     };
@@ -232,7 +236,7 @@ export function Intro() {
       });
       later(cells().length * STAT_STEP + 620, () => (signals.glance = null));
       const idle = () =>
-        later(2200 + Math.random() * 3400, () => {
+        later(2200 + Math.random() * 3400, () => { // (ambient: a fault now and then while the count is up)
           if (beat !== "stats") return;
           const c = cells();
           fault(c[(Math.random() * c.length) | 0], 110 + Math.random() * 120);

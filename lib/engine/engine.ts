@@ -4,7 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CAMERA_Z, COUNT, isMobile, reducedMotion } from './config';
+import { CAMERA_Z, COUNT, PIXEL_RATIO, isMobile, reducedMotion } from './config';
 import { ParticleField } from './field';
 import { BUST_DROP, BUST_HEIGHT, loadMascot } from './mascot';
 import { createIndex } from './spiral';
@@ -57,7 +57,7 @@ const smooth = (a: number, b: number, t: number) => {
 
 export async function createEngine({ canvas, indexLayer, onOpenProject }: EngineOptions) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-  const pixelRatio = Math.min(devicePixelRatio, 2);
+  const pixelRatio = PIXEL_RATIO;
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.setClearColor(0x000000, 1);
@@ -114,6 +114,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.addPass(aiPass);
   composer.addPass(new OutputPass());
   let aiWorld: AiWorld | null = null;
+  let aiIdle = 0; // seconds it has been out of reach
+  let dark = false; // a phone, all the AI section's: the canvas cleared and left
+  // is it in the camera's view at all (as of the last frame's matrices: near enough)
+  const frustum = new THREE.Frustum(), viewProj = new THREE.Matrix4();
+  const inView = (o: THREE.Object3D) => {
+    camera.updateMatrixWorld();
+    frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    return frustum.intersectsObject(o);
+  };
 
   const resize = () => {
     camera.aspect = innerWidth / innerHeight;
@@ -778,7 +787,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
            so the train rides with it, tightly, and pulls in as the scroll does */
         const prev = ride.s;
         ride.s = damp(ride.s, s.trainS, 7, dt);
-        if (Math.abs(target - ride.s) < 0.01) ride.s = target;
+        // (the scroll stands a hair past the stop, 0.01 of a station: near enough is there)
+        if (Math.abs(target - ride.s) < 0.02) ride.s = target;
         ride.v = (ride.s - prev) / Math.max(dt, 1e-4);
       } else {
         // the scroll drives it: close behind, smoothed, never waiting at a station
@@ -905,7 +915,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     field.update(now, time, dt);
     // what is still playing after the scroll lands: the scroll waits for it (SmoothScroll.tsx)
     signals.busy.morph = field.morphing && !view;
-    signals.busy.train = signals.rideTarget !== null && Math.abs(signals.rideTarget - ride.s) > 0.01;
+    signals.busy.train = signals.rideTarget !== null && Math.abs(signals.rideTarget - ride.s) > 0.02;
 
     bloom.strength = onIntro && ip < 0.2 ? 0.45 * smooth(0.015, 0.12, ip) : damp(bloom.strength, 0.45, 3, dt);
     const upright = onIntro || section === 'contact' || section === 'projects' || section === 'solutions';
@@ -1121,7 +1131,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     if (wasIsolating || phone) line.group.visible = false; // the work's tower alone: the line and its stations go with the city (a phone never has them)
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
-    if (billboard.material.opacity > 0.05) billboard.draw(time, !landing);
+    if (billboard.material.opacity > 0.05 && (landing || inView(billboard.plane))) billboard.draw(time, !landing);
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();
 
     sky = damp(sky, onIntro ? smooth(0.1, 0.3, ip) : 1, 3, dt);
@@ -1235,30 +1245,54 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
       (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18 * close;
     }
-    /* ---- AI & Automation: built ahead of time, drawn only while it is on screen ---- */
+    /* ---- AI & Automation: built ahead of time, drawn only while it is on screen. A phone has no AI
+       world: the page draws its chip (AiNetwork.tsx), the hand-over is to the dark, and once it is
+       dark nothing is drawn here at all ---- */
     {
       const ai = signals.ai;
-      if (!aiWorld && (ai.warm || ai.mix > 0)) {
+      if (!aiWorld && !phone && (ai.warm || ai.mix > 0)) {
         aiWorld = createAiWorld(renderer, pixelRatio);
         aiWorld.render(dt, time, 0, 0, 0); // compile it now, not on the first frame of the transition
       }
-      const on = ai.mix > 0.0001 && !!aiWorld;
+      // a touch screen can't hold both worlds for long: once the page is well past it, it is freed (and
+      // built again ahead of the way back)
+      aiIdle = aiWorld && isMobile && !ai.warm && ai.mix === 0 ? aiIdle + dt : 0;
+      if (aiWorld && (phone || aiIdle > 1.5)) {
+        aiPass.uniforms.tAi.value = null;
+        aiWorld.dispose();
+        aiWorld = null;
+        aiIdle = 0;
+      }
+      const on = ai.mix > 0.0001 && (!!aiWorld || phone);
       aiPass.enabled = on;
       const full = ai.mix >= 0.9999;
       renderPass.enabled = !full;
       bloom.enabled = !full;
-      if (on && aiWorld) {
-        aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
+      if (on) {
+        if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
         aiPass.uniforms.uMix.value = ai.mix;
         aiPass.uniforms.uMode.value = ai.mode;
         aiPass.uniforms.uTime.value = time;
       } else aiWorld?.sleep();
+      // once it is all the AI section's, a phone draws nothing more: one clean dark frame (the hand-over's
+      // last still has its tear in it), then the canvas keeps it
+      if (phone && full) {
+        if (!dark) {
+          renderer.setRenderTarget(null);
+          renderer.setClearColor(0x040509, 1);
+          renderer.clear();
+          renderer.setClearColor(0x000000, 1);
+          dark = true;
+        }
+        return;
+      }
+      dark = false;
     }
     composer.render();
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {

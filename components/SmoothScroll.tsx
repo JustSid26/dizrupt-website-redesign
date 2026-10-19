@@ -4,10 +4,11 @@ import { useEffect } from "react";
 import Lenis from "lenis";
 import { usePathname } from "next/navigation";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
-import { setLenis, setRideCanceller } from "@/lib/scroll";
+import { setLenis, setRideCanceller, setRideTo } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
-import { scrollRuns, STEP, workStops, type ScrollStop } from "@/lib/stops";
+import { scrollRuns, workStops, type ScrollStop } from "@/lib/stops";
+import { onward, QUEUED, ride, T } from "@/lib/motion";
 
 // One Lenis instance for the whole site, ticking with GSAP so ScrollTriggers stay in step.
 export function SmoothScroll() {
@@ -21,103 +22,133 @@ export function SmoothScroll() {
       window.addEventListener("scroll", onScroll, { passive: true });
       return () => window.removeEventListener("scroll", onScroll);
     }
-    /* From the DIZRUPT screen to the last billboard the scroll goes stop to stop: one gesture and
-       you are carried to the next stop at the ride's own pace, however hard or soft the gesture was.
-       Anything more while it plays (a trackpad's momentum, a second flick) is ignored, so the
-       animation between two stops always plays out whole. Past the last billboard the scroll is free. */
-    /* A ride is under way from one stop to another: nothing sent while it plays (its own momentum, a
-       second swipe, a double scroll) changes it. */
-    let glide: { stops: ScrollStop[]; i: number; dir: number; chain: boolean } | null = null;
+    /* From the DIZRUPT screen to the contact the scroll goes stop to stop: one gesture and you are
+       carried to the next stop at the ride's own pace (lib/motion.ts), however hard or soft the
+       gesture was. A ride's own momentum (a trackpad's tail) is ignored, so the animation between two
+       stops always plays out whole. A second, real gesture while it plays isn't thrown away: one more
+       stop the same way is queued for when it lands; a gesture the other way turns the ride round. */
+    let glide: { stops: ScrollStop[]; i: number; dir: number } | null = null;
+    let queued = false; // one more stop the same way, once this ride lands
     let landedAt = 0; // when the last ride came to rest: its momentum is still arriving for a moment
-    let busyAt = 0; // when a gesture first found the stop's scene still playing (0: it wasn't)
     let seq = 0;
     let lastEvent = 0, lastAbs = 0, peak = 0, trough = 0, freshAt = 0, rising = 0;
     let push = 0, pushed = false; // how far the current gesture has gone, and whether it has moved a stop yet
+    let sure = false; // the current gesture is unmistakably new (see gesture)
     const TOL = 40;
     // a gesture has to mean it: a brush of the trackpad isn't a ride (a wheel's notch is past this at once)
     const INTENT = 60;
-    // the wheel's deltas arrive here already scaled by this (a notch of 100–120 reads as 70–84)
-    const WHEEL = 0.7;
-    const sine = (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * t); // from rest: no rush in the middle
-    const onward = (t: number) => 1 - (1 - t) * (1 - t); // already moving: carry on, then settle
-    /* the train between stations: a short pull away, a steady run, a short pull in — a sine spends
-       most of the ride getting going and slowing down. `ramp` is the share of the ride each end takes. */
-    const train = (ramp: number) => {
-      const vmax = 1 / (1 - ramp);
-      return (t: number) =>
-        t < ramp ? (vmax * t * t) / (2 * ramp) : t > 1 - ramp ? 1 - (vmax * (1 - t) * (1 - t)) / (2 * ramp) : vmax * (t - ramp / 2);
+    // a ride's momentum, still arriving after it lands, for this long (a new gesture is told apart by
+    // its rising delta before then: see isNew)
+    const SETTLE = 400;
+    const busy = () => Object.values(signals.busy).some(Boolean);
+    /* the stop's own scene is still playing: it plays out whole first (with a ceiling, so a scene that
+       never says it has finished can't hold the page for good), then the ride. Only the latest waits. */
+    let waiting: (() => void) | null = null;
+    let pending: { stops: ScrollStop[]; i: number; dir: number } | null = null; // the ride waiting on it
+    const afterScene = (fn: () => void) => {
+      if (waiting) gsap.ticker.remove(waiting);
+      const t0 = performance.now(), token = seq;
+      const wait = () => {
+        if (token !== seq) return void (gsap.ticker.remove(wait), (waiting = null), (pending = null));
+        if (busy() && performance.now() - t0 < T.hold * 1000) return;
+        gsap.ticker.remove(wait);
+        waiting = null;
+        pending = null;
+        fn();
+      };
+      waiting = wait;
+      gsap.ticker.add(wait);
     };
-    const TRAIN_RAMP = 0.16 * STEP; // seconds to pull away, and to pull in
-    const TRAIN_SPEED = 1.2; // the steady run, against the stop's own pace (the ends keep theirs)
-    const go = (stops: ScrollStop[], i: number, moving: boolean) => {
+    const go = (stops: ScrollStop[], i: number, how: { queued?: boolean; turning?: boolean } = {}) => {
       const y = window.scrollY, to = stops[i];
       const dir = to.y > y ? 1 : -1;
       const leg = dir > 0 ? to : stops[i + 1] ?? to; // the leg being ridden, whichever way
       const from = dir > 0 ? stops[i - 1] : stops[i + 1];
       // the whole leg takes its full time; from partway along it, that part of it
       const part = from ? Math.min(1, Math.abs(to.y - y) / Math.max(1, Math.abs(to.y - from.y))) : 1;
+      const r = ride(leg.kind, dir as 1 | -1);
+      const duration = Math.max(T.micro * 4, r.duration * part * (how.queued ? QUEUED : 1));
       // the train drives itself there now, rather than when the page catches up
       signals.rideTarget = to.train;
-      // chain: this ride runs through a waypoint (the hand-over): it plays out whole, nothing extends it
-      glide = { stops, i, dir, chain: !!to.pass || !!glide?.chain };
+      signals.rideEnd = performance.now() + duration * 1000;
+      glide = { stops, i, dir };
       const token = ++seq;
-      busyAt = 0;
-      // station to station (both ends are the train's): ridden as a train runs, the run quicker
-      const byTrain = !moving && to.train !== null && from?.train != null;
-      let duration = Math.max(1.2, leg.dur * part);
-      if (byTrain) duration = TRAIN_RAMP + (duration - TRAIN_RAMP) / TRAIN_SPEED;
       lenis.scrollTo(to.y, {
         duration,
-        easing: moving ? onward : byTrain ? train(Math.min(0.5, TRAIN_RAMP / duration)) : sine,
+        // turned round mid-ride it is already moving: carry on, then settle
+        easing: how.turning ? onward : r.ease,
         lock: true,
         force: true,
         onComplete: () => {
           if (token !== seq) return;
-          // a waypoint: carry on through it to the next stop the same way, from rest at its own pace
-          const next = stops[i + dir];
-          if (to.pass && next) return go(stops, i + dir, false);
           landedAt = performance.now();
           glide = null;
+          signals.rideEnd = 0;
+          if (!queued) return;
+          queued = false;
+          // the queued stop: as soon as this stop's own scene has finished, the next ride, a little quicker
+          if (stops[i + dir]) afterScene(() => go(stops, i + dir, { queued: true }));
         },
       });
     };
-    /* true: the gesture is the ride's (started one, sent it on, or swallowed); false: scroll freely.
-       fresh: a new gesture, not the tail of the last one. A trackpad's momentum keeps sending
-       events for a second or more after the swipe, so a pause alone can't tell them apart. */
-    const ride = (dir: number, fresh: boolean) => {
-      // a ride under way plays out whole: a second swipe (or a double scroll) while it runs is ignored,
-      // so one gesture is always exactly one stop
-      if (glide) return true;
+    /* true: the gesture is the ride's (started one, queued one, turned one round, or swallowed);
+       false: scroll freely. fresh: a new gesture, not the tail of the last one. A trackpad's momentum
+       keeps sending events for a second or more after the swipe, so a pause alone can't tell them apart. */
+    // sure: unmistakably a new gesture (a key, a wheel's notch, a swipe after a pause), not momentum
+    const gesture = (dir: number, fresh: boolean, sure = false) => {
+      // a ride waiting on the scene counts as under way: a second gesture queues behind it, the other
+      // way calls it off
+      if (pending && !glide) {
+        if (!fresh) return true;
+        if (dir === pending.dir) queued = true;
+        else {
+          seq++;
+          queued = false;
+        }
+        return true;
+      }
+      if (glide) {
+        if (!fresh) return true; // its own momentum
+        if (dir === glide.dir) queued = true; // one more stop, never more than one
+        else {
+          // the other way: back to where it came from, from where it is
+          queued = false;
+          const back = glide.i - glide.dir;
+          if (glide.stops[back]) go(glide.stops, back, { turning: true });
+        }
+        return true;
+      }
       const y = window.scrollY;
-      // the run of stops this point is in: the landing and the train (a phone: the landing, then the
-      // bridge and AI, with the cards free between them), or the work's tower
-      // (two runs can share a stop, the AI statement: take the one there's somewhere to go in, this way)
+      // the run of stops this point is in: from the landing to AI & Automation, or the work's tower
+      // (two runs share a stop, the AI statement: take the one there's somewhere to go in, this way)
       const stops = [...scrollRuns(), workStops()].find(
         (g) => g.length > 1 && y >= g[0].y - TOL && y <= g[g.length - 1].y + TOL && (dir > 0 ? y < g[g.length - 1].y - TOL : y > g[0].y + TOL),
       );
       if (!stops) { signals.rideTarget = null; return false; } // off the end of a run: free again
       if (!fresh) return true; // one gesture, one stop
-      // just landed: what arrives now is the last gesture's momentum, however it looks
-      if (performance.now() - landedAt < 1000) return true;
-      // the stop's own scene is still playing: it plays out whole before the next one starts
-      // (with a ceiling, so a scene that never says it has finished can't hold the page for good)
-      if (!Object.values(signals.busy).some(Boolean)) busyAt = 0;
-      else if (!busyAt) busyAt = performance.now();
-      if (busyAt && performance.now() - busyAt < 12000) return true;
+      // just landed: what arrives now is the last gesture's momentum, unless it can't be
+      if (!sure && performance.now() - landedAt < SETTLE) return true;
       const i = dir > 0 ? stops.findIndex((st) => st.y > y + TOL) : stops.findLastIndex((st) => st.y < y - TOL);
       if (i < 0) return false;
-      go(stops, i, false); // (onComplete carries it on through any waypoint)
+      // the stop's own scene still playing: the gesture isn't lost, the ride waits for it to finish
+      if (busy()) {
+        pending = { stops, i, dir };
+        afterScene(() => go(stops, i));
+      } else go(stops, i);
       return true;
     };
     const lenis = new Lenis({
-      lerp: 0.085, smoothWheel: true, syncTouch: false,
-      wheelMultiplier: WHEEL, // where the scroll is free, it goes a little less far for each turn of the wheel
+      // where the scroll is free (a case page, past the contact) it moves as the rides do: a wheel's
+      // deltas as they come, eased a little
+      lerp: 0.1, smoothWheel: true, syncTouch: false, wheelMultiplier: 1,
       // return false to take the gesture away from Lenis (and the browser: a swipe would scroll natively)
       virtualScroll: (d) => {
         const take = () => {
           if (d.event.cancelable) d.event.preventDefault();
           return false;
         };
+        // a finger going across, not down (the phone's cards, swiped): theirs, untouched
+        if (d.event.type.startsWith("touch") && Math.abs(d.deltaX) > Math.abs(d.deltaY)) return true;
         const now = performance.now(), abs = Math.abs(d.deltaY);
         /* new: after a pause, or the delta climbing clearly back up out of a momentum that was dying.
            A real trackpad swipe made during the last one's momentum starts small and climbs in gentle
@@ -128,11 +159,14 @@ export function SmoothScroll() {
            the delta rising again (momentum only ever falls), a mouse wheel's notch, or a gap long enough
            that the last gesture is over. */
         const gap = now - lastEvent;
-        const pause = gap > 900 || (gap > 220 && (abs > lastAbs || (abs >= 90 * WHEEL && abs >= lastAbs)));
+        const notch = gap > 220 && abs >= 90 && abs >= lastAbs;
+        const pause = gap > 900 || notch || (gap > 220 && abs > lastAbs);
         const dying = trough < peak * 0.6; // the last gesture had been falling away
         rising = abs > lastAbs ? rising + 1 : 0;
-        const isNew = pause || (dying && rising >= 3 && abs >= trough * 2.2 + 6 && now - freshAt > 220);
-        if (isNew) { peak = abs; trough = abs; freshAt = now; push = 0; pushed = false; }
+        const climbing = dying && rising >= 3 && abs >= trough * 2.2 + 6 && now - freshAt > 220;
+        const isNew = pause || climbing;
+        // sure: unmistakably a new gesture, not momentum, even straight after a landing
+        if (isNew) { peak = abs; trough = abs; freshAt = now; push = 0; pushed = false; sure = notch || gap > 900 || climbing; }
         else { peak = Math.max(peak, abs); trough = abs > peak * 0.98 ? abs : Math.min(trough, abs); }
         lastEvent = now;
         lastAbs = abs;
@@ -140,9 +174,9 @@ export function SmoothScroll() {
         push += abs;
         const fresh = !pushed && push >= INTENT;
         if (fresh) pushed = true;
-        if (glide) { if (d.deltaY !== 0) ride(Math.sign(d.deltaY), fresh); return take(); }
+        if (glide) { if (d.deltaY !== 0) gesture(Math.sign(d.deltaY), fresh, fresh && sure); return take(); }
         if (!useStore.getState().loaded || d.deltaY === 0) return true;
-        if (ride(Math.sign(d.deltaY), fresh)) return take();
+        if (gesture(Math.sign(d.deltaY), fresh, fresh && sure)) return take();
         signals.rideTarget = null;
         return true;
       },
@@ -151,18 +185,30 @@ export function SmoothScroll() {
       // → and ↓ ride forward to the next stop, ← and ↑ back to the last
       if (e.metaKey || e.ctrlKey || e.altKey || useStore.getState().menuOpen || useStore.getState().macOpen) return;
       // a focused control keeps its own keys: Space presses a button, arrows move a slider or a caret
-      const t = e.target as HTMLElement | null;
+      const t = e.target instanceof Element ? e.target : null;
       if (t?.closest("input, textarea, select, [contenteditable]") || (e.key === " " && t?.closest("button, a, [role=button]"))) return;
       const dir = ["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key) ? -1 : 0;
-      if (dir && ride(dir, !e.repeat)) e.preventDefault();
+      // (a key held down repeats: one stop per press, never faster than the ride)
+      if (dir && gesture(dir, !e.repeat, !e.repeat)) e.preventDefault();
     };
     addEventListener("keydown", onKey);
     setLenis(lenis);
+    // sent to a stop by the page (a step picked): ridden there like a gesture, at that ride's pace
+    setRideTo((y) => {
+      const stops = [...scrollRuns(), workStops()].find((g) => g.some((st) => Math.abs(st.y - y) < TOL));
+      const i = stops?.findIndex((st) => Math.abs(st.y - y) < TOL) ?? -1;
+      if (!stops || i < 0) return false;
+      queued = false;
+      go(stops, i);
+      return true;
+    });
     // sent somewhere else mid-ride (the nav, a button): the ride is over, the train follows the scroll
     setRideCanceller(() => {
-      seq++;
+      seq++; // (and with it, any ride waiting on a scene)
       glide = null;
+      queued = false;
       landedAt = 0;
+      signals.rideEnd = 0;
       signals.rideTarget = null;
     });
     lenis.on("scroll", (l: Lenis) => {
@@ -176,6 +222,7 @@ export function SmoothScroll() {
       gsap.ticker.remove(raf);
       removeEventListener("keydown", onKey);
       setRideCanceller(null);
+      setRideTo(null);
       lenis.destroy();
       setLenis(null);
     };

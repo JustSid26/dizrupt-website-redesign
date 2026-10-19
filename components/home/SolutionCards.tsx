@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
+import { T } from "@/lib/motion";
 import { useStore } from "@/lib/store";
 import { SOLUTIONS, solutionSlug } from "@/content/solutions";
 import { useSection } from "@/components/home/useSection";
@@ -60,7 +61,7 @@ export function SolutionCards() {
     const el = cards.current[active];
     if (!el || reduce) return;
     el.classList.add("glitching");
-    const id = setTimeout(() => el.classList.remove("glitching"), 160);
+    const id = setTimeout(() => el.classList.remove("glitching"), T.micro * 1000);
     return () => clearTimeout(id);
   }, [active, reduce]);
 

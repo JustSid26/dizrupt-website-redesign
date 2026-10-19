@@ -33,6 +33,7 @@ export const signals = {
   // the billboard the train is standing at, on screen (the engine writes it; Solutions puts a link on it)
   billboardHit: { x: 0, y: 0, w: 0, h: 0, on: false, index: -1 },
   rideTarget: null as number | null, // the stop a swipe sent the train to (null: follow the scroll)
+  rideEnd: 0, // when the ride under way lands (performance.now ms; 0: none): a stop's own animation ends with it
   rideS: 0, // where the train actually is (it drives itself towards trainS)
   // the social skyscrapers' logos on screen at contact (the engine writes them, SocialTowers links them)
   socials: Array.from({ length: 5 }, () => ({ x: 0, y: 0, w: 0, h: 0, on: false })),

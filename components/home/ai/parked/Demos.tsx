@@ -1,6 +1,7 @@
 "use client";
 
-/* PARKED: not used on the site right now (kept for later).
+/* PARKED: not used on the site right now (kept for later). Its timings are its own miniatures' and
+   predate the tempo (lib/motion.ts): move them onto it if it comes back.
    The four service demonstrations for the AI section: Lead Engine, Payment Recon, PostStack and
    Try-On, each a small working miniature played when its service comes up. Their styles are in
    ./demos.css (not loaded anywhere yet).

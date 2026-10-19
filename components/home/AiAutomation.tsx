@@ -7,6 +7,7 @@ import { useStore } from "@/lib/store";
 import { useSection } from "@/components/home/useSection";
 import { TRANSITIONS } from "@/lib/engine/ai/transition";
 import { AI_CHAPTERS } from "@/lib/aiStops";
+import { EASE, T } from "@/lib/motion";
 import { AiNetwork } from "@/components/home/ai/AiNetwork";
 
 /* AI & Automation: not a seventh solution but its own world. Past the last billboard the page loses
@@ -83,8 +84,9 @@ function Decode({ text, on, reduce }: { text: string; on: boolean; reduce: boole
   useEffect(() => {
     if (!on || reduce) return void setOut(text);
     let raf = 0;
-    const start = performance.now() + 120;
-    const dur = 380 + text.length * 30;
+    // two staggers in, it resolves a letter at a time (30ms each: a longer title takes longer)
+    const start = performance.now() + T.stagger * 2 * 1000;
+    const dur = T.uiOut * 1000 + text.length * 30;
     const step = (now: number) => {
       const t = (now - start) / dur;
       if (t >= 1) return void setOut(text);
@@ -131,19 +133,21 @@ export function AiAutomation() {
     const play = (to: 0 | 1) => {
       tween.current?.kill();
       const ai = signals.ai;
-      const T = TRANSITIONS[ai.mode] ?? TRANSITIONS[0];
+      const TR = TRANSITIONS[ai.mode] ?? TRANSITIONS[0];
       if (reduceRef.current) {
-        ai.mix = to;
+        // reduced motion: no glitch, a quick crossfade
+        tween.current = gsap.to(ai, { mix: to, duration: T.reduced, ease: EASE.inOut });
         return;
       }
-      tween.current = gsap.to(ai, { mix: to, duration: T.duration * Math.abs(to - ai.mix), ease: "none" });
+      tween.current = gsap.to(ai, { mix: to, duration: TR.duration * Math.abs(to - ai.mix), ease: EASE.handover });
     };
     signals.ai.mode = 0; // signal loss, both ways
     const el = section.current!;
     const sts = [
-      // build the world well before it's needed, so the hand-over doesn't hitch
-      ScrollTrigger.create({ trigger: el, start: "top bottom+=250%", onEnter: () => (signals.ai.warm = true) }),
-      ScrollTrigger.create({ trigger: el, start: "top 60%", onEnter: () => play(1), onLeaveBack: () => play(0) }),
+      // build the world well before it's needed, so the hand-over doesn't hitch; well past it, it may go
+      ScrollTrigger.create({ trigger: el, start: "top bottom+=250%", end: "bottom top-=150%", onToggle: (self) => void (signals.ai.warm = self.isActive) }),
+      // (early enough in the ride from the bridge that the hand-over is done as the page lands)
+      ScrollTrigger.create({ trigger: el, start: "top 80%", onEnter: () => play(1), onLeaveBack: () => play(0) }),
       ScrollTrigger.create({ trigger: el, start: "bottom bottom", onEnter: () => play(0), onLeaveBack: () => play(1) }),
       ScrollTrigger.create({
         trigger: el,
@@ -153,7 +157,8 @@ export function AiAutomation() {
         onUpdate: (self) => void (signals.ai.p = self.progress),
       }),
     ];
-    if (sts[0].isActive || el.getBoundingClientRect().top < innerHeight * 3.5) signals.ai.warm = true;
+    const r = el.getBoundingClientRect();
+    signals.ai.warm = sts[0].isActive || (r.top < innerHeight * 3.5 && r.bottom > -innerHeight * 1.5);
     // arriving mid-section (a reload, the menu): be there already
     if (sts[1].progress > 0 && !sts[2].progress) signals.ai.mix = 1;
     return () => {
@@ -189,7 +194,8 @@ export function AiAutomation() {
     };
   }, []);
 
-  const id = AI_CHAPTERS[chapter].id;
+  // the words up: the three stages of how we do it share one page of them
+  const id = AI_CHAPTERS[chapter].view;
   const caption = ([key, c]: [string, Caption], i: number) => (
     <article key={key} className={`ai-ch${key !== "core" ? " is-compact" : ""} is-${c.place}`} data-on={key === id || undefined} aria-hidden={key !== id}>
       <p className="ai-kicker">

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { T } from '@/lib/motion';
 
 /* =========================================================
    The hand-over between the city and the AI world, done on the
@@ -21,10 +22,10 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
                     AI world boots up out of the dark
    ========================================================= */
 export const TRANSITIONS = [
-  { id: 'signal', name: 'Signal loss', duration: 2.0 },
-  { id: 'scan', name: 'Neural scan', duration: 2.0 },
-  { id: 'ascii', name: 'ASCII decode', duration: 2.3 },
-  { id: 'crt', name: 'CRT reboot', duration: 2.6 },
+  { id: 'signal', name: 'Signal loss', duration: T.handover },
+  { id: 'scan', name: 'Neural scan', duration: T.handover },
+  { id: 'ascii', name: 'ASCII decode', duration: T.handover },
+  { id: 'crt', name: 'CRT reboot', duration: T.handover },
 ] as const;
 
 function glyphAtlas() {

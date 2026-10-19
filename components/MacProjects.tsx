@@ -5,6 +5,7 @@
 // file that plays in its own window.
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "@/lib/gsap";
+import { EASE, T } from "@/lib/motion";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { TECH_PROJECTS, type TechProject } from "@/content/techProjects";
@@ -49,12 +50,12 @@ export function MacProjects() {
       setVisible(true);
       requestAnimationFrame(() => {
         if (reduce) return void gsap.set(el, { opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 });
-        gsap.fromTo(el, { opacity: 0.2, ...from() }, { opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1, duration: 0.75, ease: "expo.site" });
+        gsap.fromTo(el, { opacity: 0.2, ...from() }, { opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1, duration: T.ui, ease: EASE.in });
       });
     } else if (visible) {
       setPlaying(null);
       if (reduce) return void setVisible(false);
-      gsap.to(el, { opacity: 0, ...from(), duration: 0.5, ease: "power3.in", onComplete: () => setVisible(false) });
+      gsap.to(el, { opacity: 0, ...from(), duration: T.uiOut, ease: EASE.out, onComplete: () => setVisible(false) });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -84,8 +85,8 @@ export function MacProjects() {
 
   useEffect(() => {
     if (stage !== "window" || !win.current || reduce) return;
-    gsap.fromTo(win.current, { opacity: 0, scale: 0.92, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.55, ease: "expo.site" });
-    gsap.fromTo(root.current!.querySelectorAll(".mac-file"), { opacity: 0, y: 14, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, stagger: 0.05, delay: 0.15, ease: "back.out(1.6)" });
+    gsap.fromTo(win.current, { opacity: 0, scale: 0.92, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: T.ui, ease: EASE.in });
+    gsap.fromTo(root.current!.querySelectorAll(".mac-file"), { opacity: 0, y: 14, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: T.ui, stagger: T.stagger, delay: T.stagger * 3, ease: EASE.in });
   }, [stage, reduce]);
 
   useEffect(() => {

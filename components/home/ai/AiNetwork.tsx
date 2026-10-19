@@ -5,13 +5,16 @@ import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { AI_CHAPTERS, AI_EXIT_FROM, AI_STOPS } from "@/lib/aiStops";
+import { BACK, EASE, T } from "@/lib/motion";
+import { rideToStop } from "@/lib/scroll";
 import { PANEL_VIEWS } from "@/components/home/ai/Panels";
 import { Matrix } from "@/components/home/ai/Matrix";
 import { GROUPS, linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
 
-const [, WHAT, HOW, SIMPLE] = AI_STOPS;
-/** Seconds the animation takes per unit of the section's 0..1, where a beat doesn't set its own. */
-const PACE = 20;
+const at = (id: string) => AI_STOPS[AI_CHAPTERS.findIndex((c) => c.id === id)];
+const WHAT = at("what"), HOW = at("implement"), SIMPLE = at("simple");
+/** The three stages of how we do it, as beats (indices into AI_STOPS). */
+const STAGE_BEATS = ["audit", "evaluate", "implement"].map((id) => AI_CHAPTERS.findIndex((c) => c.id === id));
 /** How far past a beat the scroll has to go, as a share of the way to the next, to set it playing. */
 const NUDGE = 0.1;
 
@@ -71,6 +74,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
   onBeatRef.current = onBeat;
   const root = useRef<HTMLDivElement>(null);
   const hub = useRef<HTMLDivElement>(null);
+  const chip = useRef<HTMLDivElement>(null); // a phone's chip: drawn here, there is no AI world behind it
   const stage = useRef<HTMLDivElement>(null);
   const tall = useTall();
   const places = placesFor(tall);
@@ -84,22 +88,29 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
     const ctx = gsap.context(() => {
       const q = gsap.utils.selector(el);
       const panels = q<HTMLElement>(".ain-panel");
+      // (linear inside: the play head that drives it carries the ease, lib/motion.ts)
       const tl = gsap.timeline({ paused: true, defaults: { ease: "none" } });
-      // each beat is placed as a fraction of the ride it plays in, so the stops can move
+      /* each beat is placed as a fraction of the ride it plays in, so the stops can move (the network's
+         own choreography: its scan, its report, its wiring keep those shares of the beat). Every beat
+         plays in one beat's time (lib/motion.ts), so a span of the timeline is so many seconds: s1, s2
+         and s3 turn seconds into the timeline's units in what we do, how (its three stages), and made
+         simple, so words arrive and stagger at the site's own tempo however long the span */
       const g1 = WHAT, g2 = HOW - WHAT, g3 = SIMPLE - HOW;
       const in1 = (f: number) => g1 * f, in2 = (f: number) => WHAT + g2 * f, in3 = (f: number) => HOW + g3 * f;
+      const s1 = (sec: number) => (sec * g1) / T.beat, s2 = (sec: number) => (sec * g2) / (T.beat * STAGE_BEATS.length);
       const hide = { strokeDashoffset: 1, autoAlpha: 0 }, draw = { strokeDashoffset: 0, autoAlpha: 1 };
 
       // What we do: said plainly beside the chip as it powers on and steps aside, a line at a time
       tl.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: g1 * 0.1 }, in1(0.55));
-      tl.fromTo(q(".ai-say-w > span"), { yPercent: 110 }, { yPercent: 0, duration: g1 * 0.2, stagger: g1 * 0.02, ease: "power3.out" }, in1(0.62));
-      tl.fromTo(q(".ai-say-rest"), { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: g1 * 0.2, stagger: g1 * 0.05, ease: "power2.out" }, in1(0.72));
+      // (the words start at 55–60% of the ride and are read by the time it lands)
+      tl.fromTo(q(".ai-say-w > span"), { yPercent: 110 }, { yPercent: 0, duration: s1(T.ui), stagger: s1(T.stagger), ease: EASE.in }, in1(0.55));
+      tl.fromTo(q(".ai-say-rest"), { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: s1(T.ui), stagger: s1(T.stagger), ease: EASE.in }, in1(0.6));
 
       /* How we do it, one stage after another on one gesture: the statement makes way and the business
          comes up round the core */
-      tl.to(q(".ai-say"), { autoAlpha: 0, y: -24, duration: g2 * 0.05 }, in2(0));
-      tl.fromTo(hub.current, { autoAlpha: 0, scale: 0.6 }, { autoAlpha: 1, scale: 1, duration: g2 * 0.06, ease: "power2.out" }, in2(0.02));
-      panels.forEach((p, i) => tl.fromTo(p, { "--e": 0 }, { "--e": 1, duration: g2 * 0.08, ease: "power2.out" }, in2(0.05 + i * 0.012)));
+      tl.to(q(".ai-say"), { autoAlpha: 0, y: -24, duration: s2(T.uiOut), ease: EASE.out }, in2(0));
+      tl.fromTo(hub.current, { autoAlpha: 0, scale: 0.6 }, { autoAlpha: 1, scale: 1, duration: g2 * 0.06, ease: EASE.in }, in2(0.02));
+      panels.forEach((p, i) => tl.fromTo(p, { "--e": 0 }, { "--e": 1, duration: s2(T.ui), ease: EASE.in }, in2(0.05) + i * s2(T.stagger)));
       // which stage the text is on
       tl.fromTo(sec, { "--h0": 0 }, { "--h0": 1, duration: g2 * 0.04 }, in2(0.04));
       tl.to(sec, { "--h0": 0, duration: g2 * 0.04 }, in2(0.36));
@@ -110,82 +121,74 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       // 01 Audit: a scan sweeps it and flags each panel as it passes; the hand-offs are traced, and where they break
       const span = scanSpan(tall);
       tl.fromTo(el, { "--scanO": 0 }, { "--scanO": 1, duration: g2 * 0.02 }, in2(0.12));
-      tl.fromTo(el, { "--scan": 0 }, { "--scan": 1, duration: g2 * 0.18, ease: "power1.inOut" }, in2(0.13));
+      tl.fromTo(el, { "--scan": 0 }, { "--scan": 1, duration: g2 * 0.18, ease: EASE.inOut }, in2(0.13));
       tl.to(el, { "--scanO": 0, duration: g2 * 0.02 }, in2(0.31));
       panels.forEach((p) => {
         const at = (places[p.dataset.id as PanelId].x - span.from) / (span.to - span.from);
         tl.fromTo(p, { "--f": 0 }, { "--f": 1, duration: g2 * 0.03 }, in2(0.13 + 0.18 * Math.min(1, Math.max(0, at))));
       });
-      tl.fromTo(q(".ain-map path"), hide, { ...draw, duration: g2 * 0.06, stagger: g2 * 0.012 }, in2(0.17));
+      tl.fromTo(q(".ain-map path"), hide, { ...draw, duration: g2 * 0.06, stagger: s2(T.stagger) }, in2(0.17));
       tl.fromTo(q(".ain-faults"), { autoAlpha: 0 }, { autoAlpha: 1, duration: g2 * 0.03 }, in2(0.27));
-      tl.fromTo(q(".ain-thread path"), hide, { ...draw, duration: g2 * 0.05, stagger: g2 * 0.02 }, in2(0.29));
+      tl.fromTo(q(".ain-thread path"), hide, { ...draw, duration: g2 * 0.05, stagger: s2(T.stagger) }, in2(0.29));
 
       // 02 Evaluate: the map steps back and the report rises over it; the workflows settle into their ranking
-      tl.fromTo(el, { "--v": 0 }, { "--v": 1, duration: g2 * 0.07, ease: "power2.inOut" }, in2(0.37));
-      tl.fromTo(el, { "--mx": 0 }, { "--mx": 1, duration: g2 * 0.07, ease: "power2.out" }, in2(0.4));
+      tl.fromTo(el, { "--v": 0 }, { "--v": 1, duration: g2 * 0.07, ease: EASE.inOut }, in2(0.37));
+      tl.fromTo(el, { "--mx": 0 }, { "--mx": 1, duration: g2 * 0.07, ease: EASE.in }, in2(0.4));
       q<HTMLElement>(".aim-row").forEach((r) => {
         const found = Number(r.style.getPropertyValue("--from")) || 0;
-        tl.fromTo(r, { "--in": 0 }, { "--in": 1, duration: g2 * 0.04, ease: "power2.out" }, in2(0.44 + found * 0.012));
-        tl.fromTo(r, { "--m": 0 }, { "--m": 1, duration: g2 * 0.06 }, in2(0.46 + found * 0.012));
+        tl.fromTo(r, { "--in": 0 }, { "--in": 1, duration: s2(T.ui), ease: EASE.in }, in2(0.44) + found * s2(T.stagger));
+        tl.fromTo(r, { "--m": 0 }, { "--m": 1, duration: g2 * 0.06 }, in2(0.46) + found * s2(T.stagger));
       });
-      tl.fromTo(el, { "--rk": 0 }, { "--rk": 1, duration: g2 * 0.08, ease: "power2.inOut" }, in2(0.56));
+      tl.fromTo(el, { "--rk": 0 }, { "--rk": 1, duration: g2 * 0.08, ease: EASE.inOut }, in2(0.56));
 
       // 03 Implement: the report gives way, the workflows worth it are wired to the core and set running
-      tl.to(el, { "--mx": 0, duration: g2 * 0.05, ease: "power2.in" }, in2(0.66));
-      tl.to(el, { "--v": 0, duration: g2 * 0.07, ease: "power2.inOut" }, in2(0.69));
+      tl.to(el, { "--mx": 0, duration: g2 * 0.05, ease: EASE.out }, in2(0.66));
+      tl.to(el, { "--v": 0, duration: g2 * 0.07, ease: EASE.inOut }, in2(0.69));
       tl.to(q(".ain-map, .ain-faults"), { autoAlpha: 0, duration: g2 * 0.04 }, in2(0.72));
-      tl.fromTo(q(".ain-link"), hide, { ...draw, duration: g2 * 0.06, stagger: g2 * 0.01 }, in2(0.74));
+      tl.fromTo(q(".ain-link"), hide, { ...draw, duration: g2 * 0.06, stagger: s2(T.stagger) }, in2(0.74));
       tl.fromTo(hub.current, { "--live": 0 }, { "--live": 1, duration: g2 * 0.04 }, in2(0.78));
       tl.fromTo(el, { "--tl": 0 }, { "--tl": 1, duration: g2 * 0.04 }, in2(0.8));
       tl.fromTo(q(".ain-flows"), { autoAlpha: 0 }, { autoAlpha: 1, duration: g2 * 0.03 }, in2(0.83));
       panels.forEach((p) => tl.fromTo(p, { "--a": 0 }, { "--a": 1, duration: g2 * 0.04 }, in2(0.8 + DONE.indexOf(p.dataset.id as PanelId) * 0.022)));
 
       // Made simple: the stages' tags give way to the two sides, framed and named, running
-      tl.fromTo(el, { "--sm": 0 }, { "--sm": 1, duration: g3 * 0.35, ease: "power2.inOut" }, in3(0.1));
+      tl.fromTo(el, { "--sm": 0 }, { "--sm": 1, duration: g3 * 0.35, ease: EASE.inOut }, in3(0.1));
 
       // and all of it gives way, as the hand-back to the work begins
-      tl.to(el, { autoAlpha: 0, duration: 0.05 }, AI_EXIT_FROM + 0.01);
+      tl.to(el, { autoAlpha: 0, duration: 0.05 }, AI_EXIT_FROM + 0.01); // (timeline units, not seconds: the scroll's own past the last beat)
       tl.set({}, {}, 1);
-      /* Not scrubbed: the scroll picks the beat, and the animation plays there in time, at its own
-         pace, however far or fast the scroll went. A nudge past a beat plays the whole of the next
-         one; back past it, the same in reverse. Past the last it hands over to the scroll again:
-         the way out to the work is a ride at its own pace already (lib/stops.ts). The AI world reads
-         the same clock (signals.ai.play), so the chip and the camera keep in step with the page. */
+      /* Not scrubbed: the scroll picks the beat, and the animation plays there in time. A gesture's
+         ride to a beat and the beat itself share one clock: the beat plays for as long as the page has
+         left to ride (signals.rideEnd), so the two land together; with no ride under way (a reload, a
+         nav jump), a beat's own time. Back past a beat, the same in reverse, quicker. Past the last it
+         hands over to the scroll again: the way out to the work is a ride already (lib/stops.ts). The
+         AI world reads the same clock (signals.ai.play), so the chip and the camera keep in step. */
       const head = { t: 0 };
       let k = 0, lastP = 0, tw: gsap.core.Timeline | null = null;
-      let held = false; // parked on a step that was picked, not on the beat: the scroll leaves it be until it moves on
       const S = AI_STOPS, n = S.length;
       const apply = () => {
         tl.time(head.t);
         signals.ai.play = head.t;
       };
-      /* to beat `to`, through every beat on the way, each at its own pace; a beat that holds is held
-         a moment on the way through, so it reads */
-      // quick: leaving a picked step, the first leg (the rest of how we do it, played already) goes by quickly
-      const playTo = (to: number, quick = false) => {
+      // to beat `to`, through every beat on the way
+      const playTo = (to: number) => {
         tw?.kill();
-        if (reduceRef.current) {
-          head.t = S[to];
-          apply();
-          return onBeatRef.current(to);
-        }
         const fwd = S[to] >= head.t;
         const legs: number[] = [];
         if (fwd) for (let i = 0; i <= to; i++) { if (S[i] > head.t + 1e-4) legs.push(i); }
         else for (let i = n - 1; i >= to; i--) { if (S[i] < head.t - 1e-4) legs.push(i); }
         if (!legs.length) legs.push(to);
         const seq = gsap.timeline({ onUpdate: apply });
+        // the page's ride, if one is under way: the beats share what is left of it
+        const left = (signals.rideEnd - performance.now()) / 1000;
         let from = head.t;
-        legs.forEach((i, j) => {
+        legs.forEach((i) => {
           seq.call(() => onBeatRef.current(i));
-          // a beat's own length is for the whole ride into it (or back out of it): from partway, that part
-          const leg = fwd ? AI_CHAPTERS[i] : AI_CHAPTERS[i + 1];
           const whole = fwd ? S[i] - (S[i - 1] ?? 0) : (S[i + 1] ?? 1) - S[i];
           const part = Math.min(1, Math.abs(S[i] - from) / Math.max(1e-4, whole));
-          const dur = leg?.len ? leg.len * part : Math.abs(S[i] - from) * PACE;
-          seq.to(head, { t: S[i], duration: Math.max(0.6, quick && j === 0 ? Math.min(dur, 1.2) : dur), ease: "power1.inOut" });
-          const hold = AI_CHAPTERS[i].hold;
-          if (fwd && hold && j < legs.length - 1) seq.to({}, { duration: hold });
+          const own = T.beat * part * (fwd ? 1 : BACK);
+          const dur = reduceRef.current ? T.reduced : left > 0.2 ? left / legs.length : own;
+          seq.to(head, { t: S[i], duration: dur, ease: EASE.inOut });
           from = S[i];
         });
         tw = seq;
@@ -211,32 +214,17 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         // sent here by the nav: be at the beat at once rather than play every page on the way
         if (performance.now() < signals.navJumpUntil) {
           tw?.kill();
-          held = false;
           head.t = p > SIMPLE ? Math.min(1, p) : S[k];
           apply();
           if (k !== last) onBeatRef.current(k);
           return;
         }
-        const quick = held && k !== last;
-        if (k !== last) held = false;
-        if (k !== last || (!held && !tw?.isActive() && head.t !== S[k])) playTo(k, quick);
+        if (k !== last || (!tw?.isActive() && head.t !== S[k])) playTo(k);
       };
-      /* a step of how we do it, picked from the text: the network goes there (forward or back), at a
-         quicker pace than it plays on its own, and holds there until the scroll moves on. Each step's
-         place is where its picture is complete, just before the next begins. */
-      const STEP_AT = [0.345, 0.645, 1].map((f) => WHAT + (HOW - WHAT) * f);
+      /* a step of how we do it, picked from the text: the page rides to that stage's stop, and the
+         network plays there with it, as if it had been scrolled to */
       seek.current = (i: number) => {
-        if (k !== AI_STOPS.indexOf(HOW)) return;
-        tw?.kill();
-        held = true;
-        const to = STEP_AT[i];
-        if (reduceRef.current) {
-          head.t = to;
-          return apply();
-        }
-        const len = AI_CHAPTERS[AI_STOPS.indexOf(HOW)].len ?? 8;
-        const dur = Math.max(0.8, (Math.abs(to - head.t) / (HOW - WHAT)) * len * 0.55);
-        tw = gsap.timeline({ onUpdate: apply }).to(head, { t: to, duration: dur, ease: "power2.inOut" });
+        rideToStop(sec.offsetTop + (sec.offsetHeight - innerHeight) * S[STAGE_BEATS[i]]);
       };
       const st = ScrollTrigger.create({ trigger: sec, start: "top top", end: "bottom bottom", onUpdate: (self) => step(self.progress) });
       // while a beat plays, the scroll waits for it (SmoothScroll.tsx)
@@ -285,6 +273,10 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         el.style.setProperty("--ms", Math.min(0.6, height / 420).toFixed(3));
         f.lift = innerHeight / 2 - (room.top + height / 2);
         f.zoom = Math.min(1, Math.max(0.3, (height * 0.85) / (innerHeight * CHIP)));
+        // the chip in the middle of the stage: close up to begin with, then the hub the network hangs off
+        const cs = Math.min(innerWidth * 0.5, height * (sec.dataset.chapter === "core" ? 0.62 : 0.3));
+        Object.assign(signals.aiChip, { x: innerWidth / 2, y: room.top + height / 2, size: cs / 2 });
+        chip.current?.style.setProperty("--cs", `${cs.toFixed(1)}px`);
       } else if (room.top >= 0) {
         room.top = room.bottom = -1;
         st.style.top = st.style.height = "";
@@ -294,6 +286,8 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       }
       const c = signals.aiChip, r = st.getBoundingClientRect();
       h.style.translate = `${(c.x - r.left).toFixed(1)}px ${(c.y - r.top).toFixed(1)}px`;
+      const cp = chip.current?.offsetParent?.getBoundingClientRect();
+      if (cp) chip.current!.style.translate = `${(c.x - cp.left).toFixed(1)}px ${(c.y - cp.top).toFixed(1)}px`;
       el.style.setProperty("--sx", `${(c.x - r.left - r.width / 2).toFixed(1)}px`);
       el.style.setProperty("--sy", `${(c.y - r.top - r.height / 2).toFixed(1)}px`);
       h.style.setProperty("--r", `${Math.max(24, c.size * 1.5).toFixed(1)}px`);
@@ -308,6 +302,12 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
 
   const say = chapter === "what";
   return (
+    <>
+      {/* a phone's chip: beside the network, not in it, since it is up before the network is */}
+      <div ref={chip} className="ain-chip" aria-hidden>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/heart.png" alt="" />
+      </div>
     <div
       ref={root}
       className="ain"
@@ -420,5 +420,6 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         </ol>
       </div>
     </div>
+    </>
   );
 }

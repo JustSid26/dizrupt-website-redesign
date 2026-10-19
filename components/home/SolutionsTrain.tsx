@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
+import { EASE, T } from "@/lib/motion";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { SOLUTIONS, solutionSlug } from "@/content/solutions";
@@ -81,20 +82,21 @@ export function SolutionsTrain() {
     const dir = active > prev.current ? 1 : -1;
     prev.current = active;
     if (!to || from === to) return;
-    const d = reduce ? 0.01 : 1;
+    const d = reduce ? T.reduced / T.swapIn : 1; // reduced motion: a quick crossfade
     if (from) {
-      gsap.to(from.querySelectorAll("[data-line]"), { yPercent: -110 * dir, opacity: 0, duration: 0.45 * d, stagger: 0.04, ease: "power3.in", overwrite: true });
+      gsap.to(from.querySelectorAll("[data-line]"), { yPercent: -110 * dir, opacity: 0, duration: T.swapOut * d, stagger: T.stagger, ease: EASE.out, overwrite: true });
       from.classList.remove("is-on");
     }
     to.classList.add("is-on");
     gsap.fromTo(
       to.querySelectorAll("[data-line]"),
       { yPercent: 110 * dir, opacity: 0 },
-      { yPercent: 0, opacity: 1, duration: 0.8 * d, delay: 0.25 * d, stagger: 0.06, ease: "expo.site", overwrite: true },
+      // in as the old goes, overlapping it a little
+      { yPercent: 0, opacity: 1, duration: T.swapIn * d, delay: (T.swapOut - T.swapOverlap) * d, stagger: T.stagger, ease: EASE.in, overwrite: true },
     );
     if (!reduce) {
       to.classList.add("glitching");
-      setTimeout(() => to.classList.remove("glitching"), 160);
+      setTimeout(() => to.classList.remove("glitching"), T.micro * 1000);
     }
   }, [active, reduce]);
 
