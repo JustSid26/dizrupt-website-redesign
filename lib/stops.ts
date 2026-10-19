@@ -96,8 +96,8 @@ export function workStops(): ScrollStop[] {
   const work = document.getElementById("work");
   if (!work) return [];
   const top = work.getBoundingClientRect().top + scrollY, span = work.offsetHeight - innerHeight;
-  // one window to the next: a hop
-  const stops: ScrollStop[] = clients.map((_, k) => ({ y: top + span * workProgress(k), kind: "hop", train: null }));
+  // one window to the next: a hop, a little slower (lib/motion.ts: window)
+  const stops: ScrollStop[] = clients.map((_, k) => ({ y: top + span * workProgress(k), kind: "window", train: null }));
   /* led in from AI & Automation's statement: from there one gesture is one ride the whole way out —
      the network clears and the glitch hands back to the city inside it (it plays in time as the
      section's end passes), past the tower's wide shot and in to the first window */

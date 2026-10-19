@@ -5,7 +5,8 @@
    micro      answering your hand: hover, colour, focus, a small state flipping
    ui         words and panels arriving (in), and leaving quicker than they came (out)
    swap       content replacing content in place: the old out, the new in, overlapping a little
-   hop        a short camera move within one scene: billboard to billboard, window to window, beat to beat
+   hop        a short camera move within one scene: billboard to billboard, beat to beat (the work's
+              window to window is one too, a little slower: window)
    scene      the camera into a different world
    signature  the two payoffs of the landing: the city building itself, him turning into the count
    handover   a shader hand-over between worlds (the glitch), never linear
@@ -20,6 +21,7 @@ export const T = {
   swapIn: 0.65,
   swapOverlap: 0.1,
   hop: 2.4,
+  window: 2.4 / 0.8, // the work's window to window: a hop at 80% of the speed, so each project is taken in
   beat: 2.6, // an AI beat: a hop, the page and the network on one clock
   scene: 3.2,
   signature: 3.8,
@@ -36,7 +38,7 @@ export const BACK = 0.75;
 /** A ride queued behind the one under way runs at this share of its own time. */
 export const QUEUED = 0.8;
 
-export type RideKind = "hop" | "beat" | "scene" | "signature";
+export type RideKind = "hop" | "window" | "beat" | "scene" | "signature";
 
 /* The camera's one curve, for every ride: a short pull away, a steady run, a short settle. `ramp` is
    the share of the ride each end takes. (A sine spends most of a ride getting going and stopping.) */

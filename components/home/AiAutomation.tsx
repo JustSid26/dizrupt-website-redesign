@@ -146,8 +146,8 @@ export function AiAutomation() {
     const sts = [
       // build the world well before it's needed, so the hand-over doesn't hitch; well past it, it may go
       ScrollTrigger.create({ trigger: el, start: "top bottom+=250%", end: "bottom top-=150%", onToggle: (self) => void (signals.ai.warm = self.isActive) }),
-      // (early enough in the ride from the bridge that the hand-over is done as the page lands)
-      ScrollTrigger.create({ trigger: el, start: "top 80%", onEnter: () => play(1), onLeaveBack: () => play(0) }),
+      // (late in the ride from the bridge: the fly-in to his heart plays out first, then the glitch)
+      ScrollTrigger.create({ trigger: el, start: "top 60%", onEnter: () => play(1), onLeaveBack: () => play(0) }),
       ScrollTrigger.create({ trigger: el, start: "bottom bottom", onEnter: () => play(0), onLeaveBack: () => play(1) }),
       ScrollTrigger.create({
         trigger: el,

@@ -1235,7 +1235,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       // lub-dub: two beats close together, then a rest
       const P = 1.0, ph = time % P; // one beat a second
       const beat = Math.exp(-Math.pow((ph - 0.05) / 0.06, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.3) / 0.07, 2));
-      const show = key.startsWith('mascot:') && !scrubbing && u.uProgress.value > 0.9 && u.uAurora.value > 0.5 && (!onIntro || reveal > 0.95) ? fieldOpacity * mascotVisible : 0;
+      // (on the landing, it lights as the beam passes his chest, not once he is whole: seen within the ride)
+      const show = key.startsWith('mascot:') && !scrubbing && u.uProgress.value > 0.9 && u.uAurora.value > 0.5 && (!onIntro || reveal > 0.75) ? fieldOpacity * mascotVisible : 0;
       heartShow = damp(heartShow, show, 4, dt);
       heart.visible = heartShow > 0.01;
       heart.scale.setScalar(1 + beat * 0.22);

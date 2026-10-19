@@ -1900,8 +1900,10 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
     border-radius: 9%;
     background: radial-gradient(circle at 50% 45%, #1d1a2b, #0b0a12 70%);
     box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 calc(var(--cs) * 0.35) rgb(163 16 231 / 0.18);
-    transition: width var(--t-ui) var(--ease-out), height var(--t-ui) var(--ease-out), margin var(--t-ui) var(--ease-out), box-shadow var(--t-ui);
+    transition: width var(--t-ui) var(--ease-out), height var(--t-ui) var(--ease-out), margin var(--t-ui) var(--ease-out), box-shadow var(--t-ui), opacity var(--t-ui) var(--ease-out);
   }
+  /* (only once the hand-over has gone dark: during it, the screen is still his heart, flown into) */
+  .ai:not(.is-on) .ain-chip { opacity: 0; }
   /* the pins: a comb of silver along each edge, standing just off the body */
   .ain-chip::before, .ain-chip::after {
     content: ""; position: absolute; pointer-events: none;
