@@ -900,6 +900,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     }
     u.uOpacity.value = fieldOpacity * mascotVisible * (1 - 0.92 * Math.max(0, (solidK - 0.3) / 0.7));
     field.update(now, time, dt);
+    // what is still playing after the scroll lands: the scroll waits for it (SmoothScroll.tsx)
+    signals.busy.morph = field.morphing && !view;
+    signals.busy.train = signals.rideTarget !== null && Math.abs(signals.rideTarget - ride.s) > 0.01;
 
     bloom.strength = onIntro && ip < 0.2 ? 0.45 * smooth(0.015, 0.12, ip) : damp(bloom.strength, 0.45, 3, dt);
     const upright = onIntro || section === 'contact' || section === 'projects' || section === 'solutions';

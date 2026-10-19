@@ -56,4 +56,12 @@ export const signals = {
   workHidden: [] as number[],
   onWorkFrame: null as null | (() => void),
   ready: false, // the engine has built everything it needs
+  /* scenes still playing out on their own clock after the scroll has landed: while any is, a gesture
+     doesn't ride on to the next stop (SmoothScroll.tsx), so every beat is seen whole */
+  busy: {
+    ai: false, // an AI & Automation beat playing (AiNetwork.tsx)
+    handover: false, // the glitch into or out of the AI world (AiAutomation.tsx)
+    morph: false, // the particles reshaping on a timer, not the scroll (engine.ts)
+    train: false, // the train still pulling in to its stop (engine.ts)
+  },
 };

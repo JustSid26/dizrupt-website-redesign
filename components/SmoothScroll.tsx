@@ -7,7 +7,7 @@ import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { setLenis, setRideCanceller } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
-import { scrollStops, workStops, type ScrollStop } from "@/lib/stops";
+import { scrollStops, STEP, workStops, type ScrollStop } from "@/lib/stops";
 
 // One Lenis instance for the whole site, ticking with GSAP so ScrollTriggers stay in step.
 export function SmoothScroll() {
@@ -29,14 +29,26 @@ export function SmoothScroll() {
        second swipe, a double scroll) changes it. */
     let glide: { stops: ScrollStop[]; i: number; dir: number; chain: boolean } | null = null;
     let landedAt = 0; // when the last ride came to rest: its momentum is still arriving for a moment
+    let busyAt = 0; // when a gesture first found the stop's scene still playing (0: it wasn't)
     let seq = 0;
     let lastEvent = 0, lastAbs = 0, peak = 0, trough = 0, freshAt = 0, rising = 0;
     let push = 0, pushed = false; // how far the current gesture has gone, and whether it has moved a stop yet
     const TOL = 40;
     // a gesture has to mean it: a brush of the trackpad isn't a ride (a wheel's notch is past this at once)
     const INTENT = 60;
+    // the wheel's deltas arrive here already scaled by this (a notch of 100–120 reads as 70–84)
+    const WHEEL = 0.7;
     const sine = (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * t); // from rest: no rush in the middle
     const onward = (t: number) => 1 - (1 - t) * (1 - t); // already moving: carry on, then settle
+    /* the train between stations: a short pull away, a steady run, a short pull in — a sine spends
+       most of the ride getting going and slowing down. `ramp` is the share of the ride each end takes. */
+    const train = (ramp: number) => {
+      const vmax = 1 / (1 - ramp);
+      return (t: number) =>
+        t < ramp ? (vmax * t * t) / (2 * ramp) : t > 1 - ramp ? 1 - (vmax * (1 - t) * (1 - t)) / (2 * ramp) : vmax * (t - ramp / 2);
+    };
+    const TRAIN_RAMP = 0.16 * STEP; // seconds to pull away, and to pull in
+    const TRAIN_SPEED = 1.2; // the steady run, against the stop's own pace (the ends keep theirs)
     const go = (stops: ScrollStop[], i: number, moving: boolean) => {
       const y = window.scrollY, to = stops[i];
       const dir = to.y > y ? 1 : -1;
@@ -49,9 +61,14 @@ export function SmoothScroll() {
       // chain: this ride runs through a waypoint (the hand-over): it plays out whole, nothing extends it
       glide = { stops, i, dir, chain: !!to.pass || !!glide?.chain };
       const token = ++seq;
+      busyAt = 0;
+      // station to station (both ends are the train's): ridden as a train runs, the run quicker
+      const byTrain = !moving && to.train !== null && from?.train != null;
+      let duration = Math.max(1.2, leg.dur * part);
+      if (byTrain) duration = TRAIN_RAMP + (duration - TRAIN_RAMP) / TRAIN_SPEED;
       lenis.scrollTo(to.y, {
-        duration: Math.max(1.2, leg.dur * part),
-        easing: moving ? onward : sine,
+        duration,
+        easing: moving ? onward : byTrain ? train(Math.min(0.5, TRAIN_RAMP / duration)) : sine,
         lock: true,
         force: true,
         onComplete: () => {
@@ -81,6 +98,11 @@ export function SmoothScroll() {
       if (!fresh) return true; // one gesture, one stop
       // just landed: what arrives now is the last gesture's momentum, however it looks
       if (performance.now() - landedAt < 1000) return true;
+      // the stop's own scene is still playing: it plays out whole before the next one starts
+      // (with a ceiling, so a scene that never says it has finished can't hold the page for good)
+      if (!Object.values(signals.busy).some(Boolean)) busyAt = 0;
+      else if (!busyAt) busyAt = performance.now();
+      if (busyAt && performance.now() - busyAt < 12000) return true;
       const i = dir > 0 ? stops.findIndex((st) => st.y > y + TOL) : stops.findLastIndex((st) => st.y < y - TOL);
       if (i < 0) return false;
       go(stops, i, false); // (onComplete carries it on through any waypoint)
@@ -88,7 +110,7 @@ export function SmoothScroll() {
     };
     const lenis = new Lenis({
       lerp: 0.085, smoothWheel: true, syncTouch: false,
-      wheelMultiplier: 0.7, // where the scroll is free, it goes a little less far for each turn of the wheel
+      wheelMultiplier: WHEEL, // where the scroll is free, it goes a little less far for each turn of the wheel
       // return false to take the gesture away from Lenis (and the browser: a swipe would scroll natively)
       virtualScroll: (d) => {
         const take = () => {
@@ -105,7 +127,7 @@ export function SmoothScroll() {
            the delta rising again (momentum only ever falls), a mouse wheel's notch, or a gap long enough
            that the last gesture is over. */
         const gap = now - lastEvent;
-        const pause = gap > 900 || (gap > 220 && (abs > lastAbs || (abs >= 90 && abs >= lastAbs)));
+        const pause = gap > 900 || (gap > 220 && (abs > lastAbs || (abs >= 90 * WHEEL && abs >= lastAbs)));
         const dying = trough < peak * 0.6; // the last gesture had been falling away
         rising = abs > lastAbs ? rising + 1 : 0;
         const isNew = pause || (dying && rising >= 3 && abs >= trough * 2.2 + 6 && now - freshAt > 220);

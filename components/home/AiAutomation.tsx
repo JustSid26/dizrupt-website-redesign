@@ -169,6 +169,7 @@ export function AiAutomation() {
     const tick = () => {
       const m = signals.ai.mix;
       const shifting = m > 0.001 && m < 0.999;
+      signals.busy.handover = !!tween.current?.isActive();
       root.classList.toggle("ai-shifting", shifting);
       if (shifting) {
         root.style.setProperty("--ai-jx", `${((Math.random() - 0.5) * 24 * Math.sin(Math.PI * m)).toFixed(1)}px`);
@@ -184,6 +185,7 @@ export function AiAutomation() {
     return () => {
       gsap.ticker.remove(tick);
       root.classList.remove("ai-shifting");
+      signals.busy.handover = false;
     };
   }, []);
 

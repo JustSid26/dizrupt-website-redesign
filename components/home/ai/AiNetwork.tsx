@@ -234,6 +234,9 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         tw = gsap.timeline({ onUpdate: apply }).to(head, { t: to, duration: dur, ease: "power2.inOut" });
       };
       const st = ScrollTrigger.create({ trigger: sec, start: "top top", end: "bottom bottom", onUpdate: (self) => step(self.progress) });
+      // while a beat plays, the scroll waits for it (SmoothScroll.tsx)
+      const busy = () => void (signals.busy.ai = !!tw?.isActive());
+      gsap.ticker.add(busy);
       // arriving partway (a reload, the nav): be at the beat already, without playing up to it
       {
         const p = (lastP = st.progress);
@@ -244,6 +247,8 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       }
       return () => {
         tw?.kill();
+        gsap.ticker.remove(busy);
+        signals.busy.ai = false;
         seek.current = null;
       };
     }, el);
