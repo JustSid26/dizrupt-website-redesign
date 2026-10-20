@@ -104,7 +104,7 @@ body.is-light-page .vignette { opacity: 0.25; }
 }
 /* mirrored Z. The tracking is moved out to a margin first: left inside the span it would sit on
    the wrong side of the flip and open a gap before the letter. */
-.logo .flip-z { display: inline-block; transform: scaleX(-1); letter-spacing: 0; margin-right: 0.18em; }
+.logo .flip-z { color: var(--violet); display: inline-block; transform: scaleX(-1); letter-spacing: 0; margin-right: 0.18em; }
 
 /* Both the hand-off mark and the nav mark are made from the real DIZRUPT letters in Inter Tight.
    The supplied registered logo is only the composition reference; no bitmap appears on the site. */
@@ -1031,7 +1031,7 @@ body:has(.case-page) .nav::before { opacity: 1; }
 /* the first of them is the logo: it takes you to the intro */
 .rail .rail-logo { white-space: nowrap; color: var(--fg); opacity: 0.8; font-family: var(--sans); font-size: 16px; font-weight: 700; letter-spacing: 0.16em; line-height: 1; transition: opacity var(--t-micro); }
 .rail .rail-logo[aria-current], .rail .rail-logo:hover { opacity: 1; }
-.rail .rail-logo .flip-z { display: inline-block; transform: scaleX(-1); letter-spacing: 0; margin-right: 0.18em; }
+.rail .rail-logo .flip-z { color: var(--violet); display: inline-block; transform: scaleX(-1); letter-spacing: 0; margin-right: 0.18em; }
 /* the logo dead centre, the sections split either side (equal sides keep it on the middle) */
 .rail { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
 .rail-side { display: flex; align-items: center; gap: inherit; }
@@ -2235,7 +2235,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .rail button { position: relative; padding: 6px 0; transition: color var(--t-hand) var(--e-hand); }
 .rail button:not(.rail-logo):hover { color: rgba(242, 240, 235, 0.86); }
 .rail button:not(.rail-logo)::after {
-  content: ""; position: absolute; left: 50%; bottom: -3px; width: 100%; height: 1px; translate: -50% 0;
+  content: ""; position: absolute; left: 0; bottom: -3px; width: 100%; height: 1px; /* (scaled from its centre: transform-origin) */
   background: linear-gradient(90deg, transparent, var(--violet-soft), transparent);
   transform: scaleX(0); opacity: 0; transition: transform var(--t-state) var(--e-hand), opacity var(--t-state);
 }

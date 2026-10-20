@@ -267,6 +267,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const aerialLook = new THREE.Vector3(0, GROUND + 12, 0);
 
   const api0: Record<string, unknown> = {};
+  const CAM_FOLLOW = 2.6; // how tightly the camera follows the train (per second)
   /* ---------- his heart: the DIZRUPT mark, beating in his chest ---------- */
   const heartTex = new THREE.TextureLoader().load('/heart.png');
   heartTex.colorSpace = THREE.SRGBColorSpace;
@@ -555,6 +556,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let scrubbing = false; // uProgress is being driven by the scroll
   let scrubFrom = '';
   const ride = { s: 0, v: 0 };
+  let camLead = 0; // how far the camera frames ahead of the train, riding back (see camPose)
   const contactLook = new THREE.Vector3();
   let wasContact = false;
   let formedAt = -1;
@@ -804,7 +806,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        that station's own framing, rather than drifting with the train through it. */
     const nearStop = Math.round(ride.s);
     const dock = nearStop >= 1 ? 1 - smooth(0.03, 0.14, Math.abs(ride.s - nearStop)) : 0; // only as it pulls in
-    const camPose = line.poseAt(signals.rideTarget !== null ? ride.s + (nearStop - ride.s) * dock : ride.s); // scrolling: no hold at a station
+    /* Riding back, the camera's follow (below) would leave it on the far side of the train, looking
+       the way it came and away from the train: frame where the train is going instead, as far
+       behind it as the follow trails it going forward, so it stays in view either way. */
+    camLead = damp(camLead, ride.v < 0 ? Math.max(-1, (2 * ride.v) / CAM_FOLLOW) : 0, 6, dt);
+    const camPose = line.poseAt(Math.max(0, (signals.rideTarget !== null ? ride.s + (nearStop - ride.s) * dock : ride.s) + camLead)); // scrolling: no hold at a station
     if (riding) {
       // on the line: eased onto it while the morph lands, then held to it exactly
       const k = u.uProgress.value >= 1 ? 1 : 1 - Math.exp(-5 * dt);
@@ -1012,7 +1018,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
          instead of whipping round with the train. Picked up where it is on the first frame. */
       if (time - rideCamAt > 0.25) { rideCamPos.copy(camPos); rideCamLook.copy(camLook); }
       rideCamAt = time;
-      const follow = 1 - Math.exp(-2.6 * dt);
+      const follow = 1 - Math.exp(-CAM_FOLLOW * dt);
       rideCamPos.lerp(camPos, follow);
       rideCamLook.lerp(camLook, follow);
       camera.position.copy(rideCamPos);

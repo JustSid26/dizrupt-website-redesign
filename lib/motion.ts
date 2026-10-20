@@ -5,6 +5,7 @@
    micro      answering your hand: hover, colour, focus, a small state flipping
    ui         words and panels arriving (in), and leaving quicker than they came (out)
    swap       content replacing content in place: the old out, the new in, overlapping a little
+   depart     the train leaving its station: up over the city and round to the first billboard
    wake       the AI chip powering on and pulling back to its network: two beats' worth, so it is seen
    hop        a short camera move within one scene: billboard to billboard, beat to beat (the work's
               window to window is one too, a little slower: window)
@@ -23,6 +24,7 @@ export const T = {
   swapIn: 0.65,
   swapOverlap: 0.1,
   hop: 2.4,
+  depart: 2.4 * 2, // the train leaving its station for the first billboard: a flight over the city, not a hop
   window: 2.4 / 0.8, // the work's window to window: a hop at 80% of the speed, so each project is taken in
   beat: 2.6, // an AI beat: a hop, the page and the network on one clock
   wake: 6.5, // the chip to what we do: it powers on, pulls back to the whole network and steps aside, all in one ride
@@ -44,7 +46,7 @@ export const LINGER = 1.75;
 /** A ride queued behind the one under way runs at this share of its own time. */
 export const QUEUED = 0.8;
 
-export type RideKind = "hop" | "window" | "beat" | "wake" | "scene" | "passage" | "signature";
+export type RideKind = "hop" | "depart" | "window" | "beat" | "wake" | "scene" | "passage" | "signature";
 
 /* The camera's one curve, for every ride: a short pull away, a steady run, a short settle. `ramp` is
    the share of the ride each end takes. (A sine spends most of a ride getting going and stopping.) */

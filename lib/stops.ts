@@ -85,7 +85,8 @@ export function scrollRuns(): ScrollStop[][] {
   return [[
     ...landing,
     { y: ys[0], kind: "scene", train: 0 }, // the station built, the train at it
-    ...ys.slice(1).map((y, i) => ({ y, kind: "hop" as const, train: i + 1 })), // each billboard
+    // each billboard: the first a flight from the station, then hops along the line
+    ...ys.slice(1).map((y, i) => ({ y, kind: i === 0 ? ("depart" as const) : ("hop" as const), train: i + 1 })),
     ...onward,
   ]];
 }
