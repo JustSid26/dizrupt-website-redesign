@@ -8,7 +8,7 @@ import { setLenis, setRideCanceller, setRideTo } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { scrollRuns, workStops, type ScrollStop } from "@/lib/stops";
-import { onward, QUEUED, ride, T } from "@/lib/motion";
+import { LINGER, lingering, onward, QUEUED, ride, T } from "@/lib/motion";
 
 // One Lenis instance for the whole site, ticking with GSAP so ScrollTriggers stay in step.
 export function SmoothScroll() {
@@ -67,6 +67,14 @@ export function SmoothScroll() {
       // the whole leg takes its full time; from partway along it, that part of it
       const part = from ? Math.min(1, Math.abs(to.y - y) / Math.max(1, Math.abs(to.y - from.y))) : 1;
       const r = ride(leg.kind, dir as 1 | -1);
+      // a leg that lingers over a stretch of its way (lib/stops.ts: slow): that stretch, in this ride's terms
+      const prev = stops[stops.indexOf(leg) - 1];
+      if (leg.slow && prev && to.y !== y) {
+        const a = prev.y, b = prev.y + leg.slow * (leg.y - prev.y);
+        const u = (v: number) => Math.min(1, Math.max(0, (v - y) / (to.y - y)));
+        const [lo, hi] = [u(a), u(b)].sort((m, n) => m - n);
+        if (hi - lo > 0.01) r.ease = lingering(r.ease, lo, hi, LINGER);
+      }
       const duration = Math.max(T.micro * 4, r.duration * part * (how.queued ? QUEUED : 1));
       // the train drives itself there now, rather than when the page catches up
       signals.rideTarget = to.train;

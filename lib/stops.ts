@@ -46,7 +46,7 @@ const introRaw = (p: number) =>
    scroll. `kind` is the ride into this stop from the one before it (and back, quicker: lib/motion.ts),
    by what changes on screen: a hop within a scene, a scene change, or one of the landing's two
    payoffs; `train` is the stop the train drives itself to, or null while it is still in the intro. */
-export type ScrollStop = { y: number; kind: RideKind; train: number | null };
+export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number };
 
 /** The runs of stops from the DIZRUPT screen to AI & Automation's last beat. On a phone the train is
     gone and Solutions is a row of cards swiped across: one stop, the sections either side of it. */
@@ -73,7 +73,12 @@ export function scrollRuns(): ScrollStop[][] {
     /* … and one gesture per beat of AI & Automation: powered on, the three stages of how, said
        plainly. The page glides to each and the beat's animation plays on the same clock, ending as the
        page lands (AiNetwork.tsx). */
-    ...(ai ? AI_CHAPTERS.slice(1).map((c) => ({ y: ai.offsetTop + (ai.offsetHeight - innerHeight) * c.at, kind: "beat" as const, train: null })) : []),
+    ...(ai ? AI_CHAPTERS.slice(1).map((c, i) => ({
+      y: ai.offsetTop + (ai.offsetHeight - innerHeight) * c.at,
+      // the first, from the chip, is its power-on and pull back (a wide screen's 3D; a phone's chip is flat)
+      kind: i === 0 && !isPhoneLayout() ? ("wake" as const) : ("beat" as const),
+      train: null,
+    })) : []),
   ];
   // a phone: the cards are one stop (swiped across, not ridden through) between the count and the bridge
   if (isPhoneLayout()) return [[...landing, { y: ys[1], kind: "scene", train: null }, ...onward]];
@@ -104,7 +109,10 @@ export function workStops(): ScrollStop[] {
   const ai = document.getElementById("ai");
   if (ai) {
     const at = (p: number) => ai.getBoundingClientRect().top + scrollY + (ai.offsetHeight - innerHeight) * p;
-    stops[0].kind = "scene";
+    stops[0].kind = "passage";
+    // the ride lingers over its first stretch, to the section's end: the network clearing and the glitch
+    const from = at(AI_STOPS[AI_STOPS.length - 1]), end = ai.getBoundingClientRect().top + scrollY + ai.offsetHeight - innerHeight;
+    stops[0].slow = Math.min(0.9, Math.max(0, (end - from) / Math.max(1, stops[0].y - from)));
     stops.unshift({ y: at(AI_STOPS[AI_STOPS.length - 1]), kind: "beat", train: null });
   }
   /* and from the last project, one gesture all the way out: the camera pulls back from the tower and

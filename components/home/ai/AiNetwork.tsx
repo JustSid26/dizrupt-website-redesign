@@ -5,7 +5,8 @@ import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { AI_CHAPTERS, AI_EXIT_FROM, AI_STOPS } from "@/lib/aiStops";
-import { BACK, EASE, T } from "@/lib/motion";
+import { BACK, EASE, T, camera } from "@/lib/motion";
+import { isPhoneLayout } from "@/lib/layout";
 import { rideToStop } from "@/lib/scroll";
 import { PANEL_VIEWS } from "@/components/home/ai/Panels";
 import { Matrix } from "@/components/home/ai/Matrix";
@@ -186,9 +187,13 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
           seq.call(() => onBeatRef.current(i));
           const whole = fwd ? S[i] - (S[i - 1] ?? 0) : (S[i + 1] ?? 1) - S[i];
           const part = Math.min(1, Math.abs(S[i] - from) / Math.max(1e-4, whole));
-          const own = T.beat * part * (fwd ? 1 : BACK);
+          /* the chip to what we do (either way) is the wake: on a wide screen it powers on, pulls back
+             and steps aside, all in the middle of the leg, so it runs at the camera's steady pace
+             rather than inOut's, which would rush that middle through in a quarter of the time */
+          const wake = (fwd ? i === 1 : i === 0) && !isPhoneLayout();
+          const own = (wake ? T.wake : T.beat) * part * (fwd ? 1 : BACK);
           const dur = reduceRef.current ? T.reduced : left > 0.2 ? left / legs.length : own;
-          seq.to(head, { t: S[i], duration: dur, ease: EASE.inOut });
+          seq.to(head, { t: S[i], duration: dur, ease: wake ? camera() : EASE.inOut });
           from = S[i];
         });
         tw = seq;
