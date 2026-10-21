@@ -67,9 +67,9 @@ export function scrollRuns(): ScrollStop[][] {
     { y: top + span * introRaw(0.72), kind: "signature", train: null }, // the figure dissolving into the count is worth watching
   ];
   const onward: ScrollStop[] = [
-    // on to AI & Automation in two: him whole again, the line read (Bridge.tsx: its progress runs from
-    // its top at the middle of the screen to its bottom there; the line is up at 0.28–0.42) …
-    ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, kind: "scene" as const, train: null }] : []),
+    // on to AI & Automation in two: him whole again, seen for a moment (Bridge.tsx: its progress runs
+    // from its top at the middle of the screen to its bottom there), and the page carries itself on …
+    ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, kind: "scene" as const, train: null, onward: 1200 }] : []),
     // … then into his heart and through the glitch to the chip, floating in the dark: seen for a moment,
     // and the page carries on by itself into what we do, so the chip isn't left standing still …
     ...(ai ? [{ y: ai.offsetTop + 2, kind: "scene" as const, train: null, onward: 600 }] : []),
@@ -108,10 +108,10 @@ export function workStops(): ScrollStop[] {
   // one window to the next: a hop, a little slower (lib/motion.ts: window)
   const stops: ScrollStop[] = clients.map((_, k) => ({ y: top + span * workProgress(k), kind: "window", train: null }));
   /* the whole tower is a stop of its own, seen across the street with WORK on the hoarding at its
-     foot; then in to the first window (a scene change). A phone carries itself on from it after a
-     moment, with no gesture (SmoothScroll.tsx: onward); a wide screen goes on at the next gesture. */
+     foot; then, after a moment and with no gesture, the page carries itself on in to the first
+     window (a scene change), on every screen (SmoothScroll.tsx: onward) */
   stops[0].kind = "scene";
-  stops.unshift({ y: top, kind: "scene", train: null, onward: isPhoneLayout() });
+  stops.unshift({ y: top, kind: "scene", train: null, onward: 1500 });
   /* led in from AI & Automation's statement: from there one gesture is one ride the whole way out —
      the network clears and the glitch hands back to the city inside it (it plays in time as the
      section's end passes), to the tower's wide shot */
