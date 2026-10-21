@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type MutableRefObject, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
@@ -9,7 +9,7 @@ import { BACK, EASE, T, camera } from "@/lib/motion";
 import { isPhoneLayout } from "@/lib/layout";
 import { PANEL_VIEWS } from "@/components/home/ai/Panels";
 import { Matrix } from "@/components/home/ai/Matrix";
-import { linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
+import { foundFor, linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
 
 const at = (id: string) => AI_STOPS[AI_CHAPTERS.findIndex((c) => c.id === id)];
 const WHAT = at("what"), HOW = AI_STAGES[AI_STAGES.length - 1], SIMPLE = at("simple");
@@ -84,6 +84,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
   const stage = useRef<HTMLDivElement>(null);
   const tall = useTall();
   const places = placesFor(tall);
+  const found = useMemo(() => foundFor(tall), [tall]); // where the audit finds the tools: scattered, askew
   const ids = panelsFor(tall);
   const links = linksFor(tall);
   const map = mapFor(tall);
@@ -130,7 +131,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       tl.fromTo(el, { "--scan": 0 }, { "--scan": 1, duration: g2 * 0.18, ease: EASE.inOut }, in2(0.13));
       tl.to(el, { "--scanO": 0, duration: g2 * 0.02 }, in2(0.31));
       panels.forEach((p) => {
-        const at = (places[p.dataset.id as PanelId].x - span.from) / (span.to - span.from);
+        const at = (found[p.dataset.id as PanelId].x - span.from) / (span.to - span.from);
         tl.fromTo(p, { "--f": 0 }, { "--f": 1, duration: g2 * 0.03 }, in2(0.13 + 0.18 * Math.min(1, Math.max(0, at))));
       });
       tl.fromTo(q(".ain-map path"), hide, { ...draw, duration: g2 * 0.06, stagger: s2(T.stagger) }, in2(0.17));
@@ -151,6 +152,8 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       tl.to(el, { "--mx": 0, duration: g2 * 0.05, ease: EASE.out }, in2(0.66));
       tl.to(el, { "--v": 0, duration: g2 * 0.07, ease: EASE.inOut }, in2(0.69));
       tl.to(q(".ain-map, .ain-faults"), { autoAlpha: 0, duration: g2 * 0.04 }, in2(0.72));
+      // the tools, found scattered and askew, are gathered into order before the core is wired to them
+      panels.forEach((p, i) => tl.fromTo(p, { "--k": 0 }, { "--k": 1, duration: g2 * 0.06, ease: EASE.inOut }, in2(0.71) + i * s2(T.stagger) * 0.5));
       tl.fromTo(q(".ain-link"), hide, { ...draw, duration: g2 * 0.06, stagger: s2(T.stagger) }, in2(0.74));
       tl.fromTo(hub.current, { "--live": 0 }, { "--live": 1, duration: g2 * 0.04 }, in2(0.78));
       tl.fromTo(el, { "--tl": 0 }, { "--tl": 1, duration: g2 * 0.04 }, in2(0.8));
@@ -291,7 +294,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       };
     }, el);
     return () => ctx.revert();
-  }, [section, tall, places, seek]);
+  }, [section, tall, places, found, seek]);
 
   // the core rides on the chip wherever the camera has it, and the network moves with it
   useEffect(() => {
@@ -398,11 +401,12 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         {/* made simple: the two sides of the business, each a card on its own bus to the core, running */}
         <div className="ain-simple" aria-hidden>
           <svg className="ain-simple-bus" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {/* each bus leaves from the chip's edge (its pins reach about 8 units out), not from under it */}
             {SIMPLE_SIDES.map((s) => (
-              <path key={`b-${s.side}`} className={`ain-bus is-${s.side}`} pathLength={1} d={`M50 50 H${s.x}`} />
+              <path key={`b-${s.side}`} className={`ain-bus is-${s.side}`} pathLength={1} d={`M${s.x < 50 ? 42 : 58} 50 H${s.x}`} />
             ))}
             {SIMPLE_SIDES.map((s) => (
-              <path key={`f-${s.side}`} className={`ain-bus-flow is-${s.side}`} pathLength={1} d={`M50 50 H${s.x}`} />
+              <path key={`f-${s.side}`} className={`ain-bus-flow is-${s.side}`} pathLength={1} d={`M${s.x < 50 ? 42 : 58} 50 H${s.x}`} />
             ))}
           </svg>
           {SIMPLE_SIDES.map((s) => (
@@ -430,14 +434,14 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
 
         <div className="ain-panels" aria-hidden>
           {ids.map((id) => {
-            const P = places[id];
+            const P = places[id], F = found[id];
             const View = PANEL_VIEWS[id];
             return (
               <div
                 key={id}
                 className={`ain-panel ain-${id} is-${SIDE[id]}${id === "leads" ? " is-thread" : ""}`}
                 data-id={id}
-                style={{ "--cx": P.x, "--cy": P.y, "--cr": 0, "--ox": P.x, "--oy": P.y, "--e": 0, "--k": 0, "--f": 0, "--a": 0 } as React.CSSProperties}
+                style={{ "--cx": F.x, "--cy": F.y, "--cr": F.r, "--ox": P.x, "--oy": P.y, "--e": 0, "--k": 0, "--f": 0, "--a": 0 } as React.CSSProperties}
               >
                 <p className="ain-tag">
                   <span className="is-find">{TAGS[id].find}</span>

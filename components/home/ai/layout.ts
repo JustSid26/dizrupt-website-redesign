@@ -39,6 +39,22 @@ const TALL: Record<PanelId, Spot> = {
 export const placesFor = (tall: boolean) => (tall ? TALL : WIDE);
 export const panelsFor = (tall: boolean) => (tall ? TALL_IDS : PANELS);
 
+/* Where the audit finds the tools: not in their places but as a business keeps them, scattered and
+   askew (r: degrees), each a step off its place. The implementation gathers them (AiNetwork.tsx:
+   --k) into the ordered arrangement above. A phone keeps them in place: its stage is too small. */
+type Found = Spot & { r: number };
+const FOUND_WIDE: Record<PanelId, Found> = {
+  inbox: { x: 25, y: 20, r: -5 },
+  leads: { x: 33, y: 50, r: 4 },
+  messages: { x: 28, y: 80, r: -3 },
+  sheet: { x: 69, y: 18, r: 5 },
+  invoices: { x: 63, y: 40, r: -4 },
+  report: { x: 71, y: 61, r: 3 },
+  tasks: { x: 65, y: 83, r: -5 },
+};
+export const foundFor = (tall: boolean): Record<PanelId, Found> =>
+  tall ? (Object.fromEntries(Object.entries(TALL).map(([k, v]) => [k, { ...v, r: 0 }])) as Record<PanelId, Found>) : FOUND_WIDE;
+
 /** Where the audit's scan sweeps, in the frame's units, from the near side to the far. */
 export const scanSpan = (tall: boolean) => (tall ? { from: 4, to: 96 } : { from: 21, to: 79 });
 
@@ -63,16 +79,31 @@ export function linksFor(tall: boolean): { id: PanelId; d: string }[] {
   ];
 }
 
-/** What the audit maps: how the work passes between the tools today, by hand, and where it breaks. */
+/* a hand-off between two of the tools as found: down from the foot of one, across, and down into the
+   head of the next (a panel is about 13 of the frame's units tall) */
+const handoff = (a: Spot, b: Spot) => `M${a.x} ${a.y + 6.5} V${((a.y + b.y) / 2).toFixed(1)} H${b.x} V${b.y - 6}`;
+
+/** What the audit maps: how the work passes between the tools today, by hand, and where it breaks.
+    Drawn between the tools where they were found (wide screens), so it goes askew with them. */
 export function mapFor(tall: boolean): { lines: string[]; faults: Spot[] } {
   if (tall)
     return {
       lines: ["M37 26 H63", "M37 74 H63", "M74 42.5 V57.5"],
       faults: [{ x: 50, y: 74 }, { x: 74, y: 50 }],
     };
+  const f = FOUND_WIDE;
+  const foot = Math.max(f.messages.y, f.tasks.y) + 5; // the line along the bottom, between the two sides
   return {
-    lines: ["M30 30.5 V44", "M30 70 V56", "M70 27 V35", "M70 47 V55", "M70 65 V73.5", "M37 80 H63"],
-    faults: [{ x: 30, y: 63 }, { x: 70, y: 51 }, { x: 50, y: 80 }],
+    lines: [
+      handoff(f.inbox, f.leads), handoff(f.leads, f.messages),
+      handoff(f.sheet, f.invoices), handoff(f.invoices, f.report), handoff(f.report, f.tasks),
+      `M${f.messages.x + 7} ${f.messages.y + 4} V${foot} H${f.tasks.x - 7} V${f.tasks.y + 4}`,
+    ],
+    faults: [
+      { x: f.messages.x, y: (f.leads.y + f.messages.y) / 2 }, // the hand-off into the messages breaks
+      { x: f.report.x, y: (f.invoices.y + f.report.y) / 2 }, // and the one into the report
+      { x: (f.messages.x + f.tasks.x) / 2, y: foot }, // and the one along the bottom, between the sides
+    ],
   };
 }
 
@@ -80,7 +111,13 @@ export function mapFor(tall: boolean): { lines: string[]; faults: Spot[] } {
     lead, on into the records (internal). Found in the audit, ranked first, the first to run. */
 export function threadFor(tall: boolean): string[] {
   if (tall) return ["M37 22 H63", "M16 42.5 V57.5"];
-  return ["M33 30.5 V44", "M37 47 H41 V13.5 H70 V16.5"];
+  const f = FOUND_WIDE;
+  return [
+    // the enquiry, down from the inbox into the leads (a little to the right of the hand-off)
+    `M${f.inbox.x + 3} ${f.inbox.y + 6.5} V${((f.inbox.y + f.leads.y) / 2 + 1.5).toFixed(1)} H${f.leads.x + 3} V${f.leads.y - 6}`,
+    // and out of the leads, up over the top, into the records
+    `M${f.leads.x + 7} ${f.leads.y - 3} H${f.leads.x + 11} V${f.sheet.y - 8.5} H${f.sheet.x} V${f.sheet.y - 5.5}`,
+  ];
 }
 
 /** The two sides, framed and named once the business is running (wide screens). */
