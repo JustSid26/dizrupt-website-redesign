@@ -25,8 +25,8 @@ const METHOD = ["Audit", "Evaluate", "Implement"];
 /* Made simple's picture: the business as its two sides, what each covers, on one bus each to the core
    (x: where the card's middle sits across the stage, in its percent units) */
 const SIMPLE_SIDES = [
-  { side: "external", x: 24, name: "External workflows", areas: ["Customer enquiries", "Lead management", "Client communication"] },
-  { side: "internal", x: 76, name: "Internal workflows", areas: ["Operations", "Administration", "Reporting", "Data handling"] },
+  { side: "external", x: 33, name: "External workflows", areas: ["Customer enquiries", "Lead management", "Client communication"] },
+  { side: "internal", x: 67, name: "Internal workflows", areas: ["Operations", "Administration", "Reporting", "Data handling"] },
 ];
 /** A portrait screen: the least room the picture is given over the words (px), and the share of the
     screen's height the chip takes at its closest when it has the whole screen. */
@@ -209,9 +209,10 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
           seq.to(st, { autoAlpha: 1, duration: reduceRef.current ? T.reduced : 0.3, ease: EASE.in });
         };
         const PAST_HOW = HOW + 0.002; // just past the stages' end, where made simple's picture has taken over
-        if (fwd && to > HOW_K && head.t >= S[HOW_K] - 1e-4 && head.t < HOW + 1e-4) { skip(PAST_HOW); from = PAST_HOW; }
         legs.forEach((i) => {
           seq.call(() => onBeatRef.current(i));
+          // out of how we do it (from wherever it rests among the stages): over the rest of them at once
+          if (fwd && i > HOW_K && from >= S[HOW_K] - 1e-4 && from < HOW + 1e-4) { skip(PAST_HOW); from = PAST_HOW; }
           const whole = fwd ? S[i] - (S[i - 1] ?? 0) : (S[i + 1] ?? 1) - S[i];
           const part = Math.min(1, Math.abs(rest(i) - from) / Math.max(1e-4, whole));
           /* the chip to what we do (either way) is the wake: on a wide screen it powers on, pulls back

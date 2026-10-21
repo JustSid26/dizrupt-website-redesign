@@ -2092,7 +2092,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ain-bus-flow { stroke: #ffffff; stroke-width: 5; stroke-dasharray: 0.14 0.36; opacity: var(--busf, 0); filter: drop-shadow(0 0 7px #7cf2ff); animation: ain-flow 1.4s linear infinite; } /* ambient: its own loop */
 .ain-bus-flow.is-internal { filter: drop-shadow(0 0 7px #b9a4ff); animation-delay: -0.7s; }
 .ain-side {
-  position: absolute; left: calc(var(--x) * 1cqw); top: 50cqh; translate: -50% -50%; width: 26cqw; min-width: 200px; max-width: 320px;
+  position: absolute; left: calc(var(--x) * 1cqw); top: 50cqh; translate: -50% -50%; width: 20cqw; min-width: 190px; max-width: 300px;
   padding: 18px 20px 16px; border-radius: 10px; background: rgba(7, 10, 17, 0.94);
   border: 1px solid rgba(124, 242, 255, 0.42); box-shadow: 0 0 40px rgba(60, 240, 255, 0.16), 0 24px 60px rgba(0, 0, 0, 0.6);
   opacity: var(--side, 0); transform: translateY(calc((1 - var(--side, 0)) * 16px));
