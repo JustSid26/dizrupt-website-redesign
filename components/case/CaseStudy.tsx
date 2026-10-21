@@ -73,14 +73,13 @@ export function CaseStudy({ project }: { project: Project }) {
       <figure className="project-hero">
         {banner ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={banner} alt={`${project.title} — campaign banner`} />
+          <img src={banner} alt={`${project.title} campaign banner`} />
         ) : (
           <figcaption className="project-hero-word">{project.title}</figcaption>
         )}
       </figure>
       <div className="project-inner">
         <header className="project-head">
-          <p className="project-no">Project {String(n + 1).padStart(2, "0")}</p>
           <h1 className="project-title">{project.title}</h1>
           <p className="project-lead">{project.summary}</p>
         </header>
@@ -117,9 +116,8 @@ export function CaseStudy({ project }: { project: Project }) {
               ["The Ask", cs.ask],
               ["The Solution", cs.solution],
               ["The Dizruption", cs.dizruption],
-            ].map(([h, body], i) => (
+            ].map(([h, body]) => (
               <section key={h} className="chapter" data-reveal>
-                <p className="chapter-no">{String(i + 1).padStart(2, "0")}</p>
                 <div>
                   <h3>{h}</h3>
                   <p>{body}</p>
@@ -141,7 +139,7 @@ export function CaseStudy({ project }: { project: Project }) {
               transitionTo(() => router.push("/", { scroll: false }), "back");
             }}
           >
-            ← Back to work
+            Back to work
           </Link>
           <Link
             className="project-next"

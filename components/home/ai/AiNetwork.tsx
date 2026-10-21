@@ -32,7 +32,7 @@ const CHIP = 0.38;
    followed through all three stages. Not everything goes hands-off: exceptions stay with a person. */
 const TAGS: Record<PanelId, { find: string; done: string }> = {
   inbox: { find: "Sorted by hand", done: "Auto-triaged" },
-  leads: { find: "WF-01 · Enquiry → lead", done: "WF-01 · Running" },
+  leads: { find: "WF-01 · Enquiry to lead", done: "WF-01 · Running" },
   messages: { find: "Replies wait", done: "Drafted · you approve" },
   sheet: { find: "Re-keyed · duplicates", done: "Synced" },
   invoices: { find: "Chased by hand", done: "Exceptions to a person" },

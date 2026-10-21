@@ -7,7 +7,7 @@ export const generateStaticParams = () => TECH_PROJECTS.map((p) => ({ slug: p.sl
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const p = techProjectBySlug((await params).slug);
-  return p ? { title: `${p.name} — AI & Automation — Dizrupt`, description: p.summary } : {};
+  return p ? { title: `${p.name} | AI & Automation | Dizrupt`, description: p.summary } : {};
 }
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {

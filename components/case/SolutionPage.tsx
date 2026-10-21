@@ -32,7 +32,6 @@ export function SolutionPage({ solution: s }: { solution: Solution }) {
       </figure>
       <div className="project-inner">
         <header className="project-head">
-          <p className="project-no">Solution {String(n + 1).padStart(2, "0")} / {String(SOLUTIONS.length).padStart(2, "0")}</p>
           <h1 className="project-title">{s.name}</h1>
           <p className="project-lead">{s.line}</p>
         </header>
@@ -64,7 +63,7 @@ export function SolutionPage({ solution: s }: { solution: Solution }) {
         </ul>
         <nav className="project-foot">
           <Link className="back" href="/" scroll={false}>
-            ← Back to the line
+            Back to the line
           </Link>
           <Link className="project-next" href={`/solutions/${solutionSlug(SOLUTIONS[(n + 1) % SOLUTIONS.length])}`}>
             <span className="project-next-label">Next solution</span>

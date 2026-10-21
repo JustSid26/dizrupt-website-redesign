@@ -157,21 +157,17 @@ export function Projects() {
             style={{ "--pa": c.colors[0], "--pb": c.colors[1] } as React.CSSProperties}
           >
             <p className="work-shot-no">
-              <span>Project {pad(k + 1)} / {pad(N)}</span>
               <span>{c.tags}</span>
             </p>
             <h3 className="work-cap-title">{c.title}</h3>
             <p className="work-shot-services">{c.client}</p>
             <button type="button" className="work-shot-open" onClick={() => open(k)} tabIndex={-1}>
               <span>View case study</span>
-              <i aria-hidden>→</i>
             </button>
           </div>
         ))}
 
-        <h2 id="work-title" className="eyebrow work-eyebrow">
-          <span className="hud-no">03</span> Selected work
-        </h2>
+        <h2 id="work-title" className="eyebrow work-eyebrow">Selected work</h2>
         <p className="work-count" aria-live="polite">
           <strong ref={countRef}>01</strong> / {pad(N)}
         </p>

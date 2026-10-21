@@ -11,7 +11,7 @@ const REC = { auto: "Automate", assist: "AI-assisted", person: "Keep with a pers
 
 // in rank order; `found` is where each came up in the audit
 const ROWS: (Row & { found: number })[] = [
-  { id: "wf-01", name: "Enquiry → qualified lead", marks: [3, 3, 1, 2, 3], rec: "auto", thread: true, found: 2 },
+  { id: "wf-01", name: "Enquiry to qualified lead", marks: [3, 3, 1, 2, 3], rec: "auto", thread: true, found: 2 },
   { id: "wf-02", name: "Data entry between tools", marks: [3, 3, 1, 2, 2], rec: "auto", found: 1 },
   { id: "wf-03", name: "Invoice follow-ups", marks: [3, 3, 2, 2, 3], rec: "auto", found: 4 },
   { id: "wf-04", name: "Client updates & replies", marks: [2, 2, 2, 1, 2], rec: "assist", found: 0 },

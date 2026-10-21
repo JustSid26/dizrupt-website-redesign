@@ -14,7 +14,6 @@ import { useSection } from "@/components/home/useSection";
    model turns over the platform (the engine reads signals.scroll.trainS), and the copy here changes
    channel with it. */
 const N = SOLUTIONS.length;
-const pad = (n: number) => String(n).padStart(2, "0");
 
 export function SolutionsTrain() {
   const section = useRef<HTMLElement>(null);
@@ -114,12 +113,10 @@ export function SolutionsTrain() {
             router.push(`/solutions/${solutionSlug(SOLUTIONS[k] ?? SOLUTIONS[active])}`);
           }}
         >
-          <span>View the work →</span>
+          <span>View the work</span>
         </button>
         <div className="sol-copy">
-          <h2 id="solutions-title" className="eyebrow">
-            <span className="hud-no">02</span> Solutions
-          </h2>
+          <h2 id="solutions-title" className="eyebrow">Solutions</h2>
           <div className="sol-stack">
             {SOLUTIONS.map((s, i) => (
               <div
@@ -131,9 +128,6 @@ export function SolutionsTrain() {
                 style={{ "--a": s.colors[0], "--b": s.colors[1] } as React.CSSProperties}
                 aria-hidden={i !== active}
               >
-                <p className="sol-ch" data-line style={i ? { opacity: 0 } : undefined}>
-                  CH {pad(i + 1)} <span>/ {pad(N)}</span>
-                </p>
                 <h3 className="sol-title" data-text={s.name}>
                   <span data-line style={i ? { opacity: 0 } : undefined}>{s.name}</span>
                 </h3>
@@ -149,7 +143,6 @@ export function SolutionsTrain() {
           <ol className="sol-dial" aria-label="Solutions">
             {SOLUTIONS.map((s, i) => (
               <li key={s.name} aria-current={i === active || undefined} style={{ "--a": s.colors[0] } as React.CSSProperties}>
-                <span className="sol-dial-no">CH {pad(i + 1)}</span>
                 <span className="sol-dial-bar">{i === active && <span ref={bar} />}</span>
               </li>
             ))}

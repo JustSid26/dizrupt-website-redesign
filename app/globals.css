@@ -225,7 +225,7 @@ body.panel-open #work { opacity: 0; pointer-events: none; }
 .hud-no { font-family: var(--mono); color: var(--violet-soft); margin-right: 0.8em; }
 .contact-lead { margin-top: 26px; max-width: 38ch; font-size: clamp(16px, 1.3vw, 19px); line-height: 1.55; color: rgba(242, 240, 235, 0.72); }
 .contact-cta {
-  display: inline-flex; align-items: center; gap: 16px; margin-top: 34px;
+  display: flex; width: fit-content; align-items: center; gap: 16px; margin: 34px auto 0;
   padding: 18px 28px; border-radius: 999px;
   background: linear-gradient(100deg, #6f4dff, var(--violet));
   font-family: var(--display); font-weight: 600; font-stretch: 85%;
@@ -233,9 +233,7 @@ body.panel-open #work { opacity: 0; pointer-events: none; }
   box-shadow: 0 0 0 0 rgba(163, 16, 231, 0.5);
   transition: box-shadow var(--t-ui-out) var(--ease-out), transform var(--t-ui-out) var(--ease-out);
 }
-.contact-cta i { font-style: normal; transition: transform var(--t-ui-out) var(--ease-out); }
 .contact-cta:hover { box-shadow: 0 0 44px 6px rgba(163, 16, 231, 0.45); transform: translateY(-2px); }
-.contact-cta:hover i { transform: translateX(6px); }
 .contact-grid {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px;
   margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line);
@@ -936,17 +934,12 @@ body:has(.case-page) .nav::before { opacity: 1; }
 .project-chapters { margin-top: clamp(64px, 9vw, 140px); }
 .project-chapters[hidden] { display: none; }
 .chapter {
-  display: grid; grid-template-columns: 90px minmax(0, 1fr);
+  display: grid; grid-template-columns: minmax(0, 1fr);
   gap: clamp(16px, 3vw, 56px);
   padding: clamp(34px, 4.5vw, 64px) 0;
   border-top: 1px solid var(--rule);
 }
 .chapter:last-child { border-bottom: 1px solid var(--rule); }
-.chapter-no {
-  font-size: 11px; letter-spacing: 0.16em; color: var(--ink-dim);
-  /* the number stays with you down a long chapter, the way a running head would */
-  position: sticky; top: 28px; align-self: start;
-}
 .chapter h3 {
   font-family: var(--display); font-weight: 600; font-stretch: 85%;
   font-size: clamp(26px, 3.4vw, 52px); line-height: 1.05; letter-spacing: -0.03em;
@@ -956,7 +949,6 @@ body:has(.case-page) .nav::before { opacity: 1; }
 .chapter[hidden] { display: none; }
 /* the copy column keeps to the left; the right is the client's model, alive in the scene */
 .project-head, .project-results, .project-meta, .project-chapters { max-width: 820px; }
-.chapter-no { color: var(--violet-soft); }
 
 /* ---------- the numbers ---------- */
 .project-results {
@@ -979,23 +971,24 @@ body:has(.case-page) .nav::before { opacity: 1; }
 }
 
 /* ---------- the way out ---------- */
+/* the way out: the next case centred, the way back under it */
 .project-foot {
-  display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 40px;
   margin-top: clamp(48px, 6vw, 96px);
 }
 .case-page .back { margin: 0; border-color: var(--rule); color: var(--ink); }
 .case-page .back:hover { background: var(--ink); color: #050507; }
 .project-next {
-  display: grid; gap: 8px; text-align: right; margin-left: auto;
+  display: grid; gap: 8px; text-align: center; justify-items: center;
   padding: 0; color: var(--ink);
 }
 .project-next-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
 .project-next strong {
   font-family: var(--display); font-weight: 700; font-stretch: 80%; text-transform: uppercase;
   font-size: clamp(28px, 4.5vw, 64px); line-height: 1; letter-spacing: -0.03em;
-  /* the rule draws itself in from the side you are heading towards */
+  /* the rule draws itself out from the middle */
   background-image: linear-gradient(currentColor, currentColor);
-  background-repeat: no-repeat; background-position: 100% 100%; background-size: 0 1px;
+  background-repeat: no-repeat; background-position: 50% 100%; background-size: 0 1px;
   transition: background-size var(--t-ui-out) var(--ease-out);
   padding-bottom: 6px;
 }
@@ -1009,9 +1002,7 @@ body:has(.case-page) .nav::before { opacity: 1; }
   .project-lead { max-width: none; margin-left: 0; }
   .project-meta { grid-template-columns: 1fr; gap: 22px; }
   .chapter { grid-template-columns: 1fr; gap: 10px; }
-  .chapter-no { position: static; }
   .project-hero { aspect-ratio: 16 / 11; }
-  .project-next { text-align: left; margin-left: 0; }
 }
 
 /* =========================== The scroll site =========================== */
@@ -1050,10 +1041,8 @@ body:has(.case-page) .nav::before { opacity: 1; }
 .sol-item { grid-area: 1 / 1; pointer-events: none; }
 .sol-item.is-on { pointer-events: auto; }
 .sol-item > * { overflow: hidden; }
-.sol-ch { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; color: var(--b); }
-.sol-ch span { color: var(--dim); }
 .sol-title {
-  margin-top: 18px; overflow: hidden;
+  margin-top: 0; overflow: hidden;
   font-family: var(--display); font-weight: 700; font-stretch: 78%; text-transform: uppercase;
   font-size: clamp(44px, 6.2vw, 108px); line-height: 0.88; letter-spacing: -0.035em;
 }
@@ -1362,7 +1351,7 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 }
 .nf-copy { max-width: 36ch; margin-top: clamp(20px, 3vw, 36px); color: var(--dim); font-size: 15px; line-height: 1.5; }
 .nf-home {
-  margin-top: 28px; display: inline-flex; gap: 12px; align-items: center;
+  margin-top: 28px; display: inline-flex; gap: 12px; align-items: center; align-self: center;
   font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
   padding: 14px 20px; border: 1px solid var(--line); border-radius: 999px; color: var(--fg); text-decoration: none;
   transition: background var(--t-micro), border-color var(--t-micro), color var(--t-micro);
@@ -1664,7 +1653,7 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .work-shot-no span:first-child { color: color-mix(in srgb, var(--pb) 80%, #fff); }
 .work-shot-services { font-size: clamp(14px, 1.3vw, 18px); color: rgba(242, 240, 235, 0.82); }
 .work-shot-open {
-  justify-self: start; margin-top: 8px;
+  justify-self: center; margin-top: 8px;
   display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 999px;
   font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #fff;
   border: 1px solid color-mix(in srgb, var(--pb) 70%, rgba(255, 255, 255, 0.3));
@@ -1672,9 +1661,7 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   transition: background var(--t-touch) var(--ease-work), box-shadow var(--t-touch) var(--ease-work), transform var(--t-touch) var(--ease-work);
 }
-.work-shot-open i { font-style: normal; transition: transform var(--t-touch) var(--ease-work); }
 .work-shot-open:hover { background: color-mix(in srgb, var(--pa) 45%, rgba(5, 4, 10, 0.3)); box-shadow: 0 0 30px -6px var(--pa); }
-.work-shot-open:hover i { transform: translateX(4px); }
 .work-shot-open:active { transform: scale(0.97); }
 .work-shot-open:focus-visible, .case-page .back:focus-visible, .project-next:focus-visible { outline: 2px solid var(--pb, #d4b8ff); outline-offset: 4px; }
 /* the picture that becomes the case's banner, and the title that becomes its title */
@@ -2261,15 +2248,12 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .intro-enter { font-family: var(--mono); letter-spacing: 0.24em; }
 
 /* ---------- Solutions: the chapter dial reads as a control ---------- */
-.sol-ch { display: inline-flex; align-items: center; gap: 10px; letter-spacing: var(--label-track); }
-.sol-ch::before { content: ""; width: 22px; height: 1px; background: currentColor; opacity: 0.7; }
 .sol-desc { text-wrap: pretty; }
 .sol-proof { display: inline-flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--hair); }
 .sol-proof span { margin-right: 0.4em; }
 .sol-dial li { transition: color var(--t-state) var(--e-hand); }
 .sol-dial-bar { transition: background var(--t-state); }
 .sol-dial li[aria-current] .sol-dial-bar { background: color-mix(in srgb, var(--a) 22%, transparent); box-shadow: 0 0 12px color-mix(in srgb, var(--a) 35%, transparent); }
-.sol-dial li[aria-current] .sol-dial-no { color: color-mix(in srgb, var(--a) 40%, #fff); }
 /* the change of chapter: a precise, short split on the title only (already timed in Solutions.tsx) */
 .sol-item.glitching .sol-title { clip-path: inset(0 0 0 0); }
 
@@ -2423,7 +2407,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .solc .sol-proof { margin: 12px 0 18px; font-size: 12px; line-height: 1.7; }
 .solc-card.glitching .sol-title { filter: drop-shadow(6px 0 rgba(255, 45, 79, 0.8)) drop-shadow(-6px 0 rgba(47, 107, 255, 0.8)); transform: translateX(4px); }
 .solc-cta {
-  align-self: flex-start; margin-top: auto; /* the cards are as tall as the tallest: the button sits on the foot */
+  align-self: center; margin-top: auto; /* the cards are as tall as the tallest: the button sits on the foot */
   display: inline-flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 20px; border-radius: 999px;
   font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #fff;
   border: 1px solid color-mix(in srgb, var(--b) 45%, rgba(255, 255, 255, 0.2)); background: color-mix(in srgb, var(--a) 16%, rgba(255, 255, 255, 0.04));

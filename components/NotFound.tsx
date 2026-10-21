@@ -126,7 +126,7 @@ export function NotFound() {
       <p className="nf-readout">
         <span className="hud-no">GET</span>
         {path}
-        <span className="nf-status">→ 404 Not Found</span>
+        <span className="nf-status">404 Not Found</span>
       </p>
       <h1 id="nf-title" className="nf-title">
         <span className="sr-only">404, not found</span>
@@ -136,7 +136,6 @@ export function NotFound() {
       <p className="nf-copy">This page lost the signal. Whatever was here has moved, or never was.</p>
       <Link href="/" className="nf-home">
         <span>Back to Dizrupt</span>
-        <span aria-hidden>→</span>
       </Link>
     </section>
   );

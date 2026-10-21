@@ -8,7 +8,7 @@ const sans = Inter_Tight({ subsets: ["latin"], weight: ["300", "400", "500", "70
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--f-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Dizrupt — Solutions designed for what’s next",
+  title: "Dizrupt | Solutions designed for what’s next",
   description: "Dizrupt is a solutions-led full stack digital marketing agency headquartered in Mumbai.",
 };
 

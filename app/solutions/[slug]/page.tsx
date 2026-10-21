@@ -7,7 +7,7 @@ export const generateStaticParams = () => SOLUTIONS.map((s) => ({ slug: solution
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const s = solutionBySlug((await params).slug);
-  return s ? { title: `${s.name} — Dizrupt`, description: s.line } : {};
+  return s ? { title: `${s.name} | Dizrupt`, description: s.line } : {};
 }
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {

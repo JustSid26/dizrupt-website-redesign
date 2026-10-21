@@ -77,14 +77,11 @@ export function Contact() {
       <SocialTowers />
       <div ref={pane} className="contact-pin">
         <div className="contact-inner">
-          <p className="eyebrow">
-            <span className="hud-no">04</span> Contact
-          </p>
+          <p className="eyebrow">Contact</p>
           <Counterflow />
           <p className="contact-lead">Tell us what you&apos;re building. We&apos;ll come back within a working day with how we&apos;d approach it.</p>
           <a className="contact-cta" href={`mailto:${c.email}?subject=New%20project%20with%20Dizrupt`}>
             <span>Start a project</span>
-            <i aria-hidden>→</i>
           </a>
           <dl className="contact-grid">
             <div>
@@ -108,12 +105,12 @@ export function Contact() {
             <div>
               <dt>Follow</dt>
               <dd>
-                <a className="u-link" href={c.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>
+                <a className="u-link" href={c.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a>
               </dd>
             </div>
           </dl>
           <button type="button" className="back" onClick={() => goToSection("work")}>
-            ← Back to work
+            Back to work
           </button>
         </div>
       </div>

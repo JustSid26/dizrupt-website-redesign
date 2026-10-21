@@ -134,7 +134,7 @@ export function MacProjects() {
                   <span className="mac-folder" aria-hidden />
                   <span>
                     <strong>projects</strong>
-                    <small>Folder — ~/dizrupt/tech-and-automation</small>
+                    <small>Folder · ~/dizrupt/tech-and-automation</small>
                   </span>
                 </div>
               </div>

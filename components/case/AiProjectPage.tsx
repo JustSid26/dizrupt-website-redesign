@@ -89,7 +89,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
             if (!sessionStorage.getItem("home-scroll")) sessionStorage.setItem("home-target", "ai");
           }}
         >
-          <span aria-hidden>←</span> <span className="aip-back-label">AI &amp; Automation</span>
+          <span className="aip-back-label">AI &amp; Automation</span>
         </Link>
         <p className="aip-path">
           ~/dizrupt/ai/projects/<strong>{project.slug}</strong>
@@ -122,7 +122,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
             <video src={project.video} poster={project.poster} controls playsInline preload="metadata" />
           ) : project.poster ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={project.poster} alt={`${project.name} — still`} />
+            <img src={project.poster} alt={`${project.name} still`} />
           ) : (
             <div className="aip-nosignal">
               <span>Film incoming</span>
@@ -189,7 +189,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
 
       <Link href={`/ai/${next.slug}`} className="aip-next" data-reveal>
         <span className="aip-label">
-          <span>→</span> Next node
+          Next node
         </span>
         <strong>{next.name}</strong>
         <small>{next.about}</small>

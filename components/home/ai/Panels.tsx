@@ -42,7 +42,7 @@ function Inbox() {
               <b>{m.from}</b>
               {m.subj}
             </span>
-            <em className="ain-route is-after">→ {m.to}</em>
+            <em className="ain-route is-after">{m.to}</em>
           </li>
         ))}
       </ul>

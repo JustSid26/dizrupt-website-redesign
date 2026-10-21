@@ -68,9 +68,7 @@ export function SolutionCards() {
   return (
     <section ref={section} id="solutions" className="solc" aria-labelledby="solutions-title">
       <header className="solc-head">
-        <h2 id="solutions-title" className="eyebrow">
-          <span className="hud-no">02</span> Solutions
-        </h2>
+        <h2 id="solutions-title" className="eyebrow">Solutions</h2>
         <p className="solc-count" aria-live="polite">
           CH <strong>{pad(active + 1)}</strong> / {pad(N)}
         </p>
@@ -122,9 +120,6 @@ export function SolutionCards() {
               )}
             </div>
             <div className="solc-body">
-              <p className="sol-ch">
-                CH {pad(i + 1)} <span>/ {pad(N)}</span>
-              </p>
               <h3 className="sol-title">
                 <span>{s.name}</span>
               </h3>
@@ -139,7 +134,6 @@ export function SolutionCards() {
                 onClick={() => sessionStorage.setItem("home-scroll", String(scrollY))}
               >
                 <span>View the work</span>
-                <i aria-hidden>→</i>
               </Link>
             </div>
           </li>
