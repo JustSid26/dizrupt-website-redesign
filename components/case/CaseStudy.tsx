@@ -30,25 +30,11 @@ export function CaseStudy({ project }: { project: Project }) {
     };
   }, [project]);
 
-  /* Further down, each block arrives as it comes into view: once, rising a little as it fades in,
-     its own pieces one after another. */
+  /* The whole page is there at once: every block is revealed on arrival (each still rises in with
+     its own pieces one after another, on the page's one entrance), not as it is scrolled to. */
   useEffect(() => {
-    const els = [...(root.current?.querySelectorAll<HTMLElement>("[data-reveal]") ?? [])];
-    if (reduce) return void els.forEach((el) => el.classList.add("is-revealed"));
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => {
-        if (!e.isIntersecting) return;
-        e.target.classList.add("is-revealed");
-        io.unobserve(e.target);
-      }),
-      { rootMargin: "0px 0px -12% 0px", threshold: 0.12 },
-    );
-    els.forEach((el) => {
-      el.classList.remove("is-revealed");
-      io.observe(el);
-    });
-    return () => io.disconnect();
-  }, [project, reduce]);
+    root.current?.querySelectorAll<HTMLElement>("[data-reveal]").forEach((el) => el.classList.add("is-revealed"));
+  }, [project]);
 
   // the headline numbers count up once they are on screen
   useEffect(() => {

@@ -305,12 +305,13 @@ export function createWorkTower(opts: { box: Box; banners: (string | null)[]; co
     return { frame, glass };
   });
 
-  /* ---- the sign on the roof: WORK, in the studio's neon, facing the way the camera comes. The
-     panel is the building's own dark with a hairline of violet round it; the word is white tubes
-     over a violet glow, the way the Z in the window is. About four storeys tall: read from across the
-     city, out of frame once the camera is at a window. ---- */
+  /* ---- the sign at its foot: WORK, in the studio's neon, a hoarding standing in front of the
+     building on its podium, facing the way the camera comes. The panel is the building's own dark
+     with a hairline of violet round it; the word is white tubes over a violet glow, the way the Z in
+     the window is. Wide and low: it stays under the first project's window, and the camera flying in
+     to that window passes over it. ---- */
   const signCanvas = document.createElement('canvas');
-  signCanvas.width = 1024; signCanvas.height = 384;
+  signCanvas.width = 1024; signCanvas.height = 200;
   const signTex = new THREE.CanvasTexture(signCanvas);
   signTex.colorSpace = THREE.SRGBColorSpace;
   signTex.anisotropy = 4;
@@ -322,32 +323,34 @@ export function createWorkTower(opts: { box: Box; banners: (string | null)[]; co
     g.strokeStyle = 'rgba(196, 92, 255, 0.85)'; g.lineWidth = 6; g.strokeRect(16, 16, sw - 32, sh - 32);
     // the display face, as the page has it (next/font names it; the plain name if that isn't there yet)
     const fam = (typeof getComputedStyle === 'function' && getComputedStyle(document.documentElement).getPropertyValue('--f-display').trim()) || '"Bricolage Grotesque"';
-    g.font = `800 290px ${fam}, "Inter Tight", system-ui, sans-serif`;
+    g.font = `800 158px ${fam}, "Inter Tight", system-ui, sans-serif`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.shadowColor = '#c45cff'; g.shadowBlur = 54; g.fillStyle = '#c45cff';
-    g.fillText('WORK', sw / 2, sh / 2 + 12);
-    g.shadowBlur = 16; g.fillStyle = '#fff4ff';
-    g.fillText('WORK', sw / 2, sh / 2 + 12);
+    g.shadowColor = '#c45cff'; g.shadowBlur = 40; g.fillStyle = '#c45cff';
+    g.fillText('WORK', sw / 2, sh / 2 + 8);
+    g.shadowBlur = 12; g.fillStyle = '#fff4ff';
+    g.fillText('WORK', sw / 2, sh / 2 + 8);
     signTex.needsUpdate = true;
   };
   drawSign();
   // drawn again once the page's fonts are in, so the word is set in the display face
   if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(drawSign).catch(() => {});
-  const SIGN_W = W * 0.86, SIGN_H = SIGN_W * (signCanvas.height / signCanvas.width), SIGN_LIFT = 0.3;
-  const SIGN_Y = H + SIGN_LIFT + SIGN_H / 2, SIGN_Z = -0.45; // a little back from the front edge of the roof
-  const signMat = new THREE.MeshBasicMaterial({ map: signTex, toneMapped: false, color: new THREE.Color(0.85, 0.85, 0.85) });
+  /* nearly twice the building's width, standing a little way out from its front on short legs; its
+     top stays below the first project's window (row 3 of the front, about 1.26 up) */
+  const SIGN_W = W * 1.8, SIGN_H = SIGN_W * (signCanvas.height / signCanvas.width), SIGN_LIFT = 0.08;
+  const SIGN_Y = SIGN_LIFT + SIGN_H / 2, SIGN_Z = 1.3; // out in front of the face (z runs out of the wall)
+  const signMat = new THREE.MeshBasicMaterial({ map: signTex, toneMapped: false, color: new THREE.Color(0.9, 0.9, 0.9) });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(SIGN_W, SIGN_H), signMat);
   sign.position.set(0, SIGN_Y, SIGN_Z);
   group.add(sign);
-  // its steel: a slab behind the panel, two posts down to the roof
+  // its steel: a slab behind the panel, and legs down to the podium
   const steel = new THREE.MeshBasicMaterial({ color: '#15141f' });
-  const signBack = new THREE.Mesh(new THREE.BoxGeometry(SIGN_W + 0.06, SIGN_H + 0.06, 0.06), steel);
-  signBack.position.set(0, SIGN_Y, SIGN_Z - 0.04);
+  const signBack = new THREE.Mesh(new THREE.BoxGeometry(SIGN_W + 0.08, SIGN_H + 0.08, 0.08), steel);
+  signBack.position.set(0, SIGN_Y, SIGN_Z - 0.05);
   group.add(signBack);
-  for (const sx of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, SIGN_LIFT + 0.06, 0.05), steel);
-    post.position.set(sx * SIGN_W * 0.38, H + SIGN_LIFT / 2, SIGN_Z - 0.04);
-    group.add(post);
+  for (const sx of [-0.42, 0.42, -0.14, 0.14]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, SIGN_LIFT + 0.04, 0.06), steel);
+    leg.position.set(sx * SIGN_W, SIGN_LIFT / 2, SIGN_Z - 0.05);
+    group.add(leg);
   }
 
   /* ---- where things are ---- */

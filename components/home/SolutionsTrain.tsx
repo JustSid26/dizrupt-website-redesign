@@ -7,6 +7,7 @@ import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { SOLUTIONS, solutionSlug } from "@/content/solutions";
 import { useRouter } from "next/navigation";
+import { transitionTo } from "@/lib/viewTransition";
 import { useSection } from "@/components/home/useSection";
 
 /* What Dizrupt does, six stations long (a wide screen; a phone has SolutionCards.tsx). The mascot
@@ -110,7 +111,7 @@ export function SolutionsTrain() {
           onClick={() => {
             const k = Number(hit.current?.dataset.index ?? active);
             sessionStorage.setItem("home-scroll", String(scrollY));
-            router.push(`/solutions/${solutionSlug(SOLUTIONS[k] ?? SOLUTIONS[active])}`);
+            transitionTo(() => router.push(`/solutions/${solutionSlug(SOLUTIONS[k] ?? SOLUTIONS[active])}`), "open");
           }}
         >
           <span>View the work</span>

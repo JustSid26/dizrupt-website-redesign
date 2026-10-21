@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { transitionTo } from "@/lib/viewTransition";
 import { ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { T } from "@/lib/motion";
@@ -70,6 +72,7 @@ export function SolutionCards() {
   const [active, setActive] = useState(0);
   const [seen, setSeen] = useState(false); // on screen: its film may play
   const reduce = useStore((s) => s.reducedMotion);
+  const router = useRouter();
   useSection(section, "solutions");
 
   useEffect(() => {
@@ -203,7 +206,12 @@ export function SolutionCards() {
                 href={`/solutions/${solutionSlug(s)}`}
                 className="solc-cta"
                 tabIndex={i === active ? 0 : -1}
-                onClick={() => sessionStorage.setItem("home-scroll", String(scrollY))}
+                onClick={(e) => {
+                  // the page crossfades into the solution's own (lib/viewTransition.ts), and comes back to this card
+                  e.preventDefault();
+                  sessionStorage.setItem("home-scroll", String(scrollY));
+                  transitionTo(() => router.push(`/solutions/${solutionSlug(s)}`), "open");
+                }}
               >
                 <span>View the work</span>
               </Link>

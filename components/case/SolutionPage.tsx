@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { routeReady, transitionTo } from "@/lib/viewTransition";
 import { signals } from "@/lib/signals";
 import { bannerFor } from "@/content/banners";
 import { clients, slugOf } from "@/content/projects";
@@ -14,10 +16,13 @@ export function SolutionPage({ solution: s }: { solution: Solution }) {
   const root = useRef<HTMLElement>(null);
   const work = clients.filter((p) => matchesSolution(s, p.client));
   const n = SOLUTIONS.findIndex((x) => x.name === s.name); // by name: the page is handed a copy from the server
+  const router = useRouter();
+  const next = SOLUTIONS[(n + 1) % SOLUTIONS.length];
 
   useEffect(() => {
     signals.caseShape = { shape: s.shape, colors: s.colors };
     scrollTo(0, 0);
+    routeReady(); // a transition into this page can take its "after" picture now
     requestAnimationFrame(() => root.current?.classList.add("in"));
     return () => {
       signals.caseShape = null;
@@ -62,12 +67,30 @@ export function SolutionPage({ solution: s }: { solution: Solution }) {
           })}
         </ul>
         <nav className="project-foot">
-          <Link className="back" href="/" scroll={false}>
+          <Link
+            className="back"
+            href="/"
+            scroll={false}
+            onClick={(e) => {
+              e.preventDefault();
+              // back to the line where it was left; arrived here directly, back to the solutions
+              if (!sessionStorage.getItem("home-scroll")) sessionStorage.setItem("home-target", "solutions");
+              document.documentElement.classList.add("is-landing");
+              transitionTo(() => router.push("/", { scroll: false }), "back");
+            }}
+          >
             Back to the line
           </Link>
-          <Link className="project-next" href={`/solutions/${solutionSlug(SOLUTIONS[(n + 1) % SOLUTIONS.length])}`}>
+          <Link
+            className="project-next"
+            href={`/solutions/${solutionSlug(next)}`}
+            onClick={(e) => {
+              e.preventDefault();
+              transitionTo(() => router.push(`/solutions/${solutionSlug(next)}`), "next");
+            }}
+          >
             <span className="project-next-label">Next solution</span>
-            <strong>{SOLUTIONS[(n + 1) % SOLUTIONS.length].name}</strong>
+            <strong>{next.name}</strong>
           </Link>
         </nav>
       </div>
