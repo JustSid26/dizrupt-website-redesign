@@ -78,7 +78,6 @@ export function NavMenu() {
           <span>
             DI<span className="flip-z">Z</span>RUPT
           </span>
-          <small>Sections</small>
         </li>
         {ITEMS.map((it, i) => (
           <li key={it.id} style={{ "--i": i } as React.CSSProperties}>

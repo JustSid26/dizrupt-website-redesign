@@ -105,7 +105,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.setSize(innerWidth, innerHeight);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 0.26);
+  /* the bloom is a soft glow: a phone draws it from a half-size picture (a quarter of the work) and
+     nobody can tell; when frames are running late it drops to a quarter (see quality, below) */
+  const bloomScale = () => (isMobile ? (lowQuality ? 0.25 : 0.5) : 1);
+  const bloomSize = () => new THREE.Vector2(Math.round(innerWidth * bloomScale()), Math.round(innerHeight * bloomScale()));
+  let lowQuality = false;
+  const bloom = new UnrealBloomPass(bloomSize(), 0.45, 0.22, 0.26);
   composer.addPass(bloom);
   // the hand-over to the AI world: both pictures, one transition (ai/transition.ts)
   const aiPass = createTransitionPass();
@@ -113,6 +118,23 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
   composer.addPass(aiPass);
   composer.addPass(new OutputPass());
+  /* Quality, on a phone: while the landing builds the city the frame is at its heaviest, and a phone
+     that can't keep up stutters through the build. If frames run late there, the picture is drawn at
+     1x instead of 1.25x and the bloom from a quarter-size picture; once the build is done and frames
+     are quick again the full quality comes back. Fast phones never see the change. */
+  let qualityAt = 0, slowShare = 0;
+  const applyQuality = (low: boolean) => {
+    lowQuality = low;
+    qualityAt = performance.now();
+    const pr = low ? 1 : pixelRatio;
+    renderer.setPixelRatio(pr);
+    composer.setPixelRatio(pr);
+    composer.setSize(innerWidth, innerHeight);
+    const b = bloomSize();
+    bloom.setSize(b.x, b.y);
+    u.uPixelRatio.value = pr; // his particles keep their size on screen
+    aiPass.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr);
+  };
   let aiWorld: AiWorld | null = null;
   let aiIdle = 0; // seconds it has been out of reach
   let dark = false; // a phone, all the AI section's: the canvas cleared and left
@@ -129,8 +151,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight, false);
     composer.setSize(innerWidth, innerHeight);
-    bloom.setSize(innerWidth, innerHeight);
-    aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
+    const b = bloomSize();
+    bloom.setSize(b.x, b.y);
+    const pr = lowQuality ? 1 : pixelRatio;
+    aiPass.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr);
     aiWorld?.resize();
     atmosphere.resize();
     if (!built) return;
@@ -510,6 +534,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   field.colorB.set(MASCOT_COLORS[1]);
   // build the six solution models now, so scrolling onto one never stalls on it
   SOLUTIONS.forEach((s) => field.shape(s.shape));
+  /* and compile every material and draw one frame now, behind the count, so the first frames of the
+     landing aren't spent compiling shaders and uploading textures while the city is trying to move */
+  renderer.compile(scene, camera);
+  composer.render();
   signals.ready = true;
 
   /* ---------- glitch bursts (Spider-Verse: rare, abrupt, over in a few held frames) ---------- */
@@ -656,9 +684,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   function frame() {
     raf = requestAnimationFrame(frame);
     clock.update();
-    const dt = Math.min(clock.getDelta(), 0.05);
+    const rawDt = clock.getDelta();
+    const dt = Math.min(rawDt, 0.05);
     const time = clock.getElapsed();
     const now = performance.now();
+    // the share of recent frames that ran late (over 24ms): what the quality decision reads
+    slowShare += ((rawDt > 0.024 ? 1 : 0) - slowShare) * 0.08;
     const s = signals.scroll;
     const view = signals.caseShape;
     const preview = signals.preview;
@@ -1303,6 +1334,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         return;
       }
       dark = false;
+    }
+    // a phone falling behind while the city builds drops to the lighter picture; back up once it is built and keeping up
+    if (isMobile && now - qualityAt > 1200) {
+      const building = onIntro && ip < 0.7;
+      if (!lowQuality && building && slowShare > 0.45) applyQuality(true);
+      else if (lowQuality && !building && slowShare < 0.1) applyQuality(false);
     }
     composer.render();
   }

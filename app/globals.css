@@ -2508,7 +2508,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 /* the pane: a dark glass, a violet hairline, the wordmark at its head and the sections under it */
 .nav-menu-list {
   position: absolute; right: 0; top: calc(100% + 8px); min-width: 236px; margin: 0; padding: 0 0 8px; list-style: none;
-  background: linear-gradient(180deg, rgba(14, 10, 26, 0.96), rgba(6, 5, 12, 0.96));
+  background: rgba(7, 7, 10, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; overflow: hidden;
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
@@ -2518,11 +2518,10 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .nav-menu-list[data-open] { opacity: 1; transform: none; pointer-events: auto; }
 .nav-menu-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 16px 12px;
-  border-bottom: 1px solid rgba(201, 184, 255, 0.14); margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 6px;
   font-family: var(--sans); font-size: 14px; font-weight: 700; letter-spacing: 0.16em; color: var(--fg);
 }
 .nav-menu-head .flip-z { color: var(--violet); display: inline-block; transform: scaleX(-1); letter-spacing: 0; margin-right: 0.18em; }
-.nav-menu-head small { font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
 /* the sections come in one after another as the pane opens */
 .nav-menu-list li:not(.nav-menu-head) { opacity: 0; transform: translateX(10px); transition: opacity var(--t-ui-out) var(--ease-out), transform var(--t-ui-out) var(--ease-out); }
 .nav-menu-list[data-open] li:not(.nav-menu-head) { opacity: 1; transform: none; transition-delay: calc(var(--t-stagger) * (var(--i, 0) + 1)); }
