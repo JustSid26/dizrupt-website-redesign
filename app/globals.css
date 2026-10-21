@@ -1807,9 +1807,9 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ai-hw-head:focus-visible { outline: 1px solid #7cf2ff; outline-offset: 6px; }
 .ai-hw-head:hover .ai-hw-title { color: #fff; text-shadow: 0 0 24px rgba(60, 200, 255, 0.3); }
 .ai-hw-head:hover .ai-hw-name { color: #c9fbff; }
-.ai-how-hint { font-style: normal; color: var(--dim); letter-spacing: 0.12em; margin-left: 4px; }
-.ai-hw-name { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #7cf2ff; transition: color var(--t-micro); }
-.ai-hw-title { display: block; transition: color var(--t-micro), text-shadow var(--t-micro); margin-top: 8px; font-family: var(--display); font-weight: 600; font-stretch: 80%; text-transform: uppercase; font-size: clamp(22px, 2.1vw, 36px); line-height: 0.95; }
+/* the stage's name is the headline (display, condensed), its line the small label under it */
+.ai-hw-name { display: block; font-family: var(--display); font-weight: 600; font-stretch: 80%; text-transform: uppercase; font-size: clamp(22px, 2.1vw, 36px); line-height: 0.95; color: #7cf2ff; transition: color var(--t-micro); }
+.ai-hw-title { display: block; transition: color var(--t-micro), text-shadow var(--t-micro); margin-top: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1.5; }
 .ai-hw-more { max-height: calc(var(--h) * 160px); opacity: var(--h); overflow: hidden; }
 .ai-hw-line { margin-top: 10px; max-width: 44ch; font-size: 14px; line-height: 1.5; color: rgba(242, 240, 235, 0.78); }
 .ai-hw-points { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin-top: 12px; }
@@ -1835,7 +1835,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   .ai-note b { padding: 5px 9px; }
   .ai-hw { padding: 10px 0 10px 16px; }
   .ai-hw::before { top: 10px; height: calc(var(--h) * (100% - 20px)); }
-  .ai-hw-title { font-size: clamp(19px, 5.4vw, 28px); }
+  .ai-hw-name { font-size: clamp(19px, 5.4vw, 28px); }
   .ai-hw-line { font-size: 13px; margin-top: 6px; }
   .ai-hw-more { max-height: calc(var(--h) * 130px); }
 }
@@ -1846,18 +1846,19 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ain[data-tall] { --ms: 0.6; --z0: 4; --zw: 92; }
 /* a short wide screen: the map drawn smaller, so it clears the frame's readouts */
 @media (max-height: 780px) and (min-aspect-ratio: 1/1) { .ain { --ms: 0.7; } }
-.ain-wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; opacity: calc(1 - 0.8 * var(--dim)); }
+.ain-wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; opacity: calc(1 - 0.6 * var(--dim)); }
 .ain-wires path { fill: none; vector-effect: non-scaling-stroke; }
-.ain-reach { stroke: rgba(124, 242, 255, 0.55); stroke-width: 1; stroke-dasharray: 1; }
+.ain-reach { stroke: rgba(124, 242, 255, 0.8); stroke-width: 1.3; stroke-dasharray: 1; }
 /* the audit's map: how the work passes between the tools by hand today */
 .ain-map-v { opacity: calc(1 - 0.85 * var(--v)); }
 .ain-map path { stroke: rgba(255, 179, 107, 0.6); stroke-width: 1; stroke-dasharray: 1; stroke-dashoffset: 1; }
 /* the workflow followed through all three stages */
 .ain-thread { opacity: calc(1 - 0.7 * var(--v)); }
 .ain-thread path { stroke: #a58bff; stroke-width: 1.6; stroke-dasharray: 1; stroke-dashoffset: 1; }
-.ain-thread-flow path { stroke: #efe9ff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0.05 0.95; opacity: var(--tl); animation: ain-flow 1.9s linear infinite; animation-delay: calc(var(--i) * -0.95s); } /* ambient: its own loop */
-.ain-link { stroke: rgba(124, 242, 255, 0.62); stroke-width: 1.25; stroke-dasharray: 1; stroke-dashoffset: 1; }
-.ain-flows path { stroke: #c9fbff; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 0.03 0.97; animation: ain-flow 2.6s linear infinite; animation-delay: calc(var(--i) * -0.41s); } /* ambient: its own loop */
+/* the traffic on the traces: longer, brighter pulses, more of them, running quicker */
+.ain-thread-flow path { stroke: #fbf8ff; stroke-width: 4.2; stroke-linecap: round; stroke-dasharray: 0.09 0.41; opacity: var(--tl); filter: drop-shadow(0 0 6px rgba(200, 170, 255, 0.95)); animation: ain-flow 1.3s linear infinite; animation-delay: calc(var(--i) * -0.65s); } /* ambient: its own loop */
+.ain-link { stroke: rgba(124, 242, 255, 0.85); stroke-width: 1.6; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.ain-flows path { stroke: #e6fdff; stroke-width: 3.2; stroke-linecap: round; stroke-dasharray: 0.06 0.44; filter: drop-shadow(0 0 5px rgba(60, 240, 255, 0.9)); animation: ain-flow 1.7s linear infinite; animation-delay: calc(var(--i) * -0.41s); } /* ambient: its own loop */
 @keyframes ain-flow { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 /* where the links break: a mark at each */
 .ain-faults { position: absolute; inset: 0; visibility: hidden; }
@@ -1911,20 +1912,20 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   .ain-chip img { position: absolute; inset: 27%; width: 46%; height: 46%; object-fit: contain; opacity: 0.6; animation: ain-beat 1s infinite; } /* ambient: its own loop */
   .ai[data-chapter="core"] .ain-chip { animation: ain-float 6s ease-in-out infinite; } /* ambient: its own loop */
   .ai:not([data-chapter="core"]) .ain-chip {
-    box-shadow: 0 0 0 1px rgb(124 242 255 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 calc(var(--cs) * 0.5) rgb(60 240 255 / 0.22), 0 0 calc(var(--cs) * 1.2) rgb(163 16 231 / 0.25);
+    box-shadow: 0 0 0 1px rgb(124 242 255 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 calc(var(--cs) * 0.6) rgb(60 240 255 / 0.4), 0 0 calc(var(--cs) * 1.5) rgb(163 16 231 / 0.45);
   }
 }
 /* lub-dub, once a second, as his heart beats everywhere else */
 @keyframes ain-beat {
-  0%, 100% { scale: 1; opacity: 0.55; }
-  6% { scale: 1.12; opacity: 1; }
-  18% { scale: 1; opacity: 0.6; }
-  30% { scale: 1.07; opacity: 0.85; }
-  48% { scale: 1; opacity: 0.55; }
+  0%, 100% { scale: 1; opacity: 0.5; }
+  6% { scale: 1.22; opacity: 1; }
+  18% { scale: 1; opacity: 0.55; }
+  30% { scale: 1.12; opacity: 0.9; }
+  48% { scale: 1; opacity: 0.5; }
 }
 @keyframes ain-float {
-  0%, 100% { transform: perspective(600px) rotateX(14deg) rotateY(-18deg) translateY(-3%); }
-  50% { transform: perspective(600px) rotateX(4deg) rotateY(12deg) translateY(3%); }
+  0%, 100% { transform: perspective(600px) rotateX(18deg) rotateY(-24deg) translateY(-5%); }
+  50% { transform: perspective(600px) rotateX(2deg) rotateY(16deg) translateY(5%); }
 }
 @media (prefers-reduced-motion: reduce) { .ain-chip, .ain-chip img { animation: none !important; } }
 
@@ -1946,13 +1947,13 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   font-size: 10.5px; line-height: 1.3; color: #dfe8f0; overflow: hidden; border-radius: 6px;
   background: rgba(7, 10, 17, 0.94);
   border: 1px solid rgba(124, 242, 255, calc(0.12 + 0.24 * var(--k)));
-  box-shadow: 0 0 0 1px rgba(255, 179, 107, calc(0.75 * var(--f) * (1 - var(--a)))), 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 calc(24px * var(--a)) rgba(60, 240, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(255, 179, 107, calc(0.75 * var(--f) * (1 - var(--a)))), 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 calc(36px * var(--a)) rgba(60, 240, 255, 0.22);
   /* as found it doesn't sit still */
-  animation: ain-drift 4.6s ease-in-out infinite alternate; animation-delay: calc(var(--cr) * -0.5s); /* ambient: its own loop */
+  animation: ain-drift 3.8s ease-in-out infinite alternate; animation-delay: calc(var(--cr) * -0.5s); /* ambient: its own loop */
 }
 @keyframes ain-drift {
-  from { translate: calc((1 - var(--k)) * -6px) calc((1 - var(--k)) * 4px); }
-  to { translate: calc((1 - var(--k)) * 6px) calc((1 - var(--k)) * -4px); }
+  from { translate: calc((1 - var(--k)) * -10px) calc((1 - var(--k)) * 7px); }
+  to { translate: calc((1 - var(--k)) * 10px) calc((1 - var(--k)) * -7px); }
 }
 .ain-panel .is-before { opacity: calc(1 - var(--t)); }
 .ain-panel .is-after { opacity: var(--t); }
@@ -2281,7 +2282,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .back:hover { border-color: var(--fg); }
 
 /* ---------- AI: its labels set like the rest ---------- */
-.ai-kicker, .ai-hw-name, .ai-read, .ai-tag { letter-spacing: var(--label-track); }
+.ai-kicker, .ai-hw-title, .ai-read, .ai-tag { letter-spacing: var(--label-track); }
 
 @media (prefers-reduced-motion: reduce) {
   .rail .rail-logo:hover > span { animation: none; }
@@ -2320,9 +2321,13 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ai-say-method { font-size: 12.5px; }
 /* how we do it */
 .ai-how { width: min(520px, 36vw); }
-.ai-how-hint { color: rgba(242, 240, 235, 0.65); }
-.ai-hw-name { font-size: 12.5px; }
-.ai-hw-title { font-size: clamp(24px, 2.2vw, 38px); }
+.ai-hw-title { font-size: 12.5px; }
+.ai-hw-name { font-size: clamp(24px, 2.2vw, 38px); }
+/* the heading over the three stages, set as they are */
+.ai-how > .ai-how-title {
+  font-family: var(--display); font-weight: 600; font-stretch: 80%; text-transform: uppercase;
+  font-size: clamp(24px, 2.2vw, 38px); line-height: 0.95; letter-spacing: -0.01em; color: var(--fg); margin-bottom: 18px;
+}
 .ai-hw { opacity: calc(0.55 + 0.45 * var(--h)); }
 .ai-hw-line { font-size: 16px; color: rgba(242, 240, 235, 0.9); }
 .ai-hw-points li { font-size: 11.5px; }
@@ -2353,7 +2358,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   .ai-say-body { font-size: 16px; }
   .ai-say-method { font-size: 10.5px; }
   .ai-hw-line { font-size: 14.5px; }
-  .ai-hw-title { font-size: clamp(21px, 5.8vw, 30px); }
+  .ai-hw-name { font-size: clamp(21px, 5.8vw, 30px); }
   .ai-hw-points li { font-size: 10.5px; }
   .ai-hw-more { max-height: calc(var(--h) * 160px); }
   .ain[data-tall] .ain-tag { font-size: 10px; }
@@ -2363,7 +2368,8 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   .ai-how { bottom: calc(var(--gutter) * 2); }
   .ai-how > .ai-kicker { margin-bottom: 6px; }
   .ai-hw { padding: 8px 0 8px 16px; }
-  .ai-hw-title { font-size: calc(clamp(15px, 4vw, 20px) + var(--h) * 6px); margin-top: 4px; }
+  .ai-hw-name { font-size: calc(clamp(15px, 4vw, 20px) + var(--h) * 6px); }
+  .ai-hw-title { margin-top: 4px; }
 }
 
 /* =========================== Portrait: copy below, picture above ===========================
