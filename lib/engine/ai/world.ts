@@ -602,9 +602,9 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     render(dt: number, time: number, p: number, px: number, py: number) {
       uTime.value = time;
       const q = Math.min(1, Math.max(0, p));
-      // powering on: the second half of the scroll from the chip to its first beat (the first half it
-      // just floats there, turning, so it can be seen before anything happens to it)
-      const act = smooth(WIRE * 0.5, WIRE * 0.95, q);
+      // powering on: from the very start of the scroll out of the chip's beat (the ring of light leaves
+      // it almost at once), done by a third of the way to what we do, at the same pace as ever
+      const act = smooth(WIRE * 0.06, WIRE * 0.6, q);
       const back = smooth(WIRE, CHAOS, q); // then the pull back to the whole network
       const xp = smooth(AI_EXIT_FROM, 0.97, q);
       tgtPos.lerpVectors(poses[0].pos, poses[1].pos, act).lerp(poses[2].pos, back).lerp(away, xp);
