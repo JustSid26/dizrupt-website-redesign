@@ -190,6 +190,14 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         tl.time(head.t);
         signals.ai.play = head.t;
       };
+      /* a jump on the clock hidden behind a short fade of the picture: what lies between is never
+         seen (the stages of how we do it are toggled, not played through) */
+      const fadeJump = (seq: gsap.core.Timeline, t: number) => {
+        const st = stage.current;
+        seq.to(st, { autoAlpha: 0, duration: reduceRef.current ? T.reduced : 0.22, ease: EASE.out });
+        seq.call(() => { head.t = t; apply(); });
+        seq.to(st, { autoAlpha: 1, duration: reduceRef.current ? T.reduced : 0.3, ease: EASE.in });
+      };
       // to beat `to`, through every beat on the way
       const playTo = (to: number) => {
         tw?.kill();
@@ -202,15 +210,8 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         // the page's ride, if one is under way: the beats share what is left of it
         const left = (signals.rideEnd - performance.now()) / 1000;
         let from = head.t;
-        /* the stages of how we do it are toggled, never scrolled through: a leg out of how (or back
-           into it) skips what lies between the stage it rests at and the stages' end, behind a short
-           fade of the picture, so neither way plays the other stages */
-        const skip = (t: number) => {
-          const st = stage.current;
-          seq.to(st, { autoAlpha: 0, duration: reduceRef.current ? T.reduced : 0.22, ease: EASE.out });
-          seq.call(() => { head.t = t; apply(); });
-          seq.to(st, { autoAlpha: 1, duration: reduceRef.current ? T.reduced : 0.3, ease: EASE.in });
-        };
+        // a leg out of how (or back into it) skips what lies between the stage it rests at and the stages' end
+        const skip = (t: number) => fadeJump(seq, t);
         const PAST_HOW = HOW + 0.002; // just past the stages' end, where made simple's picture has taken over
         legs.forEach((i) => {
           seq.call(() => onBeatRef.current(i));
@@ -265,14 +266,27 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         if (k !== last || (!tw?.isActive() && head.t !== rest(k))) playTo(k);
       };
       /* a stage of how we do it, picked from the text: the network plays to it where the page stands,
-         forward or back, at a beat's pace; the page itself doesn't move */
+         forward or back, at a beat's pace; the page itself doesn't move. Between neighbours the one
+         plays into the other; between audit and implement the evaluation in between is never seen:
+         behind a fade, the clock jumps past it, and only the stage asked for plays. */
+      let howStage = 0;
       seek.current = (i: number) => {
+        const from = howStage;
+        howStage = i;
         howRest = AI_STAGES[i];
         if (k !== HOW_K) return;
         tw?.kill();
-        const part = Math.min(1, Math.abs(howRest - head.t) / Math.max(1e-4, HOW - S[HOW_K]));
-        const dur = reduceRef.current ? T.reduced : T.beat * Math.max(0.4, part);
-        tw = gsap.timeline({ onUpdate: apply }).to(head, { t: howRest, duration: dur, ease: EASE.inOut });
+        const seq = gsap.timeline({ onUpdate: apply });
+        const dur = (part: number) => (reduceRef.current ? T.reduced : T.beat * Math.max(0.4, Math.min(1, part)));
+        if (Math.abs(i - from) > 1) {
+          if (i > from) {
+            // audit to implement: in just past the report's going (it is gone by 0.71), then the gathering and the wiring play
+            const wire = in2(0.716);
+            fadeJump(seq, wire);
+            seq.to(head, { t: howRest, duration: dur((howRest - wire) / (AI_STAGES[2] - AI_STAGES[1])), ease: EASE.inOut });
+          } else fadeJump(seq, howRest); // implement to audit: straight back to the audit's picture
+        } else seq.to(head, { t: howRest, duration: dur(Math.abs(howRest - head.t) / Math.max(1e-4, HOW - S[HOW_K])), ease: EASE.inOut });
+        tw = seq;
       };
       const st = ScrollTrigger.create({ trigger: sec, start: "top top", end: "bottom bottom", onUpdate: (self) => step(self.progress) });
       // while a beat plays, the scroll waits for it (SmoothScroll.tsx)
