@@ -604,7 +604,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       const q = Math.min(1, Math.max(0, p));
       // powering on: from the very start of the scroll out of the chip's beat (the ring of light leaves
       // it almost at once), done by a third of the way to what we do, at the same pace as ever
-      const act = smooth(WIRE * 0.06, WIRE * 0.6, q);
+      const act = smooth(0, WIRE * 0.45, q);
       const back = smooth(WIRE, CHAOS, q); // then the pull back to the whole network
       const xp = smooth(AI_EXIT_FROM, 0.97, q);
       tgtPos.lerpVectors(poses[0].pos, poses[1].pos, act).lerp(poses[2].pos, back).lerp(away, xp);
@@ -627,7 +627,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       camera.lookAt(look);
 
       // the pulse leaves as it powers on, the traces light up behind it
-      pulseMat.uniforms.uT.value = smooth(0.08, 0.75, act);
+      pulseMat.uniforms.uT.value = smooth(0.0, 0.7, act); // the ring leaves the instant the page moves off the chip
       traces.u.uReveal.value = smooth(0.18, 1, act);
       // they step back while the page's own picture is up over them, and fire as it hands back
       traces.u.uDim.value = 1 - 0.5 * smooth(WIRE, CHAOS, q) - 0.2 * smooth(CHAOS, ORDER, q);
