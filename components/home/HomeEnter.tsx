@@ -6,6 +6,7 @@ import { goToSection, sectionTop } from "@/lib/sections";
 import { scrollToTarget } from "@/lib/scroll";
 import { routeReady } from "@/lib/viewTransition";
 import { signals } from "@/lib/signals";
+import { isPhoneLayout } from "@/lib/layout";
 
 // Coming back to the home page puts you where you left it (from a case study), or where the menu
 // asked for; a fresh visit starts at the top.
@@ -19,18 +20,28 @@ export function HomeEnter() {
        frame or two after a route change) before telling a transition the page is ready: coming back
        from a case, the tower must already show that project, full screen, in its picture. */
     let tries = 0;
+    const root = document.documentElement;
     const land = () => {
+      /* Solutions mounts as the train and becomes the cards a moment later on a phone (Solutions.tsx),
+         and the page gets several screens shorter when it does: everything below it, the work's
+         windows among them, moves up. Nothing is settled until the section is the one this screen gets. */
+      const sol = document.getElementById("solutions");
+      const settled = !sol || sol.classList.contains("solc") === isPhoneLayout();
       ScrollTrigger.refresh();
       const want = back ? Number(back) : target ? sectionTop(target) : 0;
       if (back) scrollToTarget(want, true);
       else if (target) goToSection(target, true);
-      if (Math.abs(scrollY - want) > 4 && tries++ < 12) return void setTimeout(land, 16);
+      if ((!settled || Math.abs(scrollY - want) > 4) && tries++ < 30) return void setTimeout(land, 16);
+      // landed: a moment more in which nothing rides on from here, then the scroll is the visitor's again
+      signals.navJumpUntil = performance.now() + 600;
+      root.classList.remove("is-landing");
       signals.workApply?.();
       routeReady();
     };
     // timers, not frames: while a view transition waits for this page the browser renders nothing,
     // and frame callbacks wait with it
     setTimeout(land, 0);
+    return () => root.classList.remove("is-landing");
   }, []);
   return null;
 }

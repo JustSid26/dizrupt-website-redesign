@@ -136,6 +136,9 @@ export function CaseStudy({ project }: { project: Project }) {
               // back to this project's window in the tower, wherever the visit came in
               sessionStorage.removeItem("home-scroll");
               sessionStorage.setItem("home-target", `work-${n}`);
+              // a phone: the flick that brought the page down here is still running; it would carry
+              // the home page on past the window. Freezing the scroll kills it (HomeEnter lets go).
+              document.documentElement.classList.add("is-landing");
               transitionTo(() => router.push("/", { scroll: false }), "back");
             }}
           >

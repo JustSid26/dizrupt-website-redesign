@@ -46,7 +46,7 @@ const introRaw = (p: number) =>
    scroll. `kind` is the ride into this stop from the one before it (and back, quicker: lib/motion.ts),
    by what changes on screen: a hop within a scene, a scene change, or one of the landing's two
    payoffs; `train` is the stop the train drives itself to, or null while it is still in the intro. */
-export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number };
+export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; onward?: boolean };
 
 /** The runs of stops from the DIZRUPT screen to AI & Automation's last beat. On a phone the train is
     gone and Solutions is a row of cards swiped across: one stop, the sections either side of it. */
@@ -104,13 +104,21 @@ export function workStops(): ScrollStop[] {
   const top = work.getBoundingClientRect().top + scrollY, span = work.offsetHeight - innerHeight;
   // one window to the next: a hop, a little slower (lib/motion.ts: window)
   const stops: ScrollStop[] = clients.map((_, k) => ({ y: top + span * workProgress(k), kind: "window", train: null }));
+  /* a phone: the whole tower is a stop of its own, seen for a moment under its sign; then, with no
+     gesture, the page carries itself on into the first window (SmoothScroll.tsx: onward) */
+  const phone = isPhoneLayout();
+  if (phone) {
+    stops[0].kind = "scene";
+    stops.unshift({ y: top, kind: "scene", train: null, onward: true });
+  }
   /* led in from AI & Automation's statement: from there one gesture is one ride the whole way out —
      the network clears and the glitch hands back to the city inside it (it plays in time as the
-     section's end passes), past the tower's wide shot and in to the first window */
+     section's end passes), past the tower's wide shot and in to the first window (a phone: to the
+     wide shot, and on from there by itself) */
   const ai = document.getElementById("ai");
   if (ai) {
     const at = (p: number) => ai.getBoundingClientRect().top + scrollY + (ai.offsetHeight - innerHeight) * p;
-    stops[0].kind = "passage";
+    stops[0].kind = phone ? "scene" : "passage";
     // the ride lingers over its first stretch, to the section's end: the network clearing and the glitch
     const from = at(AI_STOPS[AI_STOPS.length - 1]), end = ai.getBoundingClientRect().top + scrollY + ai.offsetHeight - innerHeight;
     stops[0].slow = Math.min(0.9, Math.max(0, (end - from) / Math.max(1, stops[0].y - from)));

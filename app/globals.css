@@ -36,6 +36,9 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html.is-loading, html.is-loading body { overflow: hidden; }
+/* on the way back from a case the scroll is held still until the home page has landed on the window
+   it came from (HomeEnter.tsx), so a phone's flick can't carry it past */
+html.is-landing, html.is-landing body { overflow: hidden; }
 html, body {
   background: var(--bg);
   color: var(--fg);
@@ -1066,8 +1069,6 @@ body:has(.case-page) .nav::before { opacity: 1; }
 #work { position: relative; }
 .work-pin { position: sticky; top: 0; height: 100svh; pointer-events: none; }
 .work-eyebrow { position: absolute; left: var(--gutter); top: calc(var(--gutter) * 3.2); }
-.work-count { position: absolute; right: var(--gutter); top: calc(var(--gutter) * 3.2); font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; color: var(--dim); }
-.work-count strong { color: var(--fg); font-weight: 500; }
 .work-pin .index-hint { opacity: calc(1 - var(--handoff, 0) * 2.5); }
 #index .index-hit { pointer-events: auto; }
 body.menu-open #index .index-hit { pointer-events: none; }
@@ -1533,11 +1534,6 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 /* ---------- AI section: the instrument frame ---------- */
 .ai-frame { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity var(--t-ui); }
 .ai.is-on .ai-frame { opacity: 1; }
-.ai-br { position: absolute; width: 34px; height: 34px; border: 1.5px solid rgba(60, 240, 255, 0.7); }
-.ai-br.tl { left: calc(var(--gutter) * 0.6); top: calc(var(--gutter) * 2.6); border-right: 0; border-bottom: 0; }
-.ai-br.tr { right: calc(var(--gutter) * 0.6); top: calc(var(--gutter) * 2.6); border-left: 0; border-bottom: 0; }
-.ai-br.bl { left: calc(var(--gutter) * 0.6); bottom: calc(var(--gutter) * 0.6); border-right: 0; border-top: 0; }
-.ai-br.br { right: calc(var(--gutter) * 0.6); bottom: calc(var(--gutter) * 0.6); border-left: 0; border-top: 0; }
 .ai-grid { position: absolute; inset: 0; opacity: 0.22;
   background-image: linear-gradient(rgba(60, 240, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(60, 240, 255, 0.08) 1px, transparent 1px);
   background-size: 64px 64px; mask-image: radial-gradient(80% 70% at 50% 50%, transparent 35%, #000 100%); }
@@ -1561,6 +1557,8 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .ai-line { border-left: 1px solid rgba(60, 240, 255, 0.35); padding-left: 14px; }
 @media (max-width: 800px) {
   .ai-ruler, .ai-read-tr { display: none; }
+  /* a phone's nav has the mark at the top right: the tag, short enough now, sits on the same row at the left */
+  .ai-hud { padding-top: 29px; padding-right: 76px; }
 }
 @media (prefers-reduced-motion: reduce) { .ai-sweep { animation: none; opacity: 0; } }
 /* the nav's empty strip lets clicks through to the page under it; only its links and controls catch them */
@@ -1590,6 +1588,14 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 .intro-stats .stat-n { font-size: 0; line-height: 1; }
 .intro-stats .stat-n .stat-key { font-size: 12px; font-family: var(--mono); letter-spacing: 0.14em; }
 .intro-stats .stat-l { margin: 0; }
+/* a phone: the key and the label under each figure set larger and nearly white, so they can be read
+   against the city at arm's length */
+@media (max-aspect-ratio: 1/1) {
+  .intro-stats .stat-n .stat-key { font-size: 13px; color: #d7b8ff; text-shadow: 0 0 10px rgba(163, 16, 231, 0.9); }
+  .intro-stats .stat-l { font-size: 13px; letter-spacing: 0.14em; color: rgba(244, 238, 255, 0.95); text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9); }
+  .intro-stats .stat-l.is-foreign { font-size: 14px; }
+  .intro-stats .stat-mark { color: rgba(214, 200, 255, 0.7); }
+}
 /* no menu now: the section links are the navigation on a phone too */
 @media (max-width: 760px) {
   .rail { display: grid; gap: 14px; font-size: 11px; letter-spacing: 0.06em; }
@@ -1667,7 +1673,7 @@ body.menu-open .intro-inner, body.menu-open .intro-profile, body.menu-open .intr
 /* the picture that becomes the case's banner, and the title that becomes its title */
 .work-shot.is-leaving .work-shot-media { view-transition-name: work-hero; }
 .work-cap.is-leaving .work-cap-title { view-transition-name: work-title; }
-.tower-pin .work-eyebrow, .tower-pin .work-count, .tower-pin .index-hint { z-index: 3; }
+.tower-pin .work-eyebrow, .tower-pin .index-hint { z-index: 3; }
 .tower-pin .index-hint { opacity: 0.8; }
 
 /* ---------- the case page: the banner and the title are the ones it grew from ---------- */
@@ -2257,13 +2263,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 /* the change of chapter: a precise, short split on the title only (already timed in Solutions.tsx) */
 .sol-item.glitching .sol-title { clip-path: inset(0 0 0 0); }
 
-/* ---------- Work: where you are in the tower ---------- */
-.work-count { text-align: right; letter-spacing: var(--label-track); }
-.work-count::after {
-  content: ""; display: block; margin: 9px 0 0 auto; width: 120px; height: 1px;
-  background: linear-gradient(90deg, var(--violet-soft) calc(var(--wp, 0) * 100%), var(--hair) calc(var(--wp, 0) * 100%));
-  transition: background var(--t-ui-out);
-}
+/* ---------- Work: a project in its window ---------- */
 .work-cap-title { text-wrap: balance; }
 .work-shot-no { letter-spacing: var(--label-track); }
 .work-shot.is-on { box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06); }
@@ -2285,12 +2285,11 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 
 @media (prefers-reduced-motion: reduce) {
   .rail .rail-logo:hover > span { animation: none; }
-  .rail button::after, .work-count::after, .sol-dial li, .back { transition: none; }
+  .rail button::after, .sol-dial li, .back { transition: none; }
 }
 @media (max-width: 760px) {
   .rail button { padding: 4px 0; }
   .nav::after { inset: 0 0 -40px 0; background: linear-gradient(180deg, rgba(5, 5, 9, 0.75), rgba(5, 5, 9, 0)); }
-  .work-count::after { width: 72px; }
 }
 
 /* ---------- AI & Automation: legible at a glance ----------
@@ -2384,8 +2383,6 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 }
 .solc-head .eyebrow { font-size: 12px; }
 .solc-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--gutter); }
-.solc-count { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; color: var(--dim); }
-.solc-count strong { color: var(--fg); font-weight: 500; }
 .solc-track {
   display: flex; gap: 12px; list-style: none; margin: 0; padding: 0 var(--gutter);
   overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter);
@@ -2413,12 +2410,41 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   border: 1px solid color-mix(in srgb, var(--b) 45%, rgba(255, 255, 255, 0.2)); background: color-mix(in srgb, var(--a) 16%, rgba(255, 255, 255, 0.04));
 }
 .solc-cta:focus-visible { outline: 1px solid var(--violet-soft); outline-offset: 4px; }
-.solc-dial { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0 var(--gutter); }
-.solc-dial li { flex: 1; }
-.solc-dial button { position: relative; display: block; width: 100%; height: 44px; }
-.solc-dial button span { position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--line); transition: background var(--t-micro), box-shadow var(--t-micro); }
-.solc-dial button[aria-current] span { background: var(--a); box-shadow: 0 0 10px var(--a); }
+/* his line, under the cards: a lit rail across the screen, a station for each solution (tap one to go
+   there), and his train standing at the one in view, riding along to the next as the cards are swiped.
+   --at (0..1) is which station, --a its colour (SolutionCards.tsx). */
+:root { --t-rail: 1s; } /* the ride from one station to the next (SolutionCards.tsx waits the same) */
+.solc-line { position: relative; height: 40px; margin: -12px var(--gutter) 0; }
+.solc-rail {
+  position: absolute; left: 0; right: 0; bottom: 11px; height: 2px;
+  background: linear-gradient(90deg, rgba(201, 184, 255, 0.12), rgba(201, 184, 255, 0.5) 50%, rgba(201, 184, 255, 0.12));
+}
+/* the second rail, a little back: the line has depth */
+.solc-rail::before { content: ""; position: absolute; left: 3%; right: 3%; top: -4px; height: 1px; background: rgba(201, 184, 255, 0.16); }
+/* the stations run from half a train in to half a train short, so the train is whole at either end */
+.solc-dial { position: absolute; left: 32px; right: 32px; bottom: 0; display: flex; justify-content: space-between; list-style: none; margin: 0; padding: 0; }
+.solc-dial li { flex: 0 0 auto; }
+.solc-dial button { position: relative; display: block; width: 28px; height: 30px; }
+/* a station: a platform mark on the rail, lit in its solution's colour when the train stands at it */
+.solc-dial button span {
+  position: absolute; left: 50%; bottom: 9px; width: 8px; height: 8px; translate: -50% 50%; border-radius: 50%;
+  background: #1c1a28; border: 1.5px solid rgba(201, 184, 255, 0.45);
+  transition: background var(--t-micro), border-color var(--t-micro), box-shadow var(--t-micro);
+}
+.solc-dial button[aria-current] span { background: var(--a); border-color: #fff; box-shadow: 0 0 12px var(--a), 0 0 3px #fff; }
 .solc-dial button:focus-visible { outline: 1px solid var(--violet-soft); outline-offset: 2px; }
+/* the train: 92px of it, its middle over the station (the stations' middles run from 46px in to 46px short) */
+.solc-train {
+  position: absolute; bottom: 6px; width: 92px; pointer-events: none;
+  left: calc(46px + var(--at, 0) * (100% - 92px)); translate: -50% 0;
+  transition: left var(--t-rail) var(--ease);
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.65));
+}
+.solc-train svg { display: block; width: 100%; height: auto; transition: transform var(--t-micro) var(--ease-out); }
+/* under way: it leans into the run and throws more light on the rail */
+.solc-train.is-moving svg { transform: scaleX(1.04) skewX(-4deg); }
+.solc-train.is-moving { filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 14px rgba(163, 16, 231, 0.55)); }
+@media (prefers-reduced-motion: reduce) { .solc-train { transition: none; } }
 @media (max-aspect-ratio: 1/1) {
   .ai-ruler { display: none; }
 }
@@ -2457,4 +2483,68 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
     animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* =========================== A phone's menu ===========================
+   The wordmark at the top right of the nav, the sections dropping down from it when it is tapped
+   (NavMenu.tsx). A wide screen keeps the rail across the top and never shows this. */
+.nav-menu { display: none; position: relative; margin-left: auto; pointer-events: auto; }
+/* the mark, set in the brand violet and glowing a little; brighter, and turned a touch, while the menu is open */
+.nav-menu-logo { display: block; padding: 6px; }
+.nav-menu-mark {
+  display: block; width: 42px; height: 42px; background: var(--violet);
+  -webkit-mask: url("/heart.png") center / contain no-repeat; mask: url("/heart.png") center / contain no-repeat;
+  /* a halo of its own violet: a bright edge and a wide spill, breathing slowly (ambient: its own loop) */
+  filter: drop-shadow(0 0 8px rgba(196, 92, 255, 1)) drop-shadow(0 0 22px rgba(163, 16, 231, 0.95)) drop-shadow(0 0 44px rgba(163, 16, 231, 0.6));
+  animation: nav-mark-breathe 3.6s ease-in-out infinite;
+  transition: filter var(--t-ui-out) var(--ease-out), background var(--t-micro);
+}
+@keyframes nav-mark-breathe {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(196, 92, 255, 1)) drop-shadow(0 0 22px rgba(163, 16, 231, 0.95)) drop-shadow(0 0 44px rgba(163, 16, 231, 0.6)); }
+  50% { filter: drop-shadow(0 0 10px rgba(196, 92, 255, 1)) drop-shadow(0 0 30px rgba(163, 16, 231, 1)) drop-shadow(0 0 60px rgba(163, 16, 231, 0.8)); }
+}
+@media (prefers-reduced-motion: reduce) { .nav-menu-mark { animation: none; } }
+.nav-menu-logo[aria-expanded="true"] .nav-menu-mark { background: #c45cff; animation: none; filter: drop-shadow(0 0 10px rgba(196, 92, 255, 1)) drop-shadow(0 0 32px rgba(163, 16, 231, 1)) drop-shadow(0 0 64px rgba(163, 16, 231, 0.85)); }
+/* the pane: a dark glass, a violet hairline, the wordmark at its head and the sections under it */
+.nav-menu-list {
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 236px; margin: 0; padding: 0 0 8px; list-style: none;
+  background: linear-gradient(180deg, rgba(14, 10, 26, 0.96), rgba(6, 5, 12, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; overflow: hidden;
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  opacity: 0; transform: translateY(-8px) scale(0.98); transform-origin: 100% 0; pointer-events: none;
+  transition: opacity var(--t-ui-out) var(--ease-out), transform var(--t-ui-out) var(--ease-out);
+}
+.nav-menu-list[data-open] { opacity: 1; transform: none; pointer-events: auto; }
+.nav-menu-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(201, 184, 255, 0.14); margin-bottom: 6px;
+  font-family: var(--sans); font-size: 14px; font-weight: 700; letter-spacing: 0.16em; color: var(--fg);
+}
+.nav-menu-head .flip-z { color: var(--violet); display: inline-block; transform: scaleX(-1); letter-spacing: 0; margin-right: 0.18em; }
+.nav-menu-head small { font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+/* the sections come in one after another as the pane opens */
+.nav-menu-list li:not(.nav-menu-head) { opacity: 0; transform: translateX(10px); transition: opacity var(--t-ui-out) var(--ease-out), transform var(--t-ui-out) var(--ease-out); }
+.nav-menu-list[data-open] li:not(.nav-menu-head) { opacity: 1; transform: none; transition-delay: calc(var(--t-stagger) * (var(--i, 0) + 1)); }
+.nav-menu-list button {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); text-align: left;
+  transition: color var(--t-micro), background var(--t-micro);
+}
+.nav-menu-list button:hover, .nav-menu-list button:focus-visible { color: var(--fg); outline: none; background: rgba(255, 255, 255, 0.04); }
+/* the section you are in: lit white on a wash of violet, a glowing dot at its end */
+.nav-menu-list button[aria-current] { color: #fff; background: linear-gradient(90deg, rgba(163, 16, 231, 0.22), transparent); justify-content: space-between; }
+.nav-menu-list button[aria-current]::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--violet-soft); box-shadow: 0 0 8px var(--violet); }
+/* it comes in with the rail: after the landing has assembled, and not while the DIZRUPT screen is up */
+.nav:not([data-loaded]) .nav-menu { opacity: 0; transition: none; }
+.nav[data-loaded]:not([data-shown]) .nav-menu { opacity: 0; pointer-events: none; transform: translateY(-8px); transition: opacity var(--t-ui-out) var(--ease), transform var(--t-ui-out) var(--ease); }
+.nav[data-loaded][data-shown] .nav-menu { opacity: 1; transition: opacity var(--t-ui) var(--ease-out), transform var(--t-ui) var(--ease-out); }
+@media (max-width: 760px) {
+  .nav-menu { display: block; }
+  .nav .rail { display: none; }
+  /* the mark sits up near the top, not a gutter down: the band over it stays slim */
+  .nav { justify-content: flex-end; padding-top: 10px; padding-bottom: 10px; }
+  .nav-menu-mark { width: 38px; height: 38px; }
+  /* a case page's logo at the left gives way: the wordmark on the menu is the way home */
+  .nav .logo { display: none; }
 }

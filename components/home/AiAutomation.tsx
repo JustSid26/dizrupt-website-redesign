@@ -75,7 +75,6 @@ const STAGES: Stage[] = [
 
 const CAPTION_LIST = Object.entries(CAPTIONS);
 
-const pad = (n: number) => String(n).padStart(2, "0");
 const NOISE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#%&$@";
 
 /** A title that decodes out of noise whenever it comes on. */
@@ -198,9 +197,7 @@ export function AiAutomation() {
   const id = AI_CHAPTERS[chapter].view;
   const caption = ([key, c]: [string, Caption], i: number) => (
     <article key={key} className={`ai-ch${key !== "core" ? " is-compact" : ""} is-${c.place}`} data-on={key === id || undefined} aria-hidden={key !== id}>
-      <p className="ai-kicker">
-        <span>{c.no}</span> {c.kicker}
-      </p>
+      <p className="ai-kicker">{c.kicker}</p>
       {key === "core" ? (
         <h2 id="ai-title" className="ai-title" aria-label={c.title}>
           <Decode text={c.title} on={key === id} reduce={reduce} />
@@ -283,10 +280,6 @@ export function AiAutomation() {
         </div>
 
         <div className="ai-frame" aria-hidden>
-          <i className="ai-br tl" />
-          <i className="ai-br tr" />
-          <i className="ai-br bl" />
-          <i className="ai-br br" />
           <div className="ai-grid" />
           <div className="ai-sweep" />
           <div className="ai-ruler">
@@ -295,7 +288,7 @@ export function AiAutomation() {
             ))}
           </div>
           <p className="ai-read ai-read-tr">
-            SYS DZ-M1 <b>·</b> CH {pad(chapter)}/{pad(AI_CHAPTERS.length - 1)} <b>·</b> BUS 16× <b>·</b> <span className="ai-ok">LINK OK</span>
+            SYS DZ-M1 <b>·</b> BUS 16× <b>·</b> <span className="ai-ok">LINK OK</span>
           </p>
           <p className="ai-read ai-read-br" ref={readout}>
             X +0.000 Y +0.000
@@ -307,7 +300,7 @@ export function AiAutomation() {
 
         <div className="ai-hud">
           <p className="ai-tag">
-            <span className="hud-no">AI</span> Dizrupt · Neural systems
+            <span className="hud-no">AI</span> Neural systems
             <span className="ai-live">
               <i /> live
             </span>
@@ -344,7 +337,7 @@ export function AiAutomation() {
           <ol className="ai-steps" aria-hidden>
             {AI_CHAPTERS.map((c, i) => (
               <li key={c.id} data-on={i === chapter || undefined}>
-                {pad(i)} <span>{c.label}</span>
+                <span>{c.label}</span>
               </li>
             ))}
           </ol>

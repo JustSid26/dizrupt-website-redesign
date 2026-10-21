@@ -34,6 +34,7 @@ export function SmoothScroll() {
     let lastEvent = 0, lastAbs = 0, peak = 0, trough = 0, freshAt = 0, rising = 0;
     let push = 0, pushed = false; // how far the current gesture has gone, and whether it has moved a stop yet
     let sure = false; // the current gesture is unmistakably new (see gesture)
+    let lastDir = 1; // which way the page last went: a stop it carries on from does so only forwards
     const TOL = 40;
     // a gesture has to mean it: a brush of the trackpad isn't a ride (a wheel's notch is past this at once)
     const INTENT = 60;
@@ -80,6 +81,7 @@ export function SmoothScroll() {
       signals.rideTarget = to.train;
       signals.rideEnd = performance.now() + duration * 1000;
       glide = { stops, i, dir };
+      lastDir = dir;
       const token = ++seq;
       lenis.scrollTo(to.y, {
         duration,
@@ -92,7 +94,14 @@ export function SmoothScroll() {
           landedAt = performance.now();
           glide = null;
           signals.rideEnd = 0;
-          if (!queued) return;
+          if (!queued) {
+            // a stop the page doesn't rest at (lib/stops.ts: onward): once its scene is done, on it goes
+            if (dir > 0 && to.onward && stops[i + 1]) {
+              pending = { stops, i: i + 1, dir: 1 };
+              afterScene(() => go(stops, i + 1));
+            }
+            return;
+          }
           queued = false;
           // the queued stop: as soon as this stop's own scene has finished, the next ride, a little quicker
           if (stops[i + dir]) afterScene(() => go(stops, i + dir, { queued: true }));
@@ -127,6 +136,7 @@ export function SmoothScroll() {
         return true;
       }
       const y = window.scrollY;
+      lastDir = dir;
       // the run of stops this point is in: from the landing to AI & Automation, or the work's tower
       // (two runs share a stop, the AI statement: take the one there's somewhere to go in, this way)
       const stops = [...scrollRuns(), workStops()].find(
@@ -216,6 +226,7 @@ export function SmoothScroll() {
       glide = null;
       queued = false;
       landedAt = 0;
+      lastDir = 1; // sent somewhere counts as going on
       signals.rideEnd = 0;
       signals.rideTarget = null;
     });
@@ -223,11 +234,34 @@ export function SmoothScroll() {
       signals.scroll.velocity = l.velocity;
       ScrollTrigger.update();
     });
+    /* come to rest on a stop the page doesn't rest at, without riding there (the rail sent it, or it was
+       scrolled to freely): a moment's pause, then on it goes, the way a ride landing there would */
+    let restAt = 0, restChecked = false;
+    const idle = () => {
+      const now = performance.now();
+      if (glide || pending || waiting || now < signals.navJumpUntil || Math.abs(lenis.velocity) > 0.1 || !useStore.getState().loaded) {
+        restAt = now;
+        restChecked = false;
+        return;
+      }
+      if (restChecked || now - restAt < 350 || lastDir < 0) return;
+      restChecked = true;
+      const y = window.scrollY;
+      for (const run of [...scrollRuns(), workStops()]) {
+        const i = run.findIndex((st) => st.onward && Math.abs(st.y - y) < TOL);
+        if (i < 0 || !run[i + 1]) continue;
+        pending = { stops: run, i: i + 1, dir: 1 };
+        afterScene(() => go(run, i + 1));
+        return;
+      }
+    };
+    gsap.ticker.add(idle);
     const raf = (time: number) => lenis.raf(time * 1000);
     gsap.ticker.add(raf);
     gsap.ticker.lagSmoothing(0);
     return () => {
       gsap.ticker.remove(raf);
+      gsap.ticker.remove(idle);
       removeEventListener("keydown", onKey);
       setRideCanceller(null);
       setRideTo(null);

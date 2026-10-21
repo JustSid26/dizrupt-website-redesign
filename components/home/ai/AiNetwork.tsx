@@ -417,10 +417,8 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         </h3>
         <p className="ai-say-body ai-say-rest">{BODY}</p>
         <ol className="ai-say-method ai-say-rest" aria-label="How we do it">
-          {METHOD.map((m, i) => (
-            <li key={m}>
-              <span>{String(i + 1).padStart(2, "0")}</span> {m}
-            </li>
+          {METHOD.map((m) => (
+            <li key={m}>{m}</li>
           ))}
         </ol>
       </div>

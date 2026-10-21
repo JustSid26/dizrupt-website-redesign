@@ -13,7 +13,54 @@ import { useSection } from "@/components/home/useSection";
    page scrolls straight past them (the train ride between billboards is a wide screen's,
    SolutionsTrain.tsx). A card's film plays only while it is the one in view, and loads only then. */
 const N = SOLUTIONS.length;
-const pad = (n: number) => String(n).padStart(2, "0");
+
+/* His train, for a phone: the bullet train he becomes on a wide screen, drawn small and side on, a
+   nose at each end so it rides back the way it came without turning. Set in his own silver, the
+   violet stripe along it, the windows lit warm like the city's. */
+function Train() {
+  return (
+    <svg viewBox="0 0 120 36" aria-hidden>
+      <defs>
+        <linearGradient id="solc-train-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f6f4ff" />
+          <stop offset="0.55" stopColor="#cfd2e6" />
+          <stop offset="1" stopColor="#8f93ad" />
+        </linearGradient>
+        <filter id="solc-train-glow" x="-20%" y="-50%" width="140%" height="200%">
+          <feGaussianBlur stdDeviation="1.6" />
+        </filter>
+      </defs>
+      {/* the light it throws on the rail */}
+      <ellipse cx="60" cy="30" rx="54" ry="4" fill="#a310e7" opacity="0.35" filter="url(#solc-train-glow)" />
+      {/* bogies */}
+      <rect x="16" y="24" width="16" height="4" rx="1" fill="#1a1824" />
+      <rect x="88" y="24" width="16" height="4" rx="1" fill="#1a1824" />
+      <rect x="52" y="24" width="16" height="4" rx="1" fill="#1a1824" />
+      {/* the body, a nose at each end */}
+      <path d="M12 25 Q3 25 3 18 Q3 11 12 9 H108 Q117 11 117 18 Q117 25 108 25 Z" fill="url(#solc-train-body)" />
+      {/* the roof, caught by the light: the face that makes it stand up off the page */}
+      <path d="M14 9 Q17 5 24 5 H96 Q103 5 106 9 Z" fill="#ffffff" opacity="0.92" />
+      {/* the stripe */}
+      <path d="M6 20.5 H114" stroke="#a310e7" strokeWidth="2" strokeLinecap="round" />
+      {/* the windows, lit */}
+      <g fill="#ffe7b4">
+        {Array.from({ length: 7 }, (_, i) => (
+          <rect key={i} x={20 + i * 12} y="12" width="7" height="5" rx="1.4" />
+        ))}
+      </g>
+      <g fill="#ffe7b4" opacity="0.55" filter="url(#solc-train-glow)">
+        {Array.from({ length: 7 }, (_, i) => (
+          <rect key={i} x={20 + i * 12} y="12" width="7" height="5" rx="1.4" />
+        ))}
+      </g>
+      {/* headlights */}
+      <circle cx="5.5" cy="17.5" r="2.2" fill="#fff" />
+      <circle cx="114.5" cy="17.5" r="2.2" fill="#fff" />
+      <circle cx="5.5" cy="17.5" r="4" fill="#fff" opacity="0.5" filter="url(#solc-train-glow)" />
+      <circle cx="114.5" cy="17.5" r="4" fill="#fff" opacity="0.5" filter="url(#solc-train-glow)" />
+    </svg>
+  );
+}
 
 export function SolutionCards() {
   const section = useRef<HTMLElement>(null);
@@ -65,14 +112,39 @@ export function SolutionCards() {
     return () => clearTimeout(id);
   }, [active, reduce]);
 
+  // the train rides to the card's station: under way it leans into the move and its lights come up
+  const [moving, setMoving] = useState(false);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (reduce) return;
+    setMoving(true);
+    const id = setTimeout(() => setMoving(false), 1000); // (the rail's own ride, --t-rail in the CSS)
+    return () => clearTimeout(id);
+  }, [active, reduce]);
+
   return (
     <section ref={section} id="solutions" className="solc" aria-labelledby="solutions-title">
       <header className="solc-head">
         <h2 id="solutions-title" className="eyebrow">Solutions</h2>
-        <p className="solc-count" aria-live="polite">
-          CH <strong>{pad(active + 1)}</strong> / {pad(N)}
-        </p>
       </header>
+      {/* his line, over the cards where it is always in frame: a rail across the screen, a station for
+          each solution, and his train standing at the one in view */}
+      <div className="solc-line" style={{ "--at": active / (N - 1), "--a": SOLUTIONS[active].colors[0] } as React.CSSProperties}>
+        <span className="solc-rail" aria-hidden />
+        <ol className="solc-dial" aria-label="Choose a solution">
+          {SOLUTIONS.map((s, i) => (
+            <li key={s.name} style={{ "--a": s.colors[0] } as React.CSSProperties}>
+              <button type="button" aria-label={s.name} aria-current={i === active || undefined} onClick={() => goTo(i)}>
+                <span />
+              </button>
+            </li>
+          ))}
+        </ol>
+        <span className={`solc-train${moving ? " is-moving" : ""}`} aria-hidden>
+          <Train />
+        </span>
+      </div>
       <ul
         ref={track}
         className="solc-track"
@@ -139,15 +211,6 @@ export function SolutionCards() {
           </li>
         ))}
       </ul>
-      <ol className="solc-dial" aria-label="Choose a solution">
-        {SOLUTIONS.map((s, i) => (
-          <li key={s.name} style={{ "--a": s.colors[0] } as React.CSSProperties}>
-            <button type="button" aria-label={s.name} aria-current={i === active || undefined} onClick={() => goTo(i)}>
-              <span />
-            </button>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }

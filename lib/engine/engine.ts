@@ -271,9 +271,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   /* ---------- his heart: the DIZRUPT mark, beating in his chest ---------- */
   const heartTex = new THREE.TextureLoader().load('/heart.png');
   heartTex.colorSpace = THREE.SRGBColorSpace;
-  const heartMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color(0.95, 0.8, 1.15), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  // (drawn over whatever is in front of it: it is light on his chest, never hidden behind his own particles or a building)
+  const heartMat = new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color(0.95, 0.8, 1.15), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false });
   const heart = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), heartMat);
-  const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color("#b46bff"), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color("#b46bff"), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
   heart.add(heartGlow);
   heart.renderOrder = 40;
   if (mascot) {
@@ -585,8 +586,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const gx = Math.min(halfW - w / 2 - 0.2, w / 2 + 0.45), gy = Math.min(halfH - h / 2 - 0.5, h / 2 + 0.32);
       for (const [sx, sy] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) mk(sx * gx, sy * gy - 0.15, 0.3, w, h, -sx * 0.5, sy * 0.24);
     } else {
+      // a phone: the four stacked straight, square to you and parallel, so each figure reads at once
       const w = halfW * 1.6, h = Math.min(1.2, (halfH * 2 - 1.6) / 4 - 0.25);
-      for (let i = 0; i < 4; i++) mk(0, (1.5 - i) * (h + 0.3) - 0.2, 0, w, h, (i % 2 ? 1 : -1) * 0.28, (1.5 - i) * 0.12);
+      for (let i = 0; i < 4; i++) mk(0, (1.5 - i) * (h + 0.3) - 0.2, 0, w, h, 0, 0);
     }
     /* No windows: his particles write the numbers themselves, big, one figure in each place. Each
        number is set in type on a small canvas and the particles land on its lit pixels; particle i
@@ -612,8 +614,14 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const R = field.randoms;
     let seed = 9;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    /* each figure gets particles in proportion to its size, so all four are lit as densely: shared
+       out evenly, the year (four digits) would be spread half as thin as the others and read dimmer */
+    const sizes = glyphs.map((g) => g.length / 2), total = sizes.reduce((a, b) => a + b, 0);
+    const cum: number[] = [];
+    sizes.reduce((acc, s) => (cum.push((acc + s) / total), acc + s), 0);
     for (let i = 0; i < COUNT; i++) {
-      const pi = Math.min(3, Math.floor(R[i] * 4));
+      let pi = 0;
+      while (pi < 3 && R[i] > cum[pi]) pi++;
       const pnl = statPanels[pi];
       const g = glyphs[pi];
       const k = Math.floor(rnd() * (g.length / 2)) * 2;
@@ -1114,7 +1122,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // from across the city his light is spread over far fewer pixels; swell the points so he still reads
     const far = camera.position.distanceTo(points.getWorldPosition(tmpV)) / CAMERA_Z;
     u.uSolid.value = damp(u.uSolid.value, key.startsWith('train') ? 1 : 0, 3, dt);
-    u.uSize.value = 22 * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : 1);
+    // (a phone's count: the figures are drawn with bigger points, so they stand out against the city)
+    u.uSize.value = 22 * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)

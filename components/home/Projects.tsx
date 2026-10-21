@@ -23,7 +23,6 @@ import { WORK_LEAD, workP } from "@/lib/stops";
    over it. The camera holds back from the glass, so the facade and the city stay round it; the
    project's name and the way into its story stand beside the window. */
 const N = clients.length;
-const pad = (n: number) => String(n).padStart(2, "0");
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const smooth = (a: number, b: number, t: number) => { const x = clamp01((t - a) / (b - a)); return x * x * (3 - 2 * x); };
 
@@ -34,7 +33,6 @@ export function Projects() {
   const section = useRef<HTMLElement>(null);
   const shots = useRef<(HTMLDivElement | null)[]>([]);
   const caps = useRef<(HTMLDivElement | null)[]>([]);
-  const countRef = useRef<HTMLElement>(null);
   const router = useRouter();
   const reduce = useStore((s) => s.reducedMotion);
   useSection(section, "projects");
@@ -64,14 +62,11 @@ export function Projects() {
     // case): nothing is laid over the tower yet, its own glass shows the project until the next frame
     const apply = (landing = false) => {
       const vw = innerWidth, vh = innerHeight;
-      const near = Math.round(Math.max(0, Math.min(N - 1, p)));
-      if (countRef.current) {
-        countRef.current.textContent = pad(near + 1);
-        // how far through the tower: the counter's own progress line follows it
-        countRef.current.parentElement?.style.setProperty("--wp", String(Math.max(0, Math.min(1, p / Math.max(1, N - 1)))));
-      }
+      /* the pin the captions live in is 100svh tall: on a phone that is less than the viewport once the
+         browser's bars have slid away, and anything placed by innerHeight would be cut off at its foot */
+      const ph = (section.current?.firstElementChild as HTMLElement | null)?.clientHeight || vh;
       const hidden: number[] = [];
-      const gap = Math.max(20, vw * 0.025), edge = Math.max(16, vw * 0.03);
+      const gap = Math.max(20, vw * 0.025), edge = Math.max(16, vw * 0.03), foot = edge + 12;
       for (let k = 0; k < N; k++) {
         const el = shots.current[k], cap = caps.current[k];
         if (!el || !cap) continue;
@@ -105,7 +100,7 @@ export function Projects() {
         const cw = cap.offsetWidth, ch = cap.offsetHeight;
         const side = r.x + r.w + gap + cw <= vw - edge;
         const cx = side ? r.x + r.w + gap : edge;
-        const cy = side ? r.y + r.h / 2 - ch / 2 : Math.min(vh - ch - edge, r.y + r.h + gap);
+        const cy = side ? r.y + r.h / 2 - ch / 2 : Math.min(ph - ch - foot, r.y + r.h + gap);
         cap.style.visibility = settle > 0.01 ? "visible" : "hidden";
         cap.style.transform = `translate(${cx}px, ${cy + (1 - settle) * 24}px)`;
         cap.style.setProperty("--m", settle.toFixed(4));
@@ -124,7 +119,9 @@ export function Projects() {
   // a project at full screen opens into its case: the picture becomes the case's banner
   const open = (k: number) => {
     const slug = slugOf(clients[k]);
-    sessionStorage.setItem("home-scroll", String(scrollY));
+    // the way back lands on this window exactly, however the case page was left
+    sessionStorage.removeItem("home-scroll");
+    sessionStorage.setItem("home-target", `work-${k}`);
     transitionTo(() => router.push(`/work/${slug}`, { scroll: false }), "open", {
       before: () => { shots.current[k]?.classList.add("is-leaving"); caps.current[k]?.classList.add("is-leaving"); },
       after: () => { shots.current[k]?.classList.remove("is-leaving"); caps.current[k]?.classList.remove("is-leaving"); },
@@ -168,9 +165,6 @@ export function Projects() {
         ))}
 
         <h2 id="work-title" className="eyebrow work-eyebrow">Selected work</h2>
-        <p className="work-count" aria-live="polite">
-          <strong ref={countRef}>01</strong> / {pad(N)}
-        </p>
         <p className="index-hint">Scroll to fly through the tower · Click a project for its story</p>
         <ul className="sr-only">
           {clients.map((c) => (

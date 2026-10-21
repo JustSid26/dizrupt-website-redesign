@@ -11,7 +11,6 @@ import { TECH_PROJECTS, type TechProject } from "@/content/techProjects";
    register table, the build in three logged chapters, and the system drawn as a live flow — four
    nodes with data running between them. The page is a dark pane over the same world. */
 const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#%&$@";
-const pad = (n: number) => String(n).padStart(2, "0");
 
 function useDecode(text: string, delay: number, reduce: boolean) {
   const [out, setOut] = useState(reduce ? text : text.replace(/\S/g, " "));
@@ -95,7 +94,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
           ~/dizrupt/ai/projects/<strong>{project.slug}</strong>
         </p>
         <p className="aip-status">
-          <i /> Node {pad(n + 1)} · online · {clock} IST
+          <i /> Online · {clock} IST
         </p>
       </header>,
         document.body,
@@ -103,7 +102,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
 
       <section className="aip-hero">
         <p className="aip-kicker">
-          <span>[{pad(n + 1)}]</span> {project.about} <span className="aip-dim">/ {project.year}</span>
+          {project.about} <span className="aip-dim">/ {project.year}</span>
         </p>
         <h1 className="aip-title" aria-label={project.name}>
           <span aria-hidden>{title}</span>
@@ -113,7 +112,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
 
       <figure className="aip-monitor" data-reveal>
         <div className="aip-monitor-bar" aria-hidden>
-          <span>FEED {pad(n + 1)}</span>
+          <span>FEED</span>
           <span>{project.video ? "1080P · PLAYBACK" : "NO SIGNAL"}</span>
           <span className="aip-rec">● REC</span>
         </div>
@@ -145,10 +144,6 @@ export function AiProjectPage({ project }: { project: TechProject }) {
           <dt>Year</dt>
           <dd>{project.year}</dd>
         </div>
-        <div>
-          <dt>Node</dt>
-          <dd className="aip-live">{pad(n + 1)}</dd>
-        </div>
         <div className="aip-stack">
           <dt>Stack</dt>
           <dd>
@@ -166,10 +161,7 @@ export function AiProjectPage({ project }: { project: TechProject }) {
         <ol>
           {project.flow.map((step, i) => (
             <li key={step} style={{ "--i": i } as React.CSSProperties}>
-              <span className="aip-node">
-                <small>{pad(i + 1)}</small>
-                {step}
-              </span>
+              <span className="aip-node">{step}</span>
               {i < project.flow.length - 1 && <span className="aip-wire" aria-hidden />}
             </li>
           ))}
@@ -177,11 +169,9 @@ export function AiProjectPage({ project }: { project: TechProject }) {
       </section>
 
       <section className="aip-log">
-        {chapters.map(([h, body], i) => (
+        {chapters.map(([h, body]) => (
           <div key={h} className="aip-entry" data-reveal>
-            <p className="aip-label">
-              <span>{pad(i + 1)}</span> {h}
-            </p>
+            <p className="aip-label">{h}</p>
             <p className="aip-body">{body}</p>
           </div>
         ))}
