@@ -1335,11 +1335,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       }
       dark = false;
     }
-    // a phone falling behind while the city builds drops to the lighter picture; back up once it is built and keeping up
+    /* a phone falling behind while the city builds drops to the lighter picture, and takes it as a
+       matter of course for the work (the tower's rooms filling the screen is the heaviest frame
+       there is, and a phone that runs out of room there is thrown off the page); back up once it is
+       past both and keeping up */
     if (isMobile && now - qualityAt > 1200) {
       const building = onIntro && ip < 0.7;
-      if (!lowQuality && building && slowShare > 0.45) applyQuality(true);
-      else if (lowQuality && !building && slowShare < 0.1) applyQuality(false);
+      const heavy = (building && slowShare > 0.45) || section === 'projects';
+      if (!lowQuality && heavy) applyQuality(true);
+      else if (lowQuality && !heavy && !building && slowShare < 0.1) applyQuality(false);
     }
     composer.render();
   }

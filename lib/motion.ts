@@ -25,7 +25,7 @@ export const T = {
   swapOverlap: 0.1,
   hop: 2.4,
   depart: 2.4 * 2, // the train leaving its station for the first billboard: a flight over the city, not a hop
-  window: 2.4 / 0.8, // the work's window to window: a hop at 80% of the speed, so each project is taken in
+  window: (2.4 / 0.8) * 1.15, // the work's window to window: a hop at 80% of the speed and 15% slower again, so each project is taken in
   beat: 2.6, // an AI beat: a hop, the page and the network on one clock
   wake: 6.5, // the chip to what we do: it powers on, pulls back to the whole network and steps aside, all in one ride
   scene: 3.2,
