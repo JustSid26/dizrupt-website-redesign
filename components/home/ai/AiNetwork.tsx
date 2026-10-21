@@ -9,7 +9,7 @@ import { BACK, EASE, T, camera } from "@/lib/motion";
 import { isPhoneLayout } from "@/lib/layout";
 import { PANEL_VIEWS } from "@/components/home/ai/Panels";
 import { Matrix } from "@/components/home/ai/Matrix";
-import { GROUPS, linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
+import { linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
 
 const at = (id: string) => AI_STOPS[AI_CHAPTERS.findIndex((c) => c.id === id)];
 const WHAT = at("what"), HOW = AI_STAGES[AI_STAGES.length - 1], SIMPLE = at("simple");
@@ -22,6 +22,12 @@ const HEADLINE = ["Less friction.", "Smarter workflows.", "Greater potential."];
 const BODY =
   "From identifying inefficiencies to implementing tailored automation solutions, we help businesses create more efficient, connected ways of working. Every solution begins with understanding the process, evaluating the opportunity, and designing an approach around real operational needs.";
 const METHOD = ["Audit", "Evaluate", "Implement"];
+/* Made simple's picture: the business as its two sides, what each covers, on one bus each to the core
+   (x: where the card's middle sits across the stage, in its percent units) */
+const SIMPLE_SIDES = [
+  { side: "external", x: 24, name: "External workflows", areas: ["Customer enquiries", "Lead management", "Client communication"] },
+  { side: "internal", x: 76, name: "Internal workflows", areas: ["Operations", "Administration", "Reporting", "Data handling"] },
+];
 /** A portrait screen: the least room the picture is given over the words (px), and the share of the
     screen's height the chip takes at its closest when it has the whole screen. */
 const MIN_STAGE = 96;
@@ -151,8 +157,15 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       tl.fromTo(q(".ain-flows"), { autoAlpha: 0 }, { autoAlpha: 1, duration: g2 * 0.03 }, in2(0.83));
       panels.forEach((p) => tl.fromTo(p, { "--a": 0 }, { "--a": 1, duration: g2 * 0.04 }, in2(0.8 + DONE.indexOf(p.dataset.id as PanelId) * 0.022)));
 
-      // Made simple: the stages' tags give way to the two sides, framed and named, running
+      /* Made simple: a different picture. The network of tools goes, and in its place the business
+         as two sides, each a card of what it covers, each on one bus to the core, running. */
       tl.fromTo(el, { "--sm": 0 }, { "--sm": 1, duration: g3 * 0.35, ease: EASE.inOut }, in3(0.1));
+      tl.to(q(".ain-panels, .ain-wires, .ain-faults, .ain-matrix"), { autoAlpha: 0, duration: g3 * 0.001 }, in3(0.001)); // (a cut: the leg into it hides it behind a fade, playTo)
+      tl.fromTo(q(".ain-simple"), { autoAlpha: 0 }, { autoAlpha: 1, duration: g3 * 0.08 }, in3(0.04));
+      tl.fromTo(q(".ain-bus"), { "--bus": 1 }, { "--bus": 0, duration: g3 * 0.26, ease: EASE.inOut }, in3(0.08));
+      tl.fromTo(q(".ain-side"), { "--side": 0 }, { "--side": 1, duration: g3 * 0.24, stagger: g3 * 0.08, ease: EASE.in }, in3(0.2));
+      tl.fromTo(q(".ain-side li"), { "--pill": 0 }, { "--pill": 1, duration: g3 * 0.12, stagger: g3 * 0.025, ease: EASE.in }, in3(0.3));
+      tl.fromTo(q(".ain-bus-flow"), { "--busf": 0 }, { "--busf": 1, duration: g3 * 0.1 }, in3(0.42));
 
       // and all of it gives way, as the hand-back to the work begins
       tl.to(el, { autoAlpha: 0, duration: 0.05 }, AI_EXIT_FROM + 0.01); // (timeline units, not seconds: the scroll's own past the last beat)
@@ -179,23 +192,41 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         tw?.kill();
         const fwd = rest(to) >= head.t;
         const legs: number[] = [];
-        if (fwd) for (let i = 0; i <= to; i++) { if (S[i] > head.t + 1e-4) legs.push(i); }
-        else for (let i = n - 1; i >= to; i--) { if (S[i] < head.t - 1e-4) legs.push(i); }
+        if (fwd) for (let i = 0; i <= to; i++) { if (rest(i) > head.t + 1e-4) legs.push(i); }
+        else for (let i = n - 1; i >= to; i--) { if (rest(i) < head.t - 1e-4) legs.push(i); }
         if (!legs.length) legs.push(to);
         const seq = gsap.timeline({ onUpdate: apply });
         // the page's ride, if one is under way: the beats share what is left of it
         const left = (signals.rideEnd - performance.now()) / 1000;
         let from = head.t;
+        /* the stages of how we do it are toggled, never scrolled through: a leg out of how (or back
+           into it) skips what lies between the stage it rests at and the stages' end, behind a short
+           fade of the picture, so neither way plays the other stages */
+        const skip = (t: number) => {
+          const st = stage.current;
+          seq.to(st, { autoAlpha: 0, duration: reduceRef.current ? T.reduced : 0.22, ease: EASE.out });
+          seq.call(() => { head.t = t; apply(); });
+          seq.to(st, { autoAlpha: 1, duration: reduceRef.current ? T.reduced : 0.3, ease: EASE.in });
+        };
+        const PAST_HOW = HOW + 0.002; // just past the stages' end, where made simple's picture has taken over
+        if (fwd && to > HOW_K && head.t >= S[HOW_K] - 1e-4 && head.t < HOW + 1e-4) { skip(PAST_HOW); from = PAST_HOW; }
         legs.forEach((i) => {
           seq.call(() => onBeatRef.current(i));
           const whole = fwd ? S[i] - (S[i - 1] ?? 0) : (S[i + 1] ?? 1) - S[i];
-          const part = Math.min(1, Math.abs(S[i] - from) / Math.max(1e-4, whole));
+          const part = Math.min(1, Math.abs(rest(i) - from) / Math.max(1e-4, whole));
           /* the chip to what we do (either way) is the wake: on a wide screen it powers on, pulls back
              and steps aside, all in the middle of the leg, so it runs at the camera's steady pace
              rather than inOut's, which would rush that middle through in a quarter of the time */
           const wake = (fwd ? i === 1 : i === 0) && !isPhoneLayout();
           const own = (wake ? T.wake : T.beat) * part * (fwd ? 1 : BACK);
           const dur = reduceRef.current ? T.reduced : left > 0.2 ? left / legs.length : own;
+          if (!fwd && i === HOW_K && from > HOW + 1e-4) {
+            // back into how: made simple's picture goes, then across to the stage it rests at
+            seq.to(head, { t: PAST_HOW, duration: dur, ease: EASE.inOut });
+            skip(howRest);
+            from = howRest;
+            return;
+          }
           seq.to(head, { t: rest(i), duration: dur, ease: wake ? camera() : EASE.inOut });
           from = rest(i);
         });
@@ -363,12 +394,28 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         </div>
         <div className="ain-scan" aria-hidden />
 
-        {/* made simple: the two sides of the business, framed and named */}
-        <div className="ain-groups" aria-hidden>
-          {GROUPS.map((g) => (
-            <div key={g.side} className={`ain-group is-${g.side}`} style={{ "--x0": g.x0, "--x1": g.x1 } as React.CSSProperties}>
-              <p>
-                <i /> {g.name}
+        {/* made simple: the two sides of the business, each a card on its own bus to the core, running */}
+        <div className="ain-simple" aria-hidden>
+          <svg className="ain-simple-bus" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {SIMPLE_SIDES.map((s) => (
+              <path key={`b-${s.side}`} className={`ain-bus is-${s.side}`} pathLength={1} d={`M50 50 H${s.x}`} />
+            ))}
+            {SIMPLE_SIDES.map((s) => (
+              <path key={`f-${s.side}`} className={`ain-bus-flow is-${s.side}`} pathLength={1} d={`M50 50 H${s.x}`} />
+            ))}
+          </svg>
+          {SIMPLE_SIDES.map((s) => (
+            <div key={s.side} className={`ain-side is-${s.side}`} style={{ "--x": s.x } as React.CSSProperties}>
+              <p className="ain-side-name">
+                <i /> {s.name}
+              </p>
+              <ul>
+                {s.areas.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+              <p className="ain-side-state">
+                <b /> Running
               </p>
             </div>
           ))}

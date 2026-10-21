@@ -1948,7 +1948,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 
 /* a panel: out along its trace from the core (--e), from where it was found to its place (--k) */
 .ain-panels { position: absolute; inset: 0; }
-.ain-wires, .ain-faults, .ain-panels, .ain-scan, .ain-groups, .ain-matrix { translate: var(--sx, 0) var(--sy, 0); }
+.ain-wires, .ain-faults, .ain-panels, .ain-scan, .ain-matrix { translate: var(--sx, 0) var(--sy, 0); }
 .ain-panel {
   --px: calc((50 + (var(--cx) - 50) * var(--e)) * (1 - var(--k)) + var(--ox) * var(--k));
   --py: calc((50 + (var(--cy) - 50) * var(--e)) * (1 - var(--k)) + var(--oy) * var(--k));
@@ -2081,20 +2081,36 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ai[data-chapter="how"] .ai-read-tr, .ai[data-chapter="simple"] .ai-read-tr { opacity: 0; }
 
 /* made simple: the two sides of the business, framed and named */
-.ain-groups { position: absolute; inset: 0; opacity: var(--sm); pointer-events: none; }
-.ain-group {
-  position: absolute; left: calc(var(--x0) * 1cqw); width: calc((var(--x1) - var(--x0)) * 1cqw); top: 15cqh; bottom: 11cqh;
-  border: 1px dashed rgba(124, 242, 255, 0.3); border-radius: 10px;
+/* made simple: the business as its two sides, each a card of what it covers on one bus to the core,
+   running (AiNetwork.tsx plays it: --bus draws the bus, --side brings the card up, --pill each of
+   its areas, --busf sets the traffic going) */
+.ain-simple { position: absolute; inset: 0; opacity: 0; pointer-events: none; translate: var(--sx, 0) var(--sy, 0); }
+.ain-simple-bus { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ain-simple-bus path { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.ain-bus { stroke: rgba(124, 242, 255, 0.6); stroke-width: 3; stroke-dasharray: 1; stroke-dashoffset: var(--bus, 1); filter: drop-shadow(0 0 6px rgba(60, 240, 255, 0.5)); }
+.ain-bus.is-internal { stroke: rgba(185, 164, 255, 0.6); filter: drop-shadow(0 0 6px rgba(143, 107, 255, 0.5)); }
+.ain-bus-flow { stroke: #ffffff; stroke-width: 5; stroke-dasharray: 0.14 0.36; opacity: var(--busf, 0); filter: drop-shadow(0 0 7px #7cf2ff); animation: ain-flow 1.4s linear infinite; } /* ambient: its own loop */
+.ain-bus-flow.is-internal { filter: drop-shadow(0 0 7px #b9a4ff); animation-delay: -0.7s; }
+.ain-side {
+  position: absolute; left: calc(var(--x) * 1cqw); top: 50cqh; translate: -50% -50%; width: 26cqw; min-width: 200px; max-width: 320px;
+  padding: 18px 20px 16px; border-radius: 10px; background: rgba(7, 10, 17, 0.94);
+  border: 1px solid rgba(124, 242, 255, 0.42); box-shadow: 0 0 40px rgba(60, 240, 255, 0.16), 0 24px 60px rgba(0, 0, 0, 0.6);
+  opacity: var(--side, 0); transform: translateY(calc((1 - var(--side, 0)) * 16px));
 }
-.ain-group.is-internal { border-color: rgba(185, 164, 255, 0.34); }
-.ain-group p {
-  position: absolute; left: 14px; top: 0; translate: 0 -50%; display: inline-flex; align-items: center; gap: 8px; padding: 0 8px;
-  background: #05060a; white-space: nowrap; font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #bdf6ff;
+.ain-side.is-internal { border-color: rgba(185, 164, 255, 0.42); box-shadow: 0 0 40px rgba(143, 107, 255, 0.18), 0 24px 60px rgba(0, 0, 0, 0.6); }
+.ain-side-name { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #c9fbff; }
+.ain-side-name i { width: 6px; height: 6px; border-radius: 50%; background: #7cf2ff; box-shadow: 0 0 8px #3cf0ff; }
+.ain-side.is-internal .ain-side-name { color: #d6caff; }
+.ain-side.is-internal .ain-side-name i { background: #b9a4ff; box-shadow: 0 0 8px #8f6bff; }
+.ain-side ul { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.ain-side li {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #eef4ff;
+  padding: 7px 10px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 4px; background: rgba(255, 255, 255, 0.03);
+  opacity: var(--pill, 0); transform: translateY(calc((1 - var(--pill, 0)) * 8px));
 }
-.ain-group p i { width: 6px; height: 6px; border-radius: 50%; background: #7cf2ff; box-shadow: 0 0 8px #3cf0ff; }
-.ain-group.is-internal p { color: #d6caff; }
-.ain-group.is-internal p i { background: #b9a4ff; box-shadow: 0 0 8px #8f6bff; }
-.ain[data-tall] .ain-groups { display: none; }
+.ain-side-state { display: flex; align-items: center; gap: 8px; margin: 16px 0 0; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #6ff2b5; }
+.ain-side-state b { width: 6px; height: 6px; border-radius: 50%; background: #6ff2b5; box-shadow: 0 0 8px #6ff2b5; animation: ai-blink 1.4s steps(2) infinite; } /* ambient: its own loop */
+.ain[data-tall] .ain-simple { display: none; }
 
 /* the audit's scan: a line sweeping the map, a faint wake behind it */
 .ain-scan {
@@ -2351,7 +2367,6 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ai-hw-more { max-height: calc(var(--h) * 190px); }
 /* the network's own labels */
 .ain-tag { font-size: 11.5px; }
-.ain-group p { font-size: 11.5px; }
 .ain-hub-label { font-size: 11.5px; }
 @media (max-height: 760px) and (min-aspect-ratio: 1/1) {
   .ai-hw-line { font-size: 14.5px; }
