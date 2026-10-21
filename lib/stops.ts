@@ -46,7 +46,9 @@ const introRaw = (p: number) =>
    scroll. `kind` is the ride into this stop from the one before it (and back, quicker: lib/motion.ts),
    by what changes on screen: a hop within a scene, a scene change, or one of the landing's two
    payoffs; `train` is the stop the train drives itself to, or null while it is still in the intro. */
-export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; onward?: boolean };
+/* onward: the page doesn't rest here; it carries on to the next stop by itself (SmoothScroll.tsx), after
+   its usual dwell, or after this many ms */
+export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; onward?: boolean | number };
 
 /** The runs of stops from the DIZRUPT screen to AI & Automation's last beat. On a phone the train is
     gone and Solutions is a row of cards swiped across: one stop, the sections either side of it. */
@@ -68,8 +70,9 @@ export function scrollRuns(): ScrollStop[][] {
     // on to AI & Automation in two: him whole again, the line read (Bridge.tsx: its progress runs from
     // its top at the middle of the screen to its bottom there; the line is up at 0.28–0.42) …
     ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, kind: "scene" as const, train: null }] : []),
-    // … then into his heart and through the glitch to the chip, floating in the dark …
-    ...(ai ? [{ y: ai.offsetTop + 2, kind: "scene" as const, train: null }] : []),
+    // … then into his heart and through the glitch to the chip, floating in the dark: seen for a moment,
+    // and the page carries on by itself into what we do, so the chip isn't left standing still …
+    ...(ai ? [{ y: ai.offsetTop + 2, kind: "scene" as const, train: null, onward: 600 }] : []),
     /* … and one gesture per beat of AI & Automation: powered on, the three stages of how, said
        plainly. The page glides to each and the beat's animation plays on the same clock, ending as the
        page lands (AiNetwork.tsx). */

@@ -9,7 +9,7 @@ import { BACK, EASE, T, camera } from "@/lib/motion";
 import { isPhoneLayout } from "@/lib/layout";
 import { PANEL_VIEWS } from "@/components/home/ai/Panels";
 import { Matrix } from "@/components/home/ai/Matrix";
-import { foundFor, linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
+import { GROUPS, foundFor, linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
 
 const at = (id: string) => AI_STOPS[AI_CHAPTERS.findIndex((c) => c.id === id)];
 const WHAT = at("what"), HOW = AI_STAGES[AI_STAGES.length - 1], SIMPLE = at("simple");
@@ -22,12 +22,6 @@ const HEADLINE = ["Less friction.", "Smarter workflows.", "Greater potential."];
 const BODY =
   "From identifying inefficiencies to implementing tailored automation solutions, we help businesses create more efficient, connected ways of working. Every solution begins with understanding the process, evaluating the opportunity, and designing an approach around real operational needs.";
 const METHOD = ["Audit", "Evaluate", "Implement"];
-/* Made simple's picture: the business as its two sides, what each covers, on one bus each to the core
-   (x: where the card's middle sits across the stage, in its percent units) */
-const SIMPLE_SIDES = [
-  { side: "external", x: 33, name: "External workflows", areas: ["Customer enquiries", "Lead management", "Client communication"] },
-  { side: "internal", x: 67, name: "Internal workflows", areas: ["Operations", "Administration", "Reporting", "Data handling"] },
-];
 /** A portrait screen: the least room the picture is given over the words (px), and the share of the
     screen's height the chip takes at its closest when it has the whole screen. */
 const MIN_STAGE = 96;
@@ -160,15 +154,8 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       tl.fromTo(q(".ain-flows"), { autoAlpha: 0 }, { autoAlpha: 1, duration: g2 * 0.03 }, in2(0.83));
       panels.forEach((p) => tl.fromTo(p, { "--a": 0 }, { "--a": 1, duration: g2 * 0.04 }, in2(0.8 + DONE.indexOf(p.dataset.id as PanelId) * 0.022)));
 
-      /* Made simple: a different picture. The network of tools goes, and in its place the business
-         as two sides, each a card of what it covers, each on one bus to the core, running. */
+      // Made simple: the stages' tags give way to the two sides, framed and named, running
       tl.fromTo(el, { "--sm": 0 }, { "--sm": 1, duration: g3 * 0.35, ease: EASE.inOut }, in3(0.1));
-      tl.to(q(".ain-panels, .ain-wires, .ain-faults, .ain-matrix"), { autoAlpha: 0, duration: g3 * 0.001 }, in3(0.001)); // (a cut: the leg into it hides it behind a fade, playTo)
-      tl.fromTo(q(".ain-simple"), { autoAlpha: 0 }, { autoAlpha: 1, duration: g3 * 0.08 }, in3(0.04));
-      tl.fromTo(q(".ain-bus"), { "--bus": 1 }, { "--bus": 0, duration: g3 * 0.26, ease: EASE.inOut }, in3(0.08));
-      tl.fromTo(q(".ain-side"), { "--side": 0 }, { "--side": 1, duration: g3 * 0.24, stagger: g3 * 0.08, ease: EASE.in }, in3(0.2));
-      tl.fromTo(q(".ain-side li"), { "--pill": 0 }, { "--pill": 1, duration: g3 * 0.12, stagger: g3 * 0.025, ease: EASE.in }, in3(0.3));
-      tl.fromTo(q(".ain-bus-flow"), { "--busf": 0 }, { "--busf": 1, duration: g3 * 0.1 }, in3(0.42));
 
       // and all of it gives way, as the hand-back to the work begins
       tl.to(el, { autoAlpha: 0, duration: 0.05 }, AI_EXIT_FROM + 0.01); // (timeline units, not seconds: the scroll's own past the last beat)
@@ -412,29 +399,12 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         </div>
         <div className="ain-scan" aria-hidden />
 
-        {/* made simple: the two sides of the business, each a card on its own bus to the core, running */}
-        <div className="ain-simple" aria-hidden>
-          <svg className="ain-simple-bus" viewBox="0 0 100 100" preserveAspectRatio="none">
-            {/* each bus leaves from the chip's edge (its pins reach about 8 units out), not from under it */}
-            {SIMPLE_SIDES.map((s) => (
-              <path key={`b-${s.side}`} className={`ain-bus is-${s.side}`} pathLength={1} d={`M${s.x < 50 ? 42 : 58} 50 H${s.x}`} />
-            ))}
-            {SIMPLE_SIDES.map((s) => (
-              <path key={`f-${s.side}`} className={`ain-bus-flow is-${s.side}`} pathLength={1} d={`M${s.x < 50 ? 42 : 58} 50 H${s.x}`} />
-            ))}
-          </svg>
-          {SIMPLE_SIDES.map((s) => (
-            <div key={s.side} className={`ain-side is-${s.side}`} style={{ "--x": s.x } as React.CSSProperties}>
-              <p className="ain-side-name">
-                <i /> {s.name}
-              </p>
-              <ul>
-                {s.areas.map((a) => (
-                  <li key={a}>{a}</li>
-                ))}
-              </ul>
-              <p className="ain-side-state">
-                <b /> Running
+        {/* made simple: the two sides of the business, framed and named */}
+        <div className="ain-groups" aria-hidden>
+          {GROUPS.map((g) => (
+            <div key={g.side} className={`ain-group is-${g.side}`} style={{ "--x0": g.x0, "--x1": g.x1 } as React.CSSProperties}>
+              <p>
+                <i /> {g.name}
               </p>
             </div>
           ))}

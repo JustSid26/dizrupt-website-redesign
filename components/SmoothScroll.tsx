@@ -102,7 +102,7 @@ export function SmoothScroll() {
             // a stop the page doesn't rest at (lib/stops.ts: onward): once its scene is done, on it goes
             if (dir > 0 && to.onward && stops[i + 1]) {
               pending = { stops, i: i + 1, dir: 1 };
-              afterScene(() => go(stops, i + 1), DWELL);
+              afterScene(() => go(stops, i + 1), typeof to.onward === "number" ? to.onward : DWELL);
             }
             return;
           }
@@ -255,7 +255,7 @@ export function SmoothScroll() {
         const i = run.findIndex((st) => st.onward && Math.abs(st.y - y) < TOL);
         if (i < 0 || !run[i + 1]) continue;
         pending = { stops: run, i: i + 1, dir: 1 };
-        afterScene(() => go(run, i + 1), DWELL);
+        afterScene(() => go(run, i + 1), typeof run[i].onward === "number" ? run[i].onward : DWELL);
         return;
       }
     };
