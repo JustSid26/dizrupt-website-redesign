@@ -4,18 +4,17 @@ import { useEffect, useRef, useState, type MutableRefObject, type RefObject } fr
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
-import { AI_CHAPTERS, AI_EXIT_FROM, AI_STOPS } from "@/lib/aiStops";
+import { AI_CHAPTERS, AI_EXIT_FROM, AI_STAGES, AI_STOPS } from "@/lib/aiStops";
 import { BACK, EASE, T, camera } from "@/lib/motion";
 import { isPhoneLayout } from "@/lib/layout";
-import { rideToStop } from "@/lib/scroll";
 import { PANEL_VIEWS } from "@/components/home/ai/Panels";
 import { Matrix } from "@/components/home/ai/Matrix";
 import { GROUPS, linksFor, mapFor, panelsFor, placesFor, scanSpan, threadFor, SIDE, type PanelId } from "@/components/home/ai/layout";
 
 const at = (id: string) => AI_STOPS[AI_CHAPTERS.findIndex((c) => c.id === id)];
-const WHAT = at("what"), HOW = at("implement"), SIMPLE = at("simple");
-/** The three stages of how we do it, as beats (indices into AI_STOPS). */
-const STAGE_BEATS = ["audit", "evaluate", "implement"].map((id) => AI_CHAPTERS.findIndex((c) => c.id === id));
+const WHAT = at("what"), HOW = AI_STAGES[AI_STAGES.length - 1], SIMPLE = at("simple");
+/** The beat the page rests at for how we do it; its three stages are toggled to from there. */
+const HOW_K = AI_CHAPTERS.findIndex((c) => c.id === "how");
 /** How far past a beat the scroll has to go, as a share of the way to the next, to set it playing. */
 const NUDGE = 0.1;
 
@@ -98,7 +97,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
          simple, so words arrive and stagger at the site's own tempo however long the span */
       const g1 = WHAT, g2 = HOW - WHAT, g3 = SIMPLE - HOW;
       const in1 = (f: number) => g1 * f, in2 = (f: number) => WHAT + g2 * f, in3 = (f: number) => HOW + g3 * f;
-      const s1 = (sec: number) => (sec * g1) / T.beat, s2 = (sec: number) => (sec * g2) / (T.beat * STAGE_BEATS.length);
+      const s1 = (sec: number) => (sec * g1) / T.beat, s2 = (sec: number) => (sec * g2) / (T.beat * AI_STAGES.length);
       const hide = { strokeDashoffset: 1, autoAlpha: 0 }, draw = { strokeDashoffset: 0, autoAlpha: 1 };
 
       // What we do: said plainly beside the chip as it powers on and steps aside, a line at a time
@@ -167,6 +166,10 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       const head = { t: 0 };
       let k = 0, lastP = 0, tw: gsap.core.Timeline | null = null;
       const S = AI_STOPS, n = S.length;
+      /* where how we do it rests on the clock: its first stage to begin with, then whichever stage
+         was last toggled to (seek, below), so the scroll's beat and the toggle never fight */
+      let howRest = S[HOW_K];
+      const rest = (i: number) => (i === HOW_K ? howRest : S[i]);
       const apply = () => {
         tl.time(head.t);
         signals.ai.play = head.t;
@@ -174,7 +177,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       // to beat `to`, through every beat on the way
       const playTo = (to: number) => {
         tw?.kill();
-        const fwd = S[to] >= head.t;
+        const fwd = rest(to) >= head.t;
         const legs: number[] = [];
         if (fwd) for (let i = 0; i <= to; i++) { if (S[i] > head.t + 1e-4) legs.push(i); }
         else for (let i = n - 1; i >= to; i--) { if (S[i] < head.t - 1e-4) legs.push(i); }
@@ -193,8 +196,8 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
           const wake = (fwd ? i === 1 : i === 0) && !isPhoneLayout();
           const own = (wake ? T.wake : T.beat) * part * (fwd ? 1 : BACK);
           const dur = reduceRef.current ? T.reduced : left > 0.2 ? left / legs.length : own;
-          seq.to(head, { t: S[i], duration: dur, ease: wake ? camera() : EASE.inOut });
-          from = S[i];
+          seq.to(head, { t: rest(i), duration: dur, ease: wake ? camera() : EASE.inOut });
+          from = rest(i);
         });
         tw = seq;
       };
@@ -219,17 +222,22 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
         // sent here by the nav: be at the beat at once rather than play every page on the way
         if (performance.now() < signals.navJumpUntil) {
           tw?.kill();
-          head.t = p > SIMPLE ? Math.min(1, p) : S[k];
+          head.t = p > SIMPLE ? Math.min(1, p) : rest(k);
           apply();
           if (k !== last) onBeatRef.current(k);
           return;
         }
-        if (k !== last || (!tw?.isActive() && head.t !== S[k])) playTo(k);
+        if (k !== last || (!tw?.isActive() && head.t !== rest(k))) playTo(k);
       };
-      /* a step of how we do it, picked from the text: the page rides to that stage's stop, and the
-         network plays there with it, as if it had been scrolled to */
+      /* a stage of how we do it, picked from the text: the network plays to it where the page stands,
+         forward or back, at a beat's pace; the page itself doesn't move */
       seek.current = (i: number) => {
-        rideToStop(sec.offsetTop + (sec.offsetHeight - innerHeight) * S[STAGE_BEATS[i]]);
+        howRest = AI_STAGES[i];
+        if (k !== HOW_K) return;
+        tw?.kill();
+        const part = Math.min(1, Math.abs(howRest - head.t) / Math.max(1e-4, HOW - S[HOW_K]));
+        const dur = reduceRef.current ? T.reduced : T.beat * Math.max(0.4, part);
+        tw = gsap.timeline({ onUpdate: apply }).to(head, { t: howRest, duration: dur, ease: EASE.inOut });
       };
       const st = ScrollTrigger.create({ trigger: sec, start: "top top", end: "bottom bottom", onUpdate: (self) => step(self.progress) });
       // while a beat plays, the scroll waits for it (SmoothScroll.tsx)
@@ -239,7 +247,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       {
         const p = (lastP = st.progress);
         while (k < AI_STOPS.length - 1 && p >= AI_STOPS[k + 1] - NUDGE * (AI_STOPS[k + 1] - AI_STOPS[k])) k++;
-        head.t = p > SIMPLE ? Math.min(1, p) : AI_STOPS[k];
+        head.t = p > SIMPLE ? Math.min(1, p) : rest(k);
         apply();
         onBeatRef.current(k);
       }

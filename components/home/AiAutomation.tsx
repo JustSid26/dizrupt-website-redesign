@@ -311,6 +311,12 @@ export function AiAutomation() {
           {/* how we do it: the three stages together, the one playing opened out */}
           <div className="ai-how" data-on={id === "how" || undefined} aria-hidden={id !== "how"}>
             <p className="ai-kicker ai-how-title">How we do it</p>
+            {/* the three stages as a dial: the one playing lit and long */}
+            <div className="ai-how-dial" aria-hidden>
+              {STAGES.map((s, i) => (
+                <i key={s.no} style={{ "--h": `var(--h${i})` } as React.CSSProperties} />
+              ))}
+            </div>
             <ol className="ai-how-list">
               {STAGES.map((s, i) => (
                 <li key={s.no} className="ai-hw" style={{ "--h": `var(--h${i})` } as React.CSSProperties}>

@@ -1807,8 +1807,18 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ai-hw-head:focus-visible { outline: 1px solid #7cf2ff; outline-offset: 6px; }
 .ai-hw-head:hover .ai-hw-title { color: #fff; text-shadow: 0 0 24px rgba(60, 200, 255, 0.3); }
 .ai-hw-head:hover .ai-hw-name { color: #c9fbff; }
-/* the stage's name is the headline (display, condensed), its line the small label under it */
-.ai-hw-name { display: block; font-family: var(--display); font-weight: 600; font-stretch: 80%; text-transform: uppercase; font-size: clamp(22px, 2.1vw, 36px); line-height: 0.95; color: #7cf2ff; transition: color var(--t-micro); }
+/* the stage's name is the headline (display, condensed), its line the small label under it. The one
+   playing is lit: white at its head running into cyan, with a glow; the others sit back in the dark. */
+.ai-hw-name {
+  display: block; font-family: var(--display); font-weight: 600; font-stretch: 80%; text-transform: uppercase; font-size: clamp(22px, 2.1vw, 36px); line-height: 0.95;
+  background: linear-gradient(100deg, #ffffff calc(var(--h) * 45%), #7cf2ff); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 calc(var(--h) * 18px) rgba(60, 240, 255, calc(var(--h) * 0.55)));
+  transition: filter var(--t-ui-out);
+}
+/* the three stages as a dial under the heading: the one playing lit and long, tap one to go to it */
+.ai-how-dial { display: flex; gap: 6px; margin: -6px 0 14px; }
+.ai-how-dial i { display: block; height: 2px; width: 22px; border-radius: 1px; background: rgba(124, 242, 255, 0.22); transition: width var(--t-ui-out) var(--ease-out), background var(--t-micro), box-shadow var(--t-micro); }
+.ai-how-dial i { width: calc(22px + var(--h) * 38px); background: color-mix(in srgb, #3cf0ff calc(22% + var(--h) * 78%), transparent); box-shadow: 0 0 calc(var(--h) * 10px) #3cf0ff; }
 .ai-hw-title { display: block; transition: color var(--t-micro), text-shadow var(--t-micro); margin-top: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1.5; }
 .ai-hw-more { max-height: calc(var(--h) * 160px); opacity: var(--h); overflow: hidden; }
 .ai-hw-line { margin-top: 10px; max-width: 44ch; font-size: 14px; line-height: 1.5; color: rgba(242, 240, 235, 0.78); }
@@ -1863,12 +1873,19 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 /* where the links break: a mark at each */
 .ain-faults { position: absolute; inset: 0; visibility: hidden; }
 .ain-faults i { opacity: calc(1 - 0.85 * var(--v)); }
+/* the break marks: big enough to be read as such, ringed in red, lit, and pulsing (ambient: its own loop) */
 .ain-faults i {
-  position: absolute; left: calc(var(--x) * 1cqw); top: calc(var(--y) * 1cqh); width: 12px; height: 12px; translate: -50% -50%;
-  border-radius: 50%; background: #0a0608; box-shadow: 0 0 0 1px rgba(255, 110, 130, 0.65), 0 0 14px rgba(255, 60, 90, 0.4);
+  position: absolute; left: calc(var(--x) * 1cqw); top: calc(var(--y) * 1cqh); width: 24px; height: 24px; translate: -50% -50%;
+  border-radius: 50%; background: #120609; box-shadow: 0 0 0 2px rgba(255, 110, 130, 0.95), 0 0 22px rgba(255, 60, 90, 0.75), 0 0 48px rgba(255, 60, 90, 0.35);
+  animation: ain-fault 1.6s ease-in-out infinite;
 }
-.ain-faults i::before, .ain-faults i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 1.5px; background: #ff7b8a; translate: -50% -50%; rotate: 45deg; }
+.ain-faults i::before, .ain-faults i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 12px; height: 2.5px; border-radius: 2px; background: #ff8a98; box-shadow: 0 0 6px #ff4d6d; translate: -50% -50%; rotate: 45deg; }
 .ain-faults i::after { rotate: -45deg; }
+@keyframes ain-fault {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 110, 130, 0.95), 0 0 22px rgba(255, 60, 90, 0.75), 0 0 48px rgba(255, 60, 90, 0.35); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 140, 160, 1), 0 0 34px rgba(255, 60, 90, 1), 0 0 70px rgba(255, 60, 90, 0.55); }
+}
+@media (prefers-reduced-motion: reduce) { .ain-faults i { animation: none; } }
 
 /* the core: an anchor riding on the chip (no ring drawn), its label under it */
 .ain-hub {
