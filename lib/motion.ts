@@ -10,7 +10,7 @@
    hop        a short camera move within one scene: billboard to billboard, beat to beat (the work's
               window to window is one too, a little slower: window)
    scene      the camera into a different world
-   passage    AI & Automation out to the work's first window: a scene change carrying four things, so nearly three scenes' worth, lingering over the glitch
+   passage    AI & Automation out to the work's tower, whole: a scene change carrying three things, lingering over the glitch
    signature  the two payoffs of the landing: the city building itself, him turning into the count
    handover   a shader hand-over between worlds (the glitch), never linear
    ambient    loops (grain, scan drift, the eq): their own clocks, left as they are */
@@ -29,12 +29,12 @@ export const T = {
   beat: 2.6, // an AI beat: a hop, the page and the network on one clock
   wake: 6.5, // the chip to what we do: it powers on, pulls back to the whole network and steps aside, all in one ride
   scene: 3.2,
-  passage: 11.5, // AI & Automation out to the work: the network clears, the glitch, the city, the tower and in to its first window, in one ride
+  passage: 8.5, // AI & Automation out to the work: the network clears, the glitch, the city and the tower whole, in one ride
   signature: 3.8,
   handover: 1.6,
   nav: 1.6, // a jump from the menu or the rail: quick, skipping what is between
   /** the longest a stop's own scene may hold the page (the longest ride, the passage, and a little over) */
-  hold: 11.5 + 0.4,
+  hold: 8.5 + 0.4,
   /** reduced motion: everything collapses to a quick crossfade, never a cut */
   reduced: 0.2,
 } as const;

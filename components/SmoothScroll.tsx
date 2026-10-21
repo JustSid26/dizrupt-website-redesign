@@ -35,6 +35,7 @@ export function SmoothScroll() {
     let push = 0, pushed = false; // how far the current gesture has gone, and whether it has moved a stop yet
     let sure = false; // the current gesture is unmistakably new (see gesture)
     let lastDir = 1; // which way the page last went: a stop it carries on from does so only forwards
+    const DWELL = 2600; // ms a stop the page carries on from is held before it does (the tower, whole, under its sign)
     const TOL = 40;
     // a gesture has to mean it: a brush of the trackpad isn't a ride (a wheel's notch is past this at once)
     const INTENT = 60;
@@ -46,12 +47,15 @@ export function SmoothScroll() {
        never says it has finished can't hold the page for good), then the ride. Only the latest waits. */
     let waiting: (() => void) | null = null;
     let pending: { stops: ScrollStop[]; i: number; dir: number } | null = null; // the ride waiting on it
-    const afterScene = (fn: () => void) => {
+    // minMs: a dwell the page keeps at the stop whatever the scene is doing (the wide shot of the tower,
+    // seen under its sign, before the page carries itself on into the first window)
+    const afterScene = (fn: () => void, minMs = 0) => {
       if (waiting) gsap.ticker.remove(waiting);
       const t0 = performance.now(), token = seq;
       const wait = () => {
         if (token !== seq) return void (gsap.ticker.remove(wait), (waiting = null), (pending = null));
-        if (busy() && performance.now() - t0 < T.hold * 1000) return;
+        const held = performance.now() - t0;
+        if (held < minMs || (busy() && held < T.hold * 1000)) return;
         gsap.ticker.remove(wait);
         waiting = null;
         pending = null;
@@ -98,7 +102,7 @@ export function SmoothScroll() {
             // a stop the page doesn't rest at (lib/stops.ts: onward): once its scene is done, on it goes
             if (dir > 0 && to.onward && stops[i + 1]) {
               pending = { stops, i: i + 1, dir: 1 };
-              afterScene(() => go(stops, i + 1));
+              afterScene(() => go(stops, i + 1), DWELL);
             }
             return;
           }
@@ -251,7 +255,7 @@ export function SmoothScroll() {
         const i = run.findIndex((st) => st.onward && Math.abs(st.y - y) < TOL);
         if (i < 0 || !run[i + 1]) continue;
         pending = { stops: run, i: i + 1, dir: 1 };
-        afterScene(() => go(run, i + 1));
+        afterScene(() => go(run, i + 1), DWELL);
         return;
       }
     };
