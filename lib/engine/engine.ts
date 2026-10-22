@@ -1377,7 +1377,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       aiPass.enabled = on;
       const full = ai.mix >= 0.9999;
       renderPass.enabled = !full;
-      bloom.enabled = !full;
+      bloom.enabled = !full && !isMobile; // (a phone draws its lights without the bloom's haze round them)
       if (on) {
         if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
         aiPass.uniforms.uMix.value = ai.mix;
