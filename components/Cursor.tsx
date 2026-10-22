@@ -12,6 +12,9 @@ export function Cursor() {
     const pos = { x: innerWidth / 2, y: innerHeight / 2, tx: innerWidth / 2, ty: innerHeight / 2 };
     const p = signals.pointer;
     const move = (e: PointerEvent) => {
+      /* a finger isn't a pointer to follow: a swipe that scrolls the page would turn him towards it
+         (engine.ts: he looks at the pointer, and turns a little towards it) */
+      if (e.pointerType === "touch") return;
       p.x = (e.clientX / innerWidth) * 2 - 1;
       p.y = -(e.clientY / innerHeight) * 2 + 1;
       p.px = e.clientX;

@@ -319,6 +319,27 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const heart = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), heartMat);
   const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color("#b46bff"), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
   heart.add(heartGlow);
+  /* a phone draws no bloom (the haze it puts round every light in the city): the heart's own glow
+     stands in for it there, a soft violet light round the mark, beating with it (drawn first, under it) */
+  const haloTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    r.addColorStop(0, 'rgba(236, 214, 255, 1)');
+    r.addColorStop(0.22, 'rgba(196, 140, 255, 0.55)');
+    r.addColorStop(0.55, 'rgba(150, 70, 240, 0.16)');
+    r.addColorStop(1, 'rgba(120, 40, 220, 0)');
+    g.fillStyle = r;
+    g.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const heartHalo = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
+  heartHalo.renderOrder = 39;
+  heartHalo.visible = isMobile;
+  heart.add(heartHalo);
   heart.renderOrder = 40;
   if (mascot) {
     // left of his chest (his left, your right), just in front of the surface
@@ -851,7 +872,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       sc = isMobile ? 0.5 : 0.8;
       rot = null;
     } else if (onIntro) {
-      const turned = signals.introBeat === 'profile';
+      /* the profile: on a wide screen he turns side on and the line stands in the space he leaves. A
+         phone has no such space (and rides on past it to the train), so he keeps facing you */
+      const turned = signals.introBeat === 'profile' && !phone;
       tx = turned && key !== 'train:station' ? profileShift() : 0;
       ty = key === 'stats' || key === 'train:station' ? 0 : BUST_DROP;
       sc = 1;
@@ -947,10 +970,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const headOn = scrubbing ? 0 : lit;
     u.uHeadOn.value = damp(u.uHeadOn.value, headOn, 4, dt);
     // coming apart into the windows, his light fades with the scroll rather than switching off
-    /* drawn as light (the soft glow with the rim) on a wide screen; a phone draws him as it draws
-       everything else, as his points, crisp and violet: finer to look at, and the glow's blended
-       sprites were the dearest pixels on the page */
-    if (isMobile) u.uAurora.value = 0;
+    /* drawn as light (the soft glow with the rim) on a wide screen; a phone draws him standing in the
+       city as it draws everything else, as his points, crisp and violet: finer to look at, and the
+       glow's blended sprites were the dearest pixels on the page. Except on the way into his heart:
+       there the light is the animation (the camera comes in and he dissolves round the heart into
+       it), so a phone draws him as light there too, from the bridge to the hand-over */
+    const intoHeart = section === 'bridge' || s.section === 'ai';
+    if (isMobile && !intoHeart) u.uAurora.value = 0;
     else if (fromWhole) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);
     else u.uAurora.value = damp(u.uAurora.value, isMascot ? 1 : 0, 4, dt);
 
@@ -1214,7 +1240,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // (a phone draws its points smaller, there being more of them (config.ts: COUNT); its count's figures bigger, to stand out against the city)
     u.uSize.value = 22 * (isMobile ? 0.95 : 1) * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
     // a phone's figure, drawn as points rather than light, is lifted well up so his violet reads against the city
-    u.uGain.value = damp(u.uGain.value, isMobile && isMascot ? 3.2 : 1, 4, dt);
+    // (as points only: drawn as light, on the way into his heart, he is as bright as he ever was)
+    u.uGain.value = damp(u.uGain.value, isMobile && isMascot ? 1 + 2.2 * (1 - u.uAurora.value) : 1, 4, dt);
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
@@ -1354,6 +1381,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heartMat.opacity = heartShow * (0.55 + 0.45 * beat) * close;
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
       (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18 * close;
+      if (isMobile) {
+        // (a phone's stand-in for the bloom: wider and brighter as the camera comes in to it)
+        heartHalo.scale.setScalar(2.4 + beat * 0.5 + bridgeZoom * 1.2);
+        (heartHalo.material as THREE.MeshBasicMaterial).opacity = heartShow * (0.32 + 0.22 * beat) * (0.25 + 0.75 * bridgeZoom); // (faint while he stands in the city: it is the zoom in it belongs to)
+      }
     }
     /* ---- AI & Automation: built ahead of time, drawn only while it is on screen. A phone has no AI
        world: the page draws its chip (AiNetwork.tsx), the hand-over is to the dark, and once it is
