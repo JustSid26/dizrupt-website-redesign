@@ -121,11 +121,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
   composer.addPass(aiPass);
   composer.addPass(new OutputPass());
-  /* Quality, on a phone: while the landing builds the city the frame is at its heaviest, and a phone
-     that can't keep up stutters through the build. If frames run late there, the picture is drawn at
-     1x instead of 1.25x and the bloom from a quarter-size picture; once the build is done and frames
-     are quick again the full quality comes back. Fast phones never see the change. */
-  let qualityAt = 0, slowShare = 0;
+  /* Quality, on a phone: a governor. The picture is drawn at one of a few resolutions, from the one
+     the benchmark (before `ready`) found the phone can hold down to 1x. Whenever frames run late it
+     steps down a notch; once frames have been comfortably quick for a good while it steps back up.
+     So the phone settles, in each view, at the sharpest picture it can draw at full frame rate: the
+     close-ups sharp, the whole city from the air a notch softer, never a stutter in either. */
+  let qualityAt = 0, slowShare = 0, fastSince = 0;
+  let levels: number[] = [PIXEL_RATIO], level = 0, curPr = PIXEL_RATIO;
   /* draw at this many device pixels per CSS pixel: the renderer, the composer and the bloom resized,
      and every material that sizes its points by the ratio told, so nothing drawn as points changes
      size on screen (the field's particles, the city's lights, the stations', the sky's) */
@@ -145,10 +147,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     });
     u.uPixelRatio.value = pr;
   };
-  const applyQuality = (low: boolean) => {
-    lowQuality = low;
+  const setLevel = (i: number) => {
+    level = Math.max(0, Math.min(levels.length - 1, i));
+    curPr = levels[level];
+    lowQuality = curPr <= 1; // (the bloom goes to a quarter-size picture at the floor)
     qualityAt = performance.now();
-    setRatio(low ? Math.min(pixelRatio, 1) : pixelRatio);
+    setRatio(curPr);
   };
   let aiWorld: AiWorld | null = null;
   let aiIdle = 0; // seconds it has been out of reach
@@ -564,22 +568,30 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     camera.lookAt(aerialLook);
     city.update(0, 1, 1, camera.position, 1);
     tower.update(0, camera, 1, []);
+    /* the frame is timed to the pixel: reading one back can't return until the GPU has drawn it
+       (gl.finish() returns early on iOS, and would time only the handing over) */
+    const px = new Uint8Array(4);
+    const drawn = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     const cost = (pr: number) => {
       setRatio(pr);
       composer.render();
-      gl.finish(); // (the first frame at a size pays for its buffers: not counted)
+      drawn(); // (the first frame at a size pays for its buffers: not counted)
       const N = 6, t0 = performance.now();
-      for (let i = 0; i < N; i++) { composer.render(); gl.finish(); }
+      for (let i = 0; i < N; i++) { composer.render(); drawn(); }
       return (performance.now() - t0) / N;
     };
     const cap = Math.min(2, devicePixelRatio);
     let chosen = pixelRatio;
-    for (const pr of [2, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
-      if (cost(pr) <= 11) { chosen = pr; break; }
+    for (const pr of [2, 1.75, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
+      if (cost(pr) <= 12) { chosen = pr; break; }
     }
     pixelRatio = chosen;
-    setRatio(chosen);
+    // the governor's notches: from what the phone can hold, down to 1x
+    levels = [2, 1.75, 1.5, 1.25, 1].filter((v) => v < chosen - 0.01);
+    levels.unshift(chosen);
+    if (levels[levels.length - 1] > 1) levels.push(1);
   }
+  setLevel(0);
   signals.ready = true;
 
   /* ---------- glitch bursts (Spider-Verse: rare, abrupt, over in a few held frames) ---------- */
@@ -1340,7 +1352,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     {
       const ai = signals.ai;
       if (!aiWorld && !phone && (ai.warm || ai.mix > 0)) {
-        aiWorld = createAiWorld(renderer, lowQuality ? Math.min(pixelRatio, 1) : pixelRatio);
+        aiWorld = createAiWorld(renderer, curPr);
         aiWorld.render(dt, time, 0, 0, 0); // compile it now, not on the first frame of the transition
       }
       // a touch screen can't hold both worlds for long: once the page is well past it, it is freed (and
@@ -1377,15 +1389,16 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       }
       dark = false;
     }
-    /* a phone falling behind while the city builds drops to the lighter picture, and takes it as a
-       matter of course for the work (the tower's rooms filling the screen is the heaviest frame
-       there is, and a phone that runs out of room there is thrown off the page); back up once it is
-       past both and keeping up */
-    if (isMobile && now - qualityAt > 1200) {
-      const building = onIntro && ip < 0.7;
-      const heavy = (building && slowShare > 0.45) || section === 'projects';
-      if (!lowQuality && heavy) applyQuality(true);
-      else if (lowQuality && !heavy && !building && slowShare < 0.1) applyQuality(false);
+    /* the governor: late frames step the picture down a notch at once (well, within a second or so);
+       a good stretch of comfortably quick frames steps it back up, one notch at a time */
+    if (isMobile && levels.length > 1 && now - qualityAt > 1200) {
+      if (slowShare > 0.35) {
+        if (level < levels.length - 1) setLevel(level + 1);
+        fastSince = 0;
+      } else if (slowShare < 0.04) {
+        if (!fastSince) fastSince = now;
+        else if (now - fastSince > 6000 && level > 0) { setLevel(level - 1); fastSince = 0; }
+      } else fastSince = 0;
     }
     /* the DIZRUPT screen: the canvas is under solid black until the hole the cursor opens has opened.
        A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
@@ -1395,7 +1408,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: lowQuality, base: pixelRatio }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
