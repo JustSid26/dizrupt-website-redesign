@@ -901,6 +901,9 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   construct.frustumCulled = false;
+  // a phone builds the city without them: thousands of glowing, blended sprites over the whole screen
+  // were the build's dearest pixels, and the facades come up the same without their lights
+  construct.visible = !isMobile;
   group.add(construct);
 
   /* ---- the night sky: a clear, bright one, deep blue at the top, glowing at the horizon ---- */
