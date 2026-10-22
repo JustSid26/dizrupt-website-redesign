@@ -27,7 +27,9 @@ export function SmoothScroll() {
        gesture was. A ride's own momentum (a trackpad's tail) is ignored, so the animation between two
        stops always plays out whole. A second, real gesture while it plays isn't thrown away: one more
        stop the same way is queued for when it lands; a gesture the other way turns the ride round. */
-    let glide: { stops: ScrollStop[]; i: number; dir: number } | null = null;
+    // auto: a ride the page started by itself (an onward stop), not a gesture: a gesture while it runs
+    // doesn't queue another stop on top of it, or the visitor would find a stop skipped
+    let glide: { stops: ScrollStop[]; i: number; dir: number; auto?: boolean } | null = null;
     let queued = false; // one more stop the same way, once this ride lands
     let landedAt = 0; // when the last ride came to rest: its momentum is still arriving for a moment
     let seq = 0;
@@ -46,7 +48,7 @@ export function SmoothScroll() {
     /* the stop's own scene is still playing: it plays out whole first (with a ceiling, so a scene that
        never says it has finished can't hold the page for good), then the ride. Only the latest waits. */
     let waiting: (() => void) | null = null;
-    let pending: { stops: ScrollStop[]; i: number; dir: number } | null = null; // the ride waiting on it
+    let pending: { stops: ScrollStop[]; i: number; dir: number; auto?: boolean } | null = null; // the ride waiting on it
     // minMs: a dwell the page keeps at the stop whatever the scene is doing (the wide shot of the tower,
     // seen under its sign, before the page carries itself on into the first window)
     const afterScene = (fn: () => void, minMs = 0) => {
@@ -64,7 +66,7 @@ export function SmoothScroll() {
       waiting = wait;
       gsap.ticker.add(wait);
     };
-    const go = (stops: ScrollStop[], i: number, how: { queued?: boolean; turning?: boolean } = {}) => {
+    const go = (stops: ScrollStop[], i: number, how: { queued?: boolean; turning?: boolean; auto?: boolean } = {}) => {
       const y = window.scrollY, to = stops[i];
       const dir = to.y > y ? 1 : -1;
       const leg = dir > 0 ? to : stops[i + 1] ?? to; // the leg being ridden, whichever way
@@ -84,7 +86,7 @@ export function SmoothScroll() {
       // the train drives itself there now, rather than when the page catches up
       signals.rideTarget = to.train;
       signals.rideEnd = performance.now() + duration * 1000;
-      glide = { stops, i, dir };
+      glide = { stops, i, dir, auto: how.auto };
       lastDir = dir;
       const token = ++seq;
       lenis.scrollTo(to.y, {
@@ -101,8 +103,8 @@ export function SmoothScroll() {
           if (!queued) {
             // a stop the page doesn't rest at (lib/stops.ts: onward): once its scene is done, on it goes
             if (dir > 0 && to.onward && stops[i + 1]) {
-              pending = { stops, i: i + 1, dir: 1 };
-              afterScene(() => go(stops, i + 1), typeof to.onward === "number" ? to.onward : DWELL);
+              pending = { stops, i: i + 1, dir: 1, auto: true };
+              afterScene(() => go(stops, i + 1, { auto: true }), typeof to.onward === "number" ? to.onward : DWELL);
             }
             return;
           }
@@ -117,12 +119,20 @@ export function SmoothScroll() {
        keeps sending events for a second or more after the swipe, so a pause alone can't tell them apart. */
     // sure: unmistakably a new gesture (a key, a wheel's notch, a swipe after a pause), not momentum
     const gesture = (dir: number, fresh: boolean, sure = false) => {
-      // a ride waiting on the scene counts as under way: a second gesture queues behind it, the other
-      // way calls it off
+      /* a ride waiting on the scene counts as under way: a second gesture queues behind it, the other
+         way calls it off. A ride the page is about to take by itself (an onward stop's dwell) is
+         different: a gesture its way just takes it now, nothing queued, so no stop is skipped. */
       if (pending && !glide) {
         if (!fresh) return true;
-        if (dir === pending.dir) queued = true;
-        else {
+        if (dir === pending.dir) {
+          if (pending.auto) {
+            const p = pending;
+            seq++; // (the wait lets go: see afterScene)
+            pending = null;
+            queued = false;
+            go(p.stops, p.i);
+          } else queued = true;
+        } else {
           seq++;
           queued = false;
         }
@@ -130,7 +140,7 @@ export function SmoothScroll() {
       }
       if (glide) {
         if (!fresh) return true; // its own momentum
-        if (dir === glide.dir) queued = true; // one more stop, never more than one
+        if (dir === glide.dir) { if (!glide.auto) queued = true; } // one more stop, never more than one (none on a ride the page took itself)
         else {
           // the other way: back to where it came from, from where it is
           queued = false;
@@ -254,8 +264,8 @@ export function SmoothScroll() {
       for (const run of [...scrollRuns(), workStops()]) {
         const i = run.findIndex((st) => st.onward && Math.abs(st.y - y) < TOL);
         if (i < 0 || !run[i + 1]) continue;
-        pending = { stops: run, i: i + 1, dir: 1 };
-        afterScene(() => go(run, i + 1), typeof run[i].onward === "number" ? run[i].onward : DWELL);
+        pending = { stops: run, i: i + 1, dir: 1, auto: true };
+        afterScene(() => go(run, i + 1, { auto: true }), typeof run[i].onward === "number" ? run[i].onward : DWELL);
         return;
       }
     };
