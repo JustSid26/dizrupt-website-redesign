@@ -1212,13 +1212,16 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const far = camera.position.distanceTo(points.getWorldPosition(tmpV)) / CAMERA_Z;
     u.uSolid.value = damp(u.uSolid.value, key.startsWith('train') ? 1 : 0, 3, dt);
     // (a phone draws its points smaller, there being more of them (config.ts: COUNT); its count's figures bigger, to stand out against the city)
-    u.uSize.value = 22 * (isMobile ? 0.84 : 1) * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
-    // a phone's figure, drawn as points rather than light, is lifted so his violet reads against the city
-    u.uGain.value = damp(u.uGain.value, isMobile && isMascot ? 1.9 : 1, 4, dt);
+    u.uSize.value = 22 * (isMobile ? 0.95 : 1) * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
+    // a phone's figure, drawn as points rather than light, is lifted well up so his violet reads against the city
+    u.uGain.value = damp(u.uGain.value, isMobile && isMascot ? 3.2 : 1, 4, dt);
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    cityDim = damp(cityDim, section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview && !phone) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
+    /* (a phone, while he stands whole in the city on the landing: the city steps back to half, or his
+       points, drawn without the glow a wide screen gives him, are lost among its windows) */
+    const himWhole = isMobile && onIntro && ip > 0.2 && ip < 0.5;
+    cityDim = damp(cityDim, himWhole ? 0.5 : section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview && !phone) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     // the board's rig goes up first, as the camera pulls back from its screen
