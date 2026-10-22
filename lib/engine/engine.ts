@@ -947,7 +947,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const headOn = scrubbing ? 0 : lit;
     u.uHeadOn.value = damp(u.uHeadOn.value, headOn, 4, dt);
     // coming apart into the windows, his light fades with the scroll rather than switching off
-    if (fromWhole) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);
+    /* drawn as light (the soft glow with the rim) on a wide screen; a phone draws him as it draws
+       everything else, as his points, crisp and violet: finer to look at, and the glow's blended
+       sprites were the dearest pixels on the page */
+    if (isMobile) u.uAurora.value = 0;
+    else if (fromWhole) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);
     else u.uAurora.value = damp(u.uAurora.value, isMascot ? 1 : 0, 4, dt);
 
     // he looks at the count as it arrives, and at you the rest of the time — on a spring
@@ -1336,7 +1340,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const P = 1.0, ph = time % P; // one beat a second
       const beat = Math.exp(-Math.pow((ph - 0.05) / 0.06, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.3) / 0.07, 2));
       // (on the landing, it lights as the beam passes his chest, not once he is whole: seen within the ride)
-      const show = key.startsWith('mascot:') && !scrubbing && u.uProgress.value > 0.9 && u.uAurora.value > 0.5 && (!onIntro || reveal > 0.75) ? fieldOpacity * mascotVisible : 0;
+      const show = key.startsWith('mascot:') && !scrubbing && u.uProgress.value > 0.9 && (u.uAurora.value > 0.5 || isMobile) && (!onIntro || reveal > 0.75) ? fieldOpacity * mascotVisible : 0;
       heartShow = damp(heartShow, show, 4, dt);
       heart.visible = heartShow > 0.01;
       heart.scale.setScalar(1 + beat * 0.22);
