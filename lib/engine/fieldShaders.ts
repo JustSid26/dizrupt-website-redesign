@@ -276,6 +276,7 @@ uniform float uEyeReveal;
 uniform float uKindle;
 uniform float uFill;
 uniform float uKeep;
+uniform float uGain; // a plain lift on every point's light (a phone's figure, drawn as points, is lifted so it reads against the city)
 varying float vCapGain;
 void main() {
   float d = length(gl_PointCoord - 0.5);
@@ -347,5 +348,5 @@ void main() {
   vec3 channel = uGlitchLayer < 0.5 ? vec3(0.0, 1.0, 0.0) : uGlitchLayer < 1.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
   col *= mix(vec3(1.0), channel, split);
   alpha *= 1.0 - vDrop * split; // the slices that dropped out
-  gl_FragColor = vec4(col, alpha * uOpacity * reveal * vCapGain / uKeep); // (the same light from fewer, smaller ones)
+  gl_FragColor = vec4(col, alpha * uOpacity * uGain * reveal * vCapGain / uKeep); // (the same light from fewer, smaller ones)
 }`;
