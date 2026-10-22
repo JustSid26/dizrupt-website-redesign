@@ -1207,8 +1207,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // from across the city his light is spread over far fewer pixels; swell the points so he still reads
     const far = camera.position.distanceTo(points.getWorldPosition(tmpV)) / CAMERA_Z;
     u.uSolid.value = damp(u.uSolid.value, key.startsWith('train') ? 1 : 0, 3, dt);
-    // (a phone's count: the figures are drawn with bigger points, so they stand out against the city)
-    u.uSize.value = 22 * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
+    // (a phone draws its points smaller, there being more of them (config.ts: COUNT); its count's figures bigger, to stand out against the city)
+    u.uSize.value = 22 * (isMobile ? 0.72 : 1) * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)

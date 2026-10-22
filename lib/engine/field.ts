@@ -57,8 +57,8 @@ export class ParticleField {
       uFill: { value: 0 },
       uSolid: { value: 0 },
       uSize: { value: 22 },
-      uKeep: { value: isMobile ? 0.6 : 1 }, // a phone draws 60% of them, each brighter: the same light for less work
-      uMaxPoint: { value: isMobile ? 56 : 1e4 }, // and none of them huge (each pixel of a sprite is paid for, ten deep)
+      uKeep: { value: isMobile ? 0.75 : 1 }, // a phone draws three in four of them, each a little brighter (config.ts: COUNT)
+      uMaxPoint: { value: isMobile ? 44 : 1e4 }, // and none of them huge (each pixel of a sprite is paid for, ten deep)
       uPixelRatio: { value: pixelRatio },
       uMouse: { value: new THREE.Vector3(99, 99, 0) },
       uMouseStrength: { value: 0 },
