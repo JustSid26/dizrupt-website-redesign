@@ -123,10 +123,11 @@ export function workStops(): ScrollStop[] {
   const ai = document.getElementById("ai");
   if (ai) {
     const at = (p: number) => ai.getBoundingClientRect().top + scrollY + (ai.offsetHeight - innerHeight) * p;
-    stops[0].kind = "passage";
+    stops[0].kind = phone ? "sweep" : "passage";
     // the ride lingers over its first stretch, to the section's end: the network clearing and the glitch
+    // (a wide screen; a phone doesn't linger, so the tower comes up sooner)
     const from = at(AI_STOPS[AI_STOPS.length - 1]), end = ai.getBoundingClientRect().top + scrollY + ai.offsetHeight - innerHeight;
-    stops[0].slow = Math.min(0.9, Math.max(0, (end - from) / Math.max(1, stops[0].y - from)));
+    if (!phone) stops[0].slow = Math.min(0.9, Math.max(0, (end - from) / Math.max(1, stops[0].y - from)));
     stops.unshift({ y: at(AI_STOPS[AI_STOPS.length - 1]), kind: "beat", train: null });
   }
   /* and from the last project, one gesture all the way out: the camera pulls back from the tower and

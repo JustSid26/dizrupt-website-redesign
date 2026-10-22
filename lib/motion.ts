@@ -30,6 +30,7 @@ export const T = {
   wake: 6.5, // the chip to what we do: it powers on, pulls back to the whole network and steps aside, all in one ride
   scene: 3.2,
   passage: 8.5, // AI & Automation out to the work: the network clears, the glitch, the city and the tower whole, in one ride
+  sweep: 5.5, // a phone's: the same, on in to the first window, without lingering over the glitch, so the tower comes up sooner
   signature: 3.8,
   handover: 1.6,
   nav: 1.6, // a jump from the menu or the rail: quick, skipping what is between
@@ -46,7 +47,7 @@ export const LINGER = 1.75;
 /** A ride queued behind the one under way runs at this share of its own time. */
 export const QUEUED = 0.8;
 
-export type RideKind = "hop" | "depart" | "window" | "beat" | "wake" | "scene" | "passage" | "signature";
+export type RideKind = "hop" | "depart" | "window" | "beat" | "wake" | "scene" | "passage" | "sweep" | "signature";
 
 /* The camera's one curve, for every ride: a short pull away, a steady run, a short settle. `ramp` is
    the share of the ride each end takes. (A sine spends most of a ride getting going and stopping.) */
