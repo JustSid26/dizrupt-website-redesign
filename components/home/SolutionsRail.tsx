@@ -12,15 +12,60 @@ import { transitionTo } from "@/lib/viewTransition";
 import { useSection } from "@/components/home/useSection";
 
 /* What Dizrupt does, on a phone: the wide screen's train ride (SolutionsTrain.tsx) drawn flat and side
-   on. His train pulls in from the left and stands with its first carriage in the middle of the screen,
-   the solution's film in its window and the words under it; each gesture moves it on one carriage
-   (lib/stops.ts: one stop a carriage), and after the last it rides off to the right as the page goes on.
-   The section is N + 1 screens tall: one for the train to pull in over, one for each carriage. */
+   on, in the desktop train's own colours (public/models/train.glb: white paint, dark glass, the violet
+   stripe, a dark underbody) on the desktop line's elevated deck with its violet light strips.
+   As the section arrives the scene stays where it is and fades up, and the train runs in along it from
+   the left, standing with its first carriage in the middle of the screen: the solution's film in its
+   window, the words under it. Each gesture moves it on one carriage (lib/stops.ts); after the last it
+   runs off to the right as the page goes on. The section is N + 1 screens tall: one for the train to
+   run in over, one for each carriage. */
 const N = SOLUTIONS.length;
 export const RAIL_SCREENS = N + 1;
 
+/* The leading car: the carriage's body run on into a bullet nose, its windscreen wrapped over the top
+   of the nose and the stripe sweeping up it to the lamp. Drawn over the body's box (270 by 200). */
+function Nose() {
+  return (
+    <svg className="solc-nose" viewBox="0 0 270 200" preserveAspectRatio="none" aria-hidden>
+      <defs>
+        <linearGradient id="solc-paint" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fbfaff" />
+          <stop offset="0.1" stopColor="#ebe9f5" />
+          <stop offset="0.45" stopColor="#d5d2e4" />
+          <stop offset="0.7" stopColor="#b4b0c9" />
+          <stop offset="0.85" stopColor="#8e89a7" />
+          <stop offset="0.86" stopColor="#2e2c3a" />
+          <stop offset="1" stopColor="#17161f" />
+        </linearGradient>
+        <linearGradient id="solc-glass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#3a4258" />
+          <stop offset="0.5" stopColor="#1a1f2d" />
+          <stop offset="1" stopColor="#0d1018" />
+        </linearGradient>
+      </defs>
+      <path d="M0 22 Q0 2 22 2 H96 C176 2 238 44 260 128 C266 152 266 172 250 186 L236 200 H0 Z" fill="url(#solc-paint)" />
+      {/* the cool light of the sky along the top, and the shadow under the nose */}
+      <path d="M22 5 H96 C150 5 196 22 226 52" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+      {/* the passenger windows behind the cab, and the door */}
+      <rect x="10" y="26" width="98" height="88" rx="10" fill="url(#solc-glass)" />
+      <rect x="14" y="30" width="44" height="80" rx="7" fill="#232a3b" />
+      <rect x="62" y="30" width="42" height="80" rx="7" fill="#232a3b" />
+      <path d="M17 34 L40 34 L22 70 Z" fill="#ffffff" opacity="0.08" />
+      <rect x="118" y="30" width="22" height="140" rx="5" fill="none" stroke="#8e89a7" strokeWidth="1.5" />
+      <rect x="122" y="36" width="14" height="46" rx="4" fill="url(#solc-glass)" />
+      {/* the windscreen over the nose */}
+      <path d="M150 10 C192 14 228 44 246 100 C234 106 214 106 202 100 C190 64 172 40 148 30 Z" fill="url(#solc-glass)" />
+      <path d="M160 16 C190 22 214 42 228 72" fill="none" stroke="#ffffff" strokeWidth="2" opacity="0.25" strokeLinecap="round" />
+      {/* the stripe, sweeping up the nose to the lamp */}
+      <path d="M0 150 H168 C204 150 232 138 254 120 L258 129 C236 148 206 159 168 159 H0 Z" fill="#a650ed" />
+      <path d="M0 150 H168 C204 150 232 138 254 120" fill="none" stroke="#e2c9ff" strokeWidth="1" opacity="0.7" />
+    </svg>
+  );
+}
+
 export function SolutionsRail() {
   const section = useRef<HTMLElement>(null);
+  const pin = useRef<HTMLDivElement>(null);
   const train = useRef<HTMLDivElement>(null);
   const cars = useRef<(HTMLDivElement | null)[]>([]);
   const engine = useRef<HTMLDivElement>(null);
@@ -39,29 +84,38 @@ export function SolutionsRail() {
     signals.rideTarget = null;
     const sec = section.current;
     if (!sec) return;
-    let moving = false;
+    let moving = false, shown = true;
     const place = () => {
-      const tr = train.current, first = cars.current[N - 1], second = cars.current[N - 2], eng = engine.current;
-      if (!tr || !first || !eng) return;
+      const tr = train.current, pn = pin.current, first = cars.current[N - 1], second = cars.current[N - 2], eng = engine.current;
+      if (!tr || !pn || !first || !eng) return;
+      /* arriving: while the section's top is still on its way up the screen, the scene is held where it
+         will stand (it doesn't rise with the page) and fades up, so all that moves is the train */
+      const rt = sec.getBoundingClientRect().top;
+      const inside = rt > 0 && rt < innerHeight;
+      pn.style.transform = inside ? `translate3d(0, ${(-rt).toFixed(1)}px, 0)` : "";
+      const enter = rt >= innerHeight ? 0 : rt <= 0 ? 1 : 1 - rt / innerHeight;
+      pn.style.setProperty("--in", enter.toFixed(3));
+      const show = enter > 0.002;
+      if (show !== shown) { shown = show; pn.style.visibility = show ? "" : "hidden"; }
       /* u counts the carriages: 0 the train still off to the left, 1 the first carriage in the middle of
-         the screen … N the last, and past N it has ridden off. One screen of scroll per step, measured
-         from the section itself so a phone's toolbar coming and going can't put the stops off the carriages */
+         the screen … N the last, and past N it has run off. One screen of scroll per step, measured from
+         the section itself so a phone's toolbar coming and going can't put the stops off the carriages */
       const pitch = sec.offsetHeight / RAIL_SCREENS;
-      const top = sec.getBoundingClientRect().top + scrollY;
-      const u = Math.max(0, (scrollY - top) / pitch + 1);
+      const u = Math.max(0, -rt / pitch + 1);
       // carriages run back from the engine, so the first is the last in the row: its middle, from the row's left edge
       const W = second ? first.offsetLeft - second.offsetLeft : first.offsetWidth;
       const mid = first.offsetLeft + first.offsetWidth / 2;
       const at1 = innerWidth / 2 - mid; // the first carriage in the middle
-      const off = -(eng.offsetLeft + eng.offsetWidth) - 40; // the whole train off the left edge
+      const off = -(eng.offsetLeft + eng.offsetWidth) - 60; // the whole train off the left edge
       const x = u <= 1 ? off + (at1 - off) * u : at1 + (u - 1) * W; // (on to the right: the next carriage back comes to the middle)
       tr.style.transform = `translate3d(${x.toFixed(1)}px, 0, 0)`;
+      tr.style.setProperty("--roll", `${(x / 9).toFixed(3)}rad`); // the wheels turn with the distance run (9px wheels)
       const k = Math.min(N - 1, Math.max(0, Math.round(u) - 1));
       signals.scroll.solutionIndex = k;
       signals.scroll.solutions = Math.min(1, Math.max(0, (u - 1) / (N - 1)));
       setActive((c) => (c === k ? c : k));
-      // under way: it leans into the run (the CSS)
-      const m = u > 0.05 && Math.abs(u - Math.round(u)) > 0.03;
+      // under way: the lamp's beam reaches out ahead (the CSS)
+      const m = u > 0.02 && Math.abs(u - Math.round(u)) > 0.02;
       if (m !== moving) { moving = m; tr.classList.toggle("is-moving", m); }
     };
     const st = ScrollTrigger.create({
@@ -110,15 +164,25 @@ export function SolutionsRail() {
   }, [active, reduce]);
 
   const s = SOLUTIONS[active];
+  const bogies = (
+    <>
+      <span className="solc-bogie" />
+      <span className="solc-bogie" />
+    </>
+  );
   return (
     <section ref={section} id="solutions" className="solc" aria-labelledby="solutions-title" style={{ height: `${RAIL_SCREENS * 100}svh` }}>
-      <div className="solc-pin" style={{ "--a": s.colors[0], "--b": s.colors[1] } as React.CSSProperties}>
+      <div ref={pin} className="solc-pin" style={{ "--a": s.colors[0], "--b": s.colors[1] } as React.CSSProperties}>
         <header className="solc-head">
           <h2 id="solutions-title" className="eyebrow">Solutions</h2>
         </header>
-        {/* his line across the screen, and his train on it: the engine leading, a carriage a solution behind it */}
+        {/* his line across the screen, up on its deck, and his train on it: the engine leading, a carriage a solution behind it */}
         <div className="solc-scene" aria-hidden>
-          <div className="solc-ground" />
+          <div className="solc-line">
+            <span className="solc-rails" />
+            <span className="solc-deck" />
+            <span className="solc-pillars" />
+          </div>
           <div ref={train} className="solc-train">
             {[...SOLUTIONS].reverse().map((sol, r) => {
               const i = N - 1 - r;
@@ -132,39 +196,43 @@ export function SolutionsRail() {
                   style={{ "--a": sol.colors[0], "--b": sol.colors[1] } as React.CSSProperties}
                 >
                   <div className="solc-body">
-                    <div className="solc-window">
-                      {sol.film ? (
-                        <video
-                          ref={(el) => {
-                            films.current[i] = el;
-                          }}
-                          src={sol.film}
-                          poster={sol.image}
-                          muted
-                          loop
-                          playsInline
-                          preload="none"
-                          style={{ objectPosition: `50% ${(1 - (sol.filmY ?? 0.5)) * 100}%` }}
-                        />
-                      ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={sol.image} alt="" />
-                      )}
+                    <span className="solc-door" />
+                    <span className="solc-door" />
+                    <div className="solc-band">
+                      <div className="solc-window">
+                        {sol.film ? (
+                          <video
+                            ref={(el) => {
+                              films.current[i] = el;
+                            }}
+                            src={sol.film}
+                            poster={sol.image}
+                            muted
+                            loop
+                            playsInline
+                            preload="none"
+                            style={{ objectPosition: `50% ${(1 - (sol.filmY ?? 0.5)) * 100}%` }}
+                          />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={sol.image} alt="" />
+                        )}
+                      </div>
                     </div>
-                    <p className="solc-plate">{sol.name}</p>
+                    <p className="solc-plate">
+                      <i />
+                      {sol.name}
+                    </p>
                   </div>
-                  <span className="solc-bogie" />
-                  <span className="solc-bogie" />
+                  {bogies}
                 </div>
               );
             })}
             <div ref={engine} className="solc-engine">
-              <div className="solc-body">
-                <span className="solc-cab" />
-                <span className="solc-lamp" />
-              </div>
-              <span className="solc-bogie" />
-              <span className="solc-bogie" />
+              <Nose />
+              <span className="solc-lamp" />
+              <span className="solc-beam" />
+              {bogies}
             </div>
           </div>
         </div>

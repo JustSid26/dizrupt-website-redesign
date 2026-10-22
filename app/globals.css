@@ -2398,79 +2398,161 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 }
 
 /* ---------- Solutions on a phone: his train drawn flat, a carriage a solution (SolutionsRail.tsx) ----------
-   The section is N + 1 screens tall and pinned: the train pulls in from the left over the first, then
-   stands with one carriage in the middle of the screen per stop, its film in the window, the words
-   under it. --car-w is a carriage's width, --car-h the train's height on the rail. */
-.solc { position: relative; --car-w: 84vw; --car-gap: 14px; --car-h: clamp(190px, 36svh, 300px); --rail: 22px; }
+   The section is N + 1 screens tall and pinned. As it arrives the scene is held in place and fades up
+   (--in, 0..1, from the component) while the train runs in along it from the left; then it stands with
+   one carriage in the middle of the screen per stop, its film in the window, the words under it.
+   The train in the desktop train's colours (public/models/train.glb): white paint lit cool from above,
+   dark glass, the violet stripe, a dark underbody, steel wheels. The line as the desktop's: a dark deck
+   up on pillars, lit along its edges in violet, the rails on top. */
+.solc {
+  position: relative;
+  --car-w: 84vw; --car-gap: 10px; --car-h: calc(var(--car-w) * 0.64); /* a carriage: long and low */
+  --wheel: 18px; --under: 16px; /* the wheels, and the depth of the running gear under the body */
+  --rail-h: 5px; --deck-h: 16px; --pillar-h: 54px;
+  --in: 0;
+}
 .solc-pin {
   position: sticky; top: 0; height: 100svh; display: flex; flex-direction: column; justify-content: center; gap: 22px;
-  padding: calc(var(--gutter) * 3.4) 0 calc(var(--gutter) * 1.6); overflow: hidden;
-  background: linear-gradient(180deg, rgba(5, 5, 9, 0.2), rgba(5, 5, 9, 0.9) 14%, rgba(5, 5, 9, 0.9) 86%, rgba(5, 5, 9, 0.3));
+  padding: calc(var(--gutter) * 3.4) 0 calc(var(--gutter) * 1.4); overflow: hidden; isolation: isolate; will-change: transform;
 }
-.solc-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--gutter); }
+/* the dark it stands in, faded up as it arrives */
+.solc-pin::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, rgba(5, 5, 9, 0.55), rgba(5, 5, 9, 0.92) 16%, rgba(5, 5, 9, 0.92) 84%, rgba(5, 5, 9, 0.6));
+  opacity: min(1, calc(var(--in) * 1.8));
+}
+.solc-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--gutter); opacity: min(1, calc(var(--in) * 1.8)); }
 .solc-head .eyebrow { font-size: 12px; margin: 0; }
-/* the scene: the ground, the line across it, and the train */
-.solc-scene { position: relative; height: calc(var(--car-h) + var(--rail) + 24px); }
-.solc-ground { position: absolute; left: -4vw; right: -4vw; bottom: 0; height: var(--rail); }
-/* the two rails, the nearer one a little brighter, and the sleepers between them */
-.solc-ground::before, .solc-ground::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; border-radius: 1px; }
-.solc-ground::before { top: 6px; background: linear-gradient(90deg, rgba(201, 184, 255, 0.1), rgba(201, 184, 255, 0.55) 50%, rgba(201, 184, 255, 0.1)); }
-.solc-ground::after { top: 15px; background: linear-gradient(90deg, rgba(201, 184, 255, 0.06), rgba(201, 184, 255, 0.3) 50%, rgba(201, 184, 255, 0.06)); }
-.solc-ground span, .solc-ground { background: repeating-linear-gradient(90deg, transparent 0 18px, rgba(201, 184, 255, 0.14) 18px 24px, transparent 24px 42px) 0 8px / 100% 9px no-repeat; }
-/* the light the train throws on the ground, in the solution's colour, under the carriage that stands in the middle */
-.solc-scene::after {
-  content: ""; position: absolute; left: 50%; bottom: -10px; width: 70vw; height: 70px; translate: -50% 0; pointer-events: none;
-  background: radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, var(--a) 38%, transparent), transparent 70%);
+
+/* the scene: the line, and the train on it */
+.solc-scene { position: relative; flex: 0 0 auto; height: calc(var(--car-h) + var(--rail-h) + var(--deck-h) + var(--pillar-h) + 6px); }
+.solc-line { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--rail-h) + var(--deck-h) + var(--pillar-h)); pointer-events: none; }
+/* the rails: a steel head catching the light, the web under it in shadow */
+.solc-rails {
+  position: absolute; left: 0; right: 0; top: 0; height: var(--rail-h);
+  background: linear-gradient(180deg, #f4f2fb 0, #c3bfd6 30%, #6b6784 60%, #2a2836 100%);
+  box-shadow: 0 -1px 6px rgba(201, 184, 255, 0.25);
+}
+/* the deck: dark, lit along both edges in violet, flecked with the light it was built of */
+.solc-deck {
+  position: absolute; left: 0; right: 0; top: var(--rail-h); height: var(--deck-h);
+  background:
+    radial-gradient(circle, rgba(201, 184, 255, 0.5) 0 0.8px, transparent 1.4px) 0 3px / 11px 6px,
+    linear-gradient(180deg, #1d1a2b, #0c0a14);
+}
+.solc-deck::before, .solc-deck::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; }
+.solc-deck::before { top: 0; background: #b98cff; box-shadow: 0 0 6px #a650ed, 0 0 16px rgba(166, 80, 237, 0.7); }
+.solc-deck::after { bottom: 0; height: 1px; background: rgba(166, 80, 237, 0.75); box-shadow: 0 0 8px rgba(166, 80, 237, 0.6); }
+/* the pillars, standing still while the train runs over them, fading down into the dark */
+.solc-pillars {
+  position: absolute; left: 0; right: 0; top: calc(var(--rail-h) + var(--deck-h)); height: var(--pillar-h);
+  background: repeating-linear-gradient(90deg,
+    transparent 0 41px,
+    rgba(201, 184, 255, 0.4) 41px 42px, #14121e 42px 54px, rgba(166, 80, 237, 0.25) 54px 55px,
+    transparent 55px 96px);
+  -webkit-mask-image: linear-gradient(180deg, #000 10%, transparent);
+  mask-image: linear-gradient(180deg, #000 10%, transparent);
+}
+/* the light the carriage in the middle throws on the deck, in its solution's colour */
+.solc-line::after {
+  content: ""; position: absolute; left: 50%; top: -30px; width: 76vw; height: 70px; translate: -50% 0;
+  background: radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, var(--a) 40%, transparent), transparent 72%);
   transition: background var(--t-ui);
 }
+
 /* the train: a row, carriages first (the last solution furthest back), the engine leading on the right */
-.solc-train { position: absolute; left: 0; bottom: calc(var(--rail) - 6px); display: flex; align-items: flex-end; will-change: transform; }
+.solc-train { position: absolute; left: 0; bottom: calc(var(--rail-h) + var(--deck-h) + var(--pillar-h)); display: flex; align-items: flex-end; will-change: transform; --roll: 0rad; }
 .solc-car, .solc-engine { position: relative; flex: 0 0 var(--car-w); height: var(--car-h); margin-right: var(--car-gap); }
-.solc-engine { flex-basis: 54vw; margin-right: 0; }
-/* a coupling between carriages */
-.solc-car::after { content: ""; position: absolute; right: calc(-1 * var(--car-gap)); bottom: 32px; width: var(--car-gap); height: 6px; background: #2a2838; border-top: 1px solid rgba(255, 255, 255, 0.18); }
-/* the body: dark steel, the roof a band of light along the top, the violet stripe low down */
+.solc-engine { flex-basis: calc(var(--car-h) * 1.32); margin-right: 0; }
+/* the gangway between carriages: dark bellows */
+.solc-car::after {
+  content: ""; position: absolute; right: calc(-1 * var(--car-gap)); top: 18%; bottom: calc(var(--under) + 14%); width: var(--car-gap);
+  background: repeating-linear-gradient(90deg, #15141c 0 2px, #2c2a38 2px 4px); border-radius: 2px;
+}
+/* the body: white paint, lit cool from above and falling off to the dark underbody */
 .solc-body {
-  position: absolute; inset: 0 0 14px 0; overflow: hidden; border-radius: 16px 16px 9px 9px;
-  background: linear-gradient(180deg, #ecebf6 0, #b8b6cc 3%, #4a4862 4%, #1b1927 5.5%, #15131f 58%, #0e0d16 100%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -18px 30px rgba(0, 0, 0, 0.55), 0 16px 22px rgba(0, 0, 0, 0.6);
-  transition: transform var(--t-micro) var(--ease-out);
+  position: absolute; inset: 0 0 var(--under) 0; overflow: hidden;
+  border-radius: 20px 20px 8px 8px / 26px 26px 8px 8px;
+  background: linear-gradient(180deg, #fbfaff 0, #ebe9f5 10%, #d5d2e4 45%, #b4b0c9 70%, #8e89a7 85%, #2e2c3a 86%, #17161f 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.95), inset 0 -2px 0 rgba(0, 0, 0, 0.4), 0 14px 22px rgba(0, 0, 0, 0.55);
 }
-.solc-body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 14px; height: 3px; background: #a310e7; box-shadow: 0 0 10px #a310e7, 0 0 2px #fff; }
-/* the window: the solution's film, lit in its own colour, a sheen of glass over it */
+/* the stripe, the length of the train */
+.solc-body::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 75%; height: 4.5%;
+  background: #a650ed; box-shadow: 0 -1px 0 #e2c9ff, 0 0 10px rgba(166, 80, 237, 0.55);
+}
+/* the tail lamp, on the end of the last carriage */
+.solc-car:first-child .solc-body::before {
+  content: ""; position: absolute; left: 0.6%; top: 64%; width: 5px; height: 12px; border-radius: 3px; z-index: 1;
+  background: #ff3b4f; box-shadow: 0 0 6px #ff3b4f, 0 0 16px rgba(255, 59, 79, 0.6);
+}
+/* a door at each end */
+.solc-door { position: absolute; top: 15%; width: 7%; height: 70%; border: 1.5px solid #8e89a7; border-radius: 5px; }
+.solc-door:nth-of-type(1) { left: 2.5%; }
+.solc-door:nth-of-type(2) { right: 2.5%; }
+.solc-door::before { content: ""; position: absolute; left: 18%; right: 18%; top: 6%; height: 34%; border-radius: 3px; background: linear-gradient(180deg, #3a4258, #12151f); }
+/* the window band: dark glass, and in it the window with the solution's film, lit in its colour */
+.solc-band {
+  position: absolute; left: 12%; right: 12%; top: 10%; height: 54%; padding: 2.5%;
+  border-radius: 12px; background: linear-gradient(180deg, #3a4258, #1a1f2d 50%, #0d1018);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
 .solc-window {
-  position: absolute; left: 6%; right: 6%; top: 15%; height: 56%; border-radius: 11px; overflow: hidden;
-  background: linear-gradient(120deg, var(--a), var(--b)); border: 2px solid rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 28px color-mix(in srgb, var(--a) 35%, transparent);
+  position: relative; width: 100%; height: 100%; border-radius: 8px; overflow: hidden;
+  background: linear-gradient(120deg, var(--a), var(--b));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--a) 60%, transparent), 0 0 18px color-mix(in srgb, var(--a) 30%, transparent);
+  transition: box-shadow var(--t-ui), filter var(--t-ui);
 }
+.solc-car:not(.is-at) .solc-window { filter: brightness(0.55) saturate(0.8); box-shadow: none; }
 .solc-window :is(video, img) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.solc-window::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(165deg, rgba(255, 255, 255, 0.22), transparent 38%, transparent 70%, rgba(0, 0, 0, 0.25)); }
-/* the carriage's plate, under the window: the solution's name in its colour, lit while the train stands at it */
+/* the glass over it */
+.solc-window::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), transparent 34%, transparent 72%, rgba(0, 0, 0, 0.22)); }
+/* the carriage's plate, on the paint between the windows and the stripe */
 .solc-plate {
-  position: absolute; left: 6%; right: 6%; bottom: 24px; margin: 0; font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
-  color: rgba(242, 240, 235, 0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--t-ui), text-shadow var(--t-ui);
+  position: absolute; left: 12%; right: 12%; top: 66.5%; margin: 0; display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #3b3752;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.solc-car.is-at .solc-plate { color: var(--b); text-shadow: 0 0 10px color-mix(in srgb, var(--a) 60%, transparent); }
-/* the bogies: a dark truck under each end, two wheels each */
-.solc-bogie { position: absolute; bottom: 0; width: 24%; height: 15px; border-radius: 4px; background: #0b0a11; border-top: 1px solid rgba(255, 255, 255, 0.1); }
-.solc-bogie:nth-last-of-type(2) { left: 9%; }
-.solc-bogie:nth-last-of-type(1) { right: 9%; }
+.solc-plate i { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--a); box-shadow: 0 0 6px var(--a); }
+/* the running gear: a dark bogie under each end, two steel wheels each, turning with the distance run */
+.solc-bogie {
+  position: absolute; bottom: 4px; width: 22%; height: calc(var(--under) - 2px); border-radius: 4px;
+  background: linear-gradient(180deg, #2a2834, #111017); border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.solc-car .solc-bogie:nth-last-of-type(2), .solc-engine .solc-bogie:nth-last-of-type(2) { left: 9%; }
+.solc-car .solc-bogie:nth-last-of-type(1), .solc-engine .solc-bogie:nth-last-of-type(1) { right: 9%; }
+.solc-engine .solc-bogie:nth-last-of-type(1) { right: 26%; }
 .solc-bogie::before, .solc-bogie::after {
-  content: ""; position: absolute; bottom: -3px; width: 14px; height: 14px; border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, #3a3750 0 25%, #14121d 28% 100%); border: 1.5px solid rgba(201, 184, 255, 0.4);
+  content: ""; position: absolute; bottom: -4px; width: var(--wheel); height: var(--wheel); border-radius: 50%;
+  background:
+    radial-gradient(circle, #d9d6e6 0 2px, #2a2836 2.5px 4px, transparent 4.5px),
+    conic-gradient(#7a7690 0 8%, #1b1a24 8% 25%, #7a7690 25% 33%, #1b1a24 33% 50%, #7a7690 50% 58%, #1b1a24 58% 75%, #7a7690 75% 83%, #1b1a24 83% 100%);
+  border: 2px solid #b8b5c8; box-shadow: 0 0 0 1px #0b0a10;
+  transform: rotate(var(--roll));
 }
-.solc-bogie::before { left: 12%; }
-.solc-bogie::after { right: 12%; }
-/* the engine: the same body drawn to a nose on the right, a cab window, the lamp lit */
-.solc-engine .solc-body { clip-path: polygon(0 0, 62% 0, 100% 42%, 100% 100%, 0 100%); border-radius: 16px 0 9px 9px; }
-.solc-cab { position: absolute; left: 10%; top: 18%; width: 34%; height: 30%; border-radius: 9px; background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), rgba(140, 160, 255, 0.12) 50%, rgba(0, 0, 0, 0.4)); border: 2px solid rgba(255, 255, 255, 0.18); }
-.solc-lamp { position: absolute; right: 4%; top: 52%; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff, 0 0 26px rgba(255, 255, 255, 0.7), 0 0 60px rgba(163, 16, 231, 0.6); }
-/* under way: the whole train leans into the run (no filter on the train: it is many screens wide, full of film,
-   and a filter would have a phone redraw all of it every frame it moves; the shadows are each body's own) */
-.solc-train.is-moving .solc-body { transform: skewX(-2.5deg); }
-/* the words under the train, changing channel as it moves on: the wide screen's copy, for a phone */
-.solc-copy { display: flex; flex-direction: column; gap: 18px; padding: 0 var(--gutter); }
+.solc-bogie::before { left: 8%; }
+.solc-bogie::after { right: 8%; }
+/* the engine: the body run on into its nose (SolutionsRail.tsx: Nose), its lamp lit, its beam out ahead */
+.solc-nose { position: absolute; left: 0; top: 0; width: 100%; height: calc(100% - var(--under)); overflow: visible; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.5)); }
+.solc-lamp {
+  position: absolute; left: 91%; top: calc((var(--car-h) - var(--under)) * 0.69); width: 12px; height: 8px; translate: -50% -50%; border-radius: 50%;
+  background: #fffaf0; box-shadow: 0 0 6px #fff, 0 0 16px rgba(255, 246, 225, 0.9), 0 0 34px rgba(255, 236, 200, 0.6);
+}
+.solc-beam {
+  position: absolute; left: 92%; top: calc((var(--car-h) - var(--under)) * 0.69); width: 70vw; height: 90px; translate: 0 -50%; pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 246, 225, 0.4), rgba(255, 246, 225, 0.08) 60%, transparent);
+  clip-path: polygon(0 46%, 100% 0, 100% 100%, 0 54%);
+  opacity: 0.35; transition: opacity var(--t-ui);
+}
+.solc-train.is-moving .solc-beam { opacity: 1; }
+
+/* the words under the train, changing channel as it moves on: the wide screen's copy, for a phone.
+   They come up once the train has run in. */
+.solc-copy {
+  display: flex; flex-direction: column; gap: 18px; padding: 0 var(--gutter);
+  opacity: clamp(0, calc((var(--in) - 0.55) * 2.3), 1);
+  translate: 0 calc((1 - clamp(0, calc((var(--in) - 0.55) * 2.3), 1)) * 14px);
+}
 .solc .sol-title { margin-top: 0; font-size: clamp(28px, 8.6vw, 40px); }
 .solc .sol-desc { margin-top: 10px; font-size: 15px; line-height: 1.45; }
 .solc .sol-proof { margin-top: 12px; font-size: 12px; line-height: 1.7; }
@@ -2482,15 +2564,15 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   transition: border-color var(--t-ui), background var(--t-ui);
 }
 .solc-cta:focus-visible { outline: 1px solid var(--violet-soft); outline-offset: 4px; }
-/* a short phone: a lower train, shorter words */
+/* a short phone: a smaller train, a lower line, shorter words */
 @media (max-aspect-ratio: 1/1) and (max-height: 720px) {
-  .solc { --car-h: clamp(160px, 30svh, 220px); }
+  .solc { --car-w: 74vw; --pillar-h: 36px; }
   .solc-pin { gap: 14px; }
   .solc .sol-title { font-size: clamp(24px, 7.4vw, 32px); }
   .solc .sol-desc { margin-top: 6px; font-size: 14px; line-height: 1.4; }
   .solc .sol-proof { margin-top: 8px; }
 }
-@media (prefers-reduced-motion: reduce) { .solc-train.is-moving .solc-body { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .solc-bogie::before, .solc-bogie::after { transform: none; } }
 @media (max-aspect-ratio: 1/1) {
   .ai-ruler { display: none; }
 }
