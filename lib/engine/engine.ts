@@ -926,7 +926,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        the way it came and away from the train: frame where the train is going instead, as far
        behind it as the follow trails it going forward, so it stays in view either way. */
     camLead = damp(camLead, ride.v < 0 ? Math.max(-1, (2 * ride.v) / CAM_FOLLOW) : 0, 6, dt);
-    const camPose = line.poseAt(Math.max(0, (signals.rideTarget !== null ? ride.s + (nearStop - ride.s) * dock : ride.s) + camLead)); // scrolling: no hold at a station
+    const camBase = signals.rideTarget !== null ? ride.s + (nearStop - ride.s) * dock : ride.s; // scrolling: no hold at a station
+    /* ahead of the train riding back, but never past the stop it is riding to: framed past it, the
+       camera overshot that stop's framing and, the train already in, swung back round to it */
+    let camS = camBase + camLead;
+    if (signals.rideTarget !== null && camLead < 0) camS = Math.max(camS, Math.min(camBase, signals.rideTarget));
+    const camPose = line.poseAt(Math.max(0, camS));
     if (riding) {
       // on the line: eased onto it while the morph lands, then held to it exactly
       const k = u.uProgress.value >= 1 ? 1 : 1 - Math.exp(-5 * dt);
