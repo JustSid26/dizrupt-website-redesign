@@ -1395,7 +1395,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: lowQuality, base: pixelRatio }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {

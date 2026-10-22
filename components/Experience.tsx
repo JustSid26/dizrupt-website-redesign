@@ -7,6 +7,7 @@ import { SmoothScroll } from "@/components/SmoothScroll";
 import { Nav } from "@/components/Nav";
 import { Cursor } from "@/components/Cursor";
 import { MacProjects } from "@/components/MacProjects";
+import { PerfReadout } from "@/components/PerfReadout";
 
 // Everything that lives for the whole visit: the canvas, the scroll, the nav and menu, the cursor.
 export function Experience({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ export function Experience({ children }: { children: React.ReactNode }) {
       <main id="main">{children}</main>
       <MacProjects />
       <Cursor />
+      <PerfReadout />
     </>
   );
 }
