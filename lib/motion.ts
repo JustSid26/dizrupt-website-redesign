@@ -29,13 +29,13 @@ export const T = {
   beat: 2.6, // an AI beat: a hop, the page and the network on one clock
   wake: 6.5, // the chip to what we do: it powers on, pulls back to the whole network and steps aside, all in one ride
   scene: 3.2,
-  passage: 8.5, // AI & Automation out to the work: the network clears, the glitch, the city and the tower whole, in one ride
-  sweep: 5.5, // a phone's: the same, on in to the first window, without lingering over the glitch, so the tower comes up sooner
+  passage: 6.5, // AI & Automation out to the work: the network clears, the glitch, the city and the tower whole, in one ride
+  sweep: 4.5, // a phone's: the same, on in to the first window, hurrying through the glitch so the tower comes up sooner
   signature: 3.8,
   handover: 1.6,
   nav: 1.6, // a jump from the menu or the rail: quick, skipping what is between
   /** the longest a stop's own scene may hold the page (the longest ride, the passage, and a little over) */
-  hold: 8.5 + 0.4,
+  hold: 6.5 + 0.4,
   /** reduced motion: everything collapses to a quick crossfade, never a cut */
   reduced: 0.2,
 } as const;

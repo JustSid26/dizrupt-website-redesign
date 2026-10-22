@@ -79,7 +79,7 @@ export function SmoothScroll() {
         const a = prev.y, b = prev.y + leg.slow * (leg.y - prev.y);
         const u = (v: number) => Math.min(1, Math.max(0, (v - y) / (to.y - y)));
         const [lo, hi] = [u(a), u(b)].sort((m, n) => m - n);
-        if (hi - lo > 0.01) r.ease = lingering(r.ease, lo, hi, LINGER);
+        if (hi - lo > 0.01) r.ease = lingering(r.ease, lo, hi, leg.linger ?? LINGER);
       }
       const duration = Math.max(T.micro * 4, r.duration * part * (how.queued ? QUEUED : 1));
       // the train drives itself there now, rather than when the page catches up

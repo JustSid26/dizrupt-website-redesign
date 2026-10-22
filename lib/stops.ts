@@ -48,7 +48,9 @@ const introRaw = (p: number) =>
    payoffs; `train` is the stop the train drives itself to, or null while it is still in the intro. */
 /* onward: the page doesn't rest here; it carries on to the next stop by itself (SmoothScroll.tsx), after
    its usual dwell, or after this many ms */
-export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; onward?: boolean | number };
+/* slow: the share of the leg into this stop (from its start) the ride takes at another pace, `linger`
+   times slower (lib/motion.ts: LINGER unless said; under 1 is quicker) */
+export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; linger?: number; onward?: boolean | number };
 
 /** The runs of stops from the DIZRUPT screen to AI & Automation's last beat. On a phone the train is
     gone and Solutions is a row of cards swiped across: one stop, the sections either side of it. */
@@ -116,7 +118,7 @@ export function workStops(): ScrollStop[] {
      to the first window, nothing to scroll for in between. */
   const phone = isPhoneLayout();
   stops[0].kind = "scene";
-  if (!phone) stops.unshift({ y: top, kind: "scene", train: null, onward: 1500 });
+  if (!phone) stops.unshift({ y: top, kind: "scene", train: null, onward: 400 });
   /* led in from AI & Automation's statement: from there one gesture is one ride the whole way out —
      the network clears and the glitch hands back to the city inside it (it plays in time as the
      section's end passes), to the tower's wide shot (a phone: and in to the window) */
@@ -124,10 +126,12 @@ export function workStops(): ScrollStop[] {
   if (ai) {
     const at = (p: number) => ai.getBoundingClientRect().top + scrollY + (ai.offsetHeight - innerHeight) * p;
     stops[0].kind = phone ? "sweep" : "passage";
-    // the ride lingers over its first stretch, to the section's end: the network clearing and the glitch
-    // (a wide screen; a phone doesn't linger, so the tower comes up sooner)
+    /* the ride's first stretch, to the section's end (the network clearing and the glitch), is taken
+       at another pace: a wide screen lingers over it; a phone hurries through it, so the tower comes
+       up and the way in to the window begins sooner, at the pace it always had */
     const from = at(AI_STOPS[AI_STOPS.length - 1]), end = ai.getBoundingClientRect().top + scrollY + ai.offsetHeight - innerHeight;
-    if (!phone) stops[0].slow = Math.min(0.9, Math.max(0, (end - from) / Math.max(1, stops[0].y - from)));
+    stops[0].slow = Math.min(0.9, Math.max(0, (end - from) / Math.max(1, stops[0].y - from)));
+    if (phone) stops[0].linger = 0.4;
     stops.unshift({ y: at(AI_STOPS[AI_STOPS.length - 1]), kind: "beat", train: null });
   }
   /* and from the last project, one gesture all the way out: the camera pulls back from the tower and
