@@ -15,8 +15,14 @@ export function stopPositions() {
   const intro = document.getElementById("intro");
   const sol = document.getElementById("solutions");
   if (!intro || !sol) return [];
-  // a phone: no train; the intro's end, then the cards (the section's top)
-  if (isPhoneLayout()) return [intro.offsetTop + intro.offsetHeight - innerHeight, sol.getBoundingClientRect().top + scrollY];
+  /* a phone: the intro's end, then a stop a carriage: the train stands with carriage k in the middle of the
+     screen one screen of scroll after the last (SolutionsRail.tsx: the section is N + 1 screens tall, one
+     for it to pull in over), measured from the section itself, not the window, a phone's toolbar being
+     what it is */
+  if (isPhoneLayout()) {
+    const top = sol.getBoundingClientRect().top + scrollY, pitch = sol.offsetHeight / (N + 1);
+    return [intro.offsetTop + intro.offsetHeight - innerHeight, ...Array.from({ length: N }, (_, k) => top + pitch * k)];
+  }
   const iSpan = intro.offsetHeight - innerHeight;
   // Solutions' ride runs from its top reaching the bottom of the screen (see Solutions.tsx)
   const sTop = sol.getBoundingClientRect().top + scrollY - innerHeight;
@@ -53,7 +59,7 @@ const introRaw = (p: number) =>
 export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; linger?: number; onward?: boolean | number };
 
 /** The runs of stops from the DIZRUPT screen to AI & Automation's last beat. On a phone the train is
-    gone and Solutions is a row of cards swiped across: one stop, the sections either side of it. */
+    drawn flat: it pulls in (a scene change), then a hop a carriage. */
 export function scrollRuns(): ScrollStop[][] {
   const intro = document.getElementById("intro");
   const lp = landingPositions();
@@ -89,8 +95,8 @@ export function scrollRuns(): ScrollStop[][] {
       train: null,
     })) : []),
   ];
-  // a phone: the cards are one stop (swiped across, not ridden through) between the count and the bridge
-  if (isPhoneLayout()) return [[...landing, { y: ys[1], kind: "scene", train: null }, ...onward]];
+  // a phone: the train pulls in over the first, then stands a carriage on at each
+  if (isPhoneLayout()) return [[...landing, ...ys.slice(1).map((y, i) => ({ y, kind: i === 0 ? ("scene" as const) : ("hop" as const), train: null })), ...onward]];
   return [[
     ...landing,
     { y: ys[0], kind: "scene", train: 0 }, // the station built, the train at it

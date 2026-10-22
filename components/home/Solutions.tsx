@@ -4,10 +4,10 @@ import { useEffect, useSyncExternalStore } from "react";
 import { ScrollTrigger } from "@/lib/gsap";
 import { isPhoneLayout, PHONE_QUERY } from "@/lib/layout";
 import { SolutionsTrain } from "@/components/home/SolutionsTrain";
-import { SolutionCards } from "@/components/home/SolutionCards";
+import { SolutionsRail } from "@/components/home/SolutionsRail";
 
-/* What Dizrupt does: on a wide screen the train ride between six billboards; on a phone, where a ride
-   can't be swiped through, a carousel of cards the page scrolls straight past. */
+/* What Dizrupt does: on a wide screen the train ride between six billboards in the city; on a phone the
+   same train drawn flat, a carriage a solution, moved on a carriage a gesture (SolutionsRail.tsx). */
 const subscribe = (onChange: () => void) => {
   const mq = matchMedia(PHONE_QUERY);
   mq.addEventListener("change", onChange);
@@ -23,5 +23,5 @@ export function Solutions() {
   useEffect(() => {
     ScrollTrigger.refresh();
   }, [phone]);
-  return phone ? <SolutionCards /> : <SolutionsTrain />;
+  return phone ? <SolutionsRail /> : <SolutionsTrain />;
 }
