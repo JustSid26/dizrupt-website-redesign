@@ -69,6 +69,9 @@ export function SolutionsRail() {
   const train = useRef<HTMLDivElement>(null);
   const cars = useRef<(HTMLDivElement | null)[]>([]);
   const engine = useRef<HTMLDivElement>(null);
+  const shadeEl = useRef<HTMLDivElement>(null);
+  const headEl = useRef<HTMLElement>(null);
+  const copyEl = useRef<HTMLDivElement>(null);
   const films = useRef<(HTMLVideoElement | null)[]>([]);
   const items = useRef<(HTMLDivElement | null)[]>([]);
   const [active, setActive] = useState(0);
@@ -85,31 +88,56 @@ export function SolutionsRail() {
     const sec = section.current;
     if (!sec) return;
     let moving = false, shown = true;
+    /* Where everything is, measured once (and again on a resize: ScrollTrigger's refresh), never in the
+       middle of a frame's writes: a read after a write makes the browser lay the page out again then and
+       there, every frame the page scrolls. */
+    const geo = { pitch: 1, W: 1, at1: 0, off: 0 };
+    let bogies: HTMLElement[] = [];
+    const measure = () => {
+      const first = cars.current[N - 1], second = cars.current[N - 2], eng = engine.current;
+      if (!first || !eng) return;
+      geo.pitch = sec.offsetHeight / RAIL_SCREENS;
+      // carriages run back from the engine, so the first is the last in the row
+      geo.W = second ? first.offsetLeft - second.offsetLeft : first.offsetWidth;
+      geo.at1 = innerWidth / 2 - (first.offsetLeft + first.offsetWidth / 2); // the first carriage in the middle
+      geo.off = -(eng.offsetLeft + eng.offsetWidth) - 60; // the whole train off the left edge
+      bogies = Array.from(train.current?.querySelectorAll<HTMLElement>(".solc-bogie") ?? []);
+    };
+    // what was last written, so a frame that changes nothing writes nothing
+    const last = { x: NaN, enter: NaN, lift: NaN };
     const place = () => {
-      const tr = train.current, pn = pin.current, first = cars.current[N - 1], second = cars.current[N - 2], eng = engine.current;
-      if (!tr || !pn || !first || !eng) return;
+      const tr = train.current, pn = pin.current;
+      if (!tr || !pn) return;
       /* arriving: while the section's top is still on its way up the screen, the scene is held where it
          will stand (it doesn't rise with the page) and fades up, so all that moves is the train */
       const rt = sec.getBoundingClientRect().top;
-      const inside = rt > 0 && rt < innerHeight;
-      pn.style.transform = inside ? `translate3d(0, ${(-rt).toFixed(1)}px, 0)` : "";
-      const enter = rt >= innerHeight ? 0 : rt <= 0 ? 1 : 1 - rt / innerHeight;
-      pn.style.setProperty("--in", enter.toFixed(3));
-      const show = enter > 0.002;
-      if (show !== shown) { shown = show; pn.style.visibility = show ? "" : "hidden"; }
+      const lift = rt > 0 && rt < innerHeight ? Math.round(rt) : 0;
+      const enter = rt >= innerHeight ? 0 : rt <= 0 ? 1 : +(1 - rt / innerHeight).toFixed(3);
+      if (lift !== last.lift) { last.lift = lift; pn.style.transform = lift ? `translate3d(0, ${-lift}px, 0)` : ""; }
+      if (enter !== last.enter) {
+        last.enter = enter;
+        const shade = Math.min(1, enter * 1.8), words = Math.min(1, Math.max(0, (enter - 0.55) * 2.3));
+        if (shadeEl.current) shadeEl.current.style.opacity = String(shade);
+        if (headEl.current) headEl.current.style.opacity = String(shade);
+        if (copyEl.current) {
+          copyEl.current.style.opacity = String(words);
+          copyEl.current.style.transform = words < 1 ? `translate3d(0, ${((1 - words) * 14).toFixed(1)}px, 0)` : "";
+        }
+        const show = enter > 0.002;
+        if (show !== shown) { shown = show; pn.style.visibility = show ? "" : "hidden"; }
+      }
       /* u counts the carriages: 0 the train still off to the left, 1 the first carriage in the middle of
          the screen … N the last, and past N it has run off. One screen of scroll per step, measured from
          the section itself so a phone's toolbar coming and going can't put the stops off the carriages */
-      const pitch = sec.offsetHeight / RAIL_SCREENS;
-      const u = Math.max(0, -rt / pitch + 1);
-      // carriages run back from the engine, so the first is the last in the row: its middle, from the row's left edge
-      const W = second ? first.offsetLeft - second.offsetLeft : first.offsetWidth;
-      const mid = first.offsetLeft + first.offsetWidth / 2;
-      const at1 = innerWidth / 2 - mid; // the first carriage in the middle
-      const off = -(eng.offsetLeft + eng.offsetWidth) - 60; // the whole train off the left edge
-      const x = u <= 1 ? off + (at1 - off) * u : at1 + (u - 1) * W; // (on to the right: the next carriage back comes to the middle)
-      tr.style.transform = `translate3d(${x.toFixed(1)}px, 0, 0)`;
-      tr.style.setProperty("--roll", `${(x / 9).toFixed(3)}rad`); // the wheels turn with the distance run (9px wheels)
+      const u = Math.max(0, -rt / geo.pitch + 1);
+      const x = +(u <= 1 ? geo.off + (geo.at1 - geo.off) * u : geo.at1 + (u - 1) * geo.W).toFixed(1); // (on to the right: the next carriage back comes to the middle)
+      if (x !== last.x) {
+        last.x = x;
+        tr.style.transform = `translate3d(${x}px, 0, 0)`;
+        // the wheels turn with the distance run (9px wheels): set on each bogie, not the train, so only they restyle
+        const roll = `${(x / 9).toFixed(3)}rad`;
+        for (const b of bogies) b.style.setProperty("--roll", roll);
+      }
       const k = Math.min(N - 1, Math.max(0, Math.round(u) - 1));
       signals.scroll.solutionIndex = k;
       signals.scroll.solutions = Math.min(1, Math.max(0, (u - 1) / (N - 1)));
@@ -123,9 +151,10 @@ export function SolutionsRail() {
       start: "top bottom",
       end: "bottom top",
       onUpdate: place,
-      onRefresh: place,
+      onRefresh: () => { measure(); last.x = last.enter = last.lift = NaN; place(); },
       onToggle: (self) => setSeen(self.isActive),
     });
+    measure();
     place();
     return () => st.kill();
   }, []);
@@ -173,7 +202,9 @@ export function SolutionsRail() {
   return (
     <section ref={section} id="solutions" className="solc" aria-labelledby="solutions-title" style={{ height: `${RAIL_SCREENS * 100}svh` }}>
       <div ref={pin} className="solc-pin" style={{ "--a": s.colors[0], "--b": s.colors[1] } as React.CSSProperties}>
-        <header className="solc-head">
+        {/* the dark it stands in, faded up as it arrives */}
+        <div ref={shadeEl} className="solc-shade" aria-hidden />
+        <header ref={headEl} className="solc-head">
           <h2 id="solutions-title" className="eyebrow">Solutions</h2>
         </header>
         {/* his line across the screen, up on its deck, and his train on it: the engine leading, a carriage a solution behind it */}
@@ -236,7 +267,7 @@ export function SolutionsRail() {
             </div>
           </div>
         </div>
-        <div className="solc-copy">
+        <div ref={copyEl} className="solc-copy">
           <div className="sol-stack">
             {SOLUTIONS.map((sol, i) => (
               <div

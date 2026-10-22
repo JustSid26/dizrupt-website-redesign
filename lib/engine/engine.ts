@@ -1242,6 +1242,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // a phone's figure, drawn as points rather than light, is lifted well up so his violet reads against the city
     // (as points only: drawn as light, on the way into his heart, he is as bright as he ever was)
     u.uGain.value = damp(u.uGain.value, isMobile && isMascot ? 1 + 2.2 * (1 - u.uAurora.value) : 1, 4, dt);
+    /* drawn as light, every point is a wide soft sprite piled on the next: a phone draws half as many
+       of them then (each brighter, the same light), which is what it drew before it had finer points */
+    u.uKeep.value = isMobile ? 0.75 - 0.36 * u.uAurora.value : 1;
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)

@@ -43,6 +43,87 @@ const TAGS: Record<PanelId, { find: string; done: string }> = {
    last, because it's built from the rest. */
 const DONE: PanelId[] = ["inbox", "leads", "messages", "sheet", "invoices", "tasks", "report"];
 
+/* A phone's chip, in detail (drawn in the chip's own box, 0..100): eight pins a side, each led in to a
+   bond pad on the die by a trace that runs in straight and then on the diagonal, the die's grid under
+   the heart, the pin-one mark and the fiducials. Over it, a lit layer of the same pins and traces: it is
+   what powers up in what we do. */
+type ChipSide = "t" | "r" | "b" | "l";
+const PIN = Array.from({ length: 8 }, (_, j) => 14 + (j * 72) / 7);
+const PAD = Array.from({ length: 8 }, (_, j) => 30 + (j * 40) / 7);
+const DIE = 28; // how far in from the body's edge the die starts
+// a point on a side, by how far along it (a) and how far in from its edge (d)
+const onSide = (s: ChipSide, a: number, d: number) => (s === "t" ? [a, d] : s === "b" ? [a, 100 - d] : s === "l" ? [d, a] : [100 - d, a]).map((v) => +v.toFixed(2));
+const lead = (s: ChipSide, j: number) => {
+  const bend = 12 + Math.abs(PIN[j] - PAD[j]);
+  const pts = [onSide(s, PIN[j], 1), onSide(s, PIN[j], 12), onSide(s, PAD[j], bend), onSide(s, PAD[j], DIE)];
+  return "M" + pts.map((p) => p.join(" ")).join(" L");
+};
+const pinRect = (s: ChipSide, j: number) => {
+  const p = +(PIN[j] - 2.3).toFixed(2);
+  return s === "t" ? { x: p, y: -7, width: 4.6, height: 8 } : s === "b" ? { x: p, y: 99, width: 4.6, height: 8 } : s === "l" ? { x: -7, y: p, width: 8, height: 4.6 } : { x: 99, y: p, width: 8, height: 4.6 };
+};
+// round the body the way current runs round it as it powers up: along the top, down the right, back along the bottom, up the left
+const ROUND: [ChipSide, number][] = [
+  ...PIN.map((_, j) => ["t", j] as [ChipSide, number]),
+  ...PIN.map((_, j) => ["r", j] as [ChipSide, number]),
+  ...PIN.map((_, j) => ["b", 7 - j] as [ChipSide, number]),
+  ...PIN.map((_, j) => ["l", 7 - j] as [ChipSide, number]),
+];
+
+function ChipArt() {
+  return (
+    <svg className="ain-chip-art" viewBox="0 0 100 100" aria-hidden>
+      <defs>
+        <pattern id="ain-die-grid" width="4" height="4" patternUnits="userSpaceOnUse">
+          <path d="M4 0 H0 V4" fill="none" stroke="rgb(201 184 255 / 0.16)" strokeWidth="0.35" />
+        </pattern>
+        <radialGradient id="ain-die-glow">
+          <stop offset="0" stopColor="#d9b8ff" stopOpacity="0.9" />
+          <stop offset="0.45" stopColor="#8f3dff" stopOpacity="0.45" />
+          <stop offset="1" stopColor="#3cf0ff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* the leads, cold */}
+      <g className="ain-chip-cold">
+        {ROUND.map(([s, j]) => (
+          <path key={s + j} d={lead(s, j)} />
+        ))}
+      </g>
+      {/* the die: its grid, its edge, the bond pads round it */}
+      <rect className="ain-chip-die" x={DIE} y={DIE} width={100 - DIE * 2} height={100 - DIE * 2} rx="2.5" />
+      <rect x={DIE} y={DIE} width={100 - DIE * 2} height={100 - DIE * 2} rx="2.5" fill="url(#ain-die-grid)" />
+      <rect className="ain-chip-core" x={DIE - 6} y={DIE - 6} width={100 - DIE * 2 + 12} height={100 - DIE * 2 + 12} fill="url(#ain-die-glow)" />
+      <g className="ain-chip-pads">
+        {ROUND.map(([s, j]) => {
+          const [x, y] = onSide(s, PAD[j], DIE);
+          return <rect key={s + j} x={x - 1.1} y={y - 1.1} width="2.2" height="2.2" rx="0.4" />;
+        })}
+      </g>
+      {/* the pins, and the pin-one mark and fiducials in the corners */}
+      <g className="ain-chip-pins">
+        {ROUND.map(([s, j]) => (
+          <rect key={s + j} {...pinRect(s, j)} rx="0.8" />
+        ))}
+      </g>
+      <circle className="ain-chip-one" cx="7.5" cy="7.5" r="1.9" />
+      <g className="ain-chip-fid">
+        <circle cx="92.5" cy="7.5" r="1.6" />
+        <circle cx="92.5" cy="92.5" r="1.6" />
+        <circle cx="7.5" cy="92.5" r="1.6" />
+      </g>
+      {/* lit: the same pins and leads, powered up in what we do (AiNetwork's timeline) */}
+      <g className="ain-chip-lit">
+        {ROUND.map(([s, j]) => (
+          <path key={s + j} className="ain-chip-lead" pathLength={1} d={lead(s, j)} />
+        ))}
+        {ROUND.map(([s, j]) => (
+          <rect key={s + j} className="ain-chip-pin-lit" {...pinRect(s, j)} rx="0.8" />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 /** The picture is portrait: a phone's arrangement. */
 function useTall() {
   const [tall, setTall] = useState(false);
@@ -106,6 +187,17 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       // (the words start at 55–60% of the ride and are read by the time it lands)
       tl.fromTo(q(".ai-say-w > span"), { yPercent: 110 }, { yPercent: 0, duration: s1(T.ui), stagger: s1(T.stagger), ease: EASE.in }, in1(0.55));
       tl.fromTo(q(".ai-say-rest"), { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: s1(T.ui), stagger: s1(T.stagger), ease: EASE.in }, in1(0.6));
+
+      /* A phone's chip powers up as what we do comes in (a wide screen's is the AI world's): current
+         runs round its pins, down its leads into the die, the core lights under the heart, and the
+         board's lines carry it out to the edges of the screen. Played back, it powers down. */
+      const cq = gsap.utils.selector(chip.current);
+      tl.fromTo(cq(".ain-chip-pin-lit"), { opacity: 0 }, { opacity: 1, duration: g1 * 0.05, stagger: (g1 * 0.3) / ROUND.length }, in1(0.06));
+      tl.fromTo(cq(".ain-chip-lead"), hide, { ...draw, duration: g1 * 0.14, stagger: (g1 * 0.22) / ROUND.length }, in1(0.26));
+      tl.fromTo(chip.current, { "--core": 0 }, { "--core": 1, duration: g1 * 0.2, ease: EASE.inOut }, in1(0.56));
+      tl.fromTo(cq(".ain-board i"), { scaleX: 0 }, { scaleX: 1, duration: g1 * 0.22, stagger: g1 * 0.035, ease: EASE.in }, in1(0.7));
+      // the board's lines go as the business comes up round the core
+      tl.to(cq(".ain-board"), { autoAlpha: 0, duration: g2 * 0.04 }, in2(0));
 
       /* How we do it, one stage after another on one gesture: the statement makes way and the business
          comes up round the core */
@@ -353,7 +445,18 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
   return (
     <>
       {/* a phone's chip: beside the network, not in it, since it is up before the network is */}
-      <div ref={chip} className="ain-chip" aria-hidden>
+      <div ref={chip} className="ain-chip" aria-hidden style={{ "--core": 0 } as React.CSSProperties}>
+        {/* the board it sits on: lines out from its pins to the edges of the screen, lit as it powers up */}
+        <div className="ain-board">
+          {["l", "r"].map((side) => (
+            <span key={side} className={`ain-board-${side}`}>
+              <i />
+              <i />
+              <i />
+            </span>
+          ))}
+        </div>
+        <ChipArt />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/heart.png" alt="" />
       </div>
@@ -445,9 +548,7 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       </div>
 
       <div className="ai-say" inert={!say}>
-        <p className="ai-kicker ai-say-rest">
-          <span>01</span> What we do
-        </p>
+        <p className="ai-kicker ai-say-rest">What we do</p>
         <h3 className="ai-say-title" aria-label={HEADLINE.join(" ")}>
           {HEADLINE.map((line, l) => (
             <span key={l} className="ai-say-line" aria-hidden>

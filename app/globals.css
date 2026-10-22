@@ -1901,37 +1901,69 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ain-hub-label b { font-weight: 400; color: #6ff2b5; opacity: var(--live); }
 
 /* A phone's chip: no 3D world behind the AI section there, so the chip is drawn by the page. A dark
-   ceramic square with silver pins down every side and the heart in it, beating; it floats and turns a
-   little close up, then holds still and powers on (the glow) as the network comes out of it. */
+   ceramic package with eight silver pins a side, each led in to a bond pad on the die, the die's grid
+   under the heart, beating; the pin-one mark and fiducials in its corners (AiNetwork.tsx: ChipArt). It
+   floats and turns a little close up; in what we do it powers up (--core, and the lit pins and leads
+   on the timeline) and the board's lines carry it out to the edges of the screen. It sits over the
+   network, so the lines the network runs through it go into it and come out the other side. */
 .ain-chip { display: none; }
 @media (max-aspect-ratio: 1/1) {
   .ain-chip {
-    display: block; position: absolute; left: 0; top: 0; --cs: 120px;
+    display: block; position: absolute; left: 0; top: 0; z-index: 3; --cs: 120px;
     width: var(--cs); height: var(--cs); margin: calc(var(--cs) / -2) 0 0 calc(var(--cs) / -2);
-    border-radius: 9%;
-    background: radial-gradient(circle at 50% 45%, #1d1a2b, #0b0a12 70%);
-    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 calc(var(--cs) * 0.35) rgb(163 16 231 / 0.18);
+    border-radius: 7%;
+    background:
+      linear-gradient(145deg, rgb(255 255 255 / 0.07), transparent 38%),
+      radial-gradient(circle at 50% 45%, #1d1a2b, #0b0a12 72%);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 6px rgb(0 0 0 / 0.5), 0 0 calc(var(--cs) * 0.35) rgb(163 16 231 / 0.18);
     transition: width var(--t-ui) var(--ease-out), height var(--t-ui) var(--ease-out), margin var(--t-ui) var(--ease-out), box-shadow var(--t-ui), opacity var(--t-ui) var(--ease-out);
   }
   /* (only once the hand-over has gone dark: during it, the screen is still his heart, flown into) */
   .ai:not(.is-on) .ain-chip { opacity: 0; }
-  /* the pins: a comb of silver along each edge, standing just off the body */
-  .ain-chip::before, .ain-chip::after {
-    content: ""; position: absolute; pointer-events: none;
-    --pin: repeating-linear-gradient(90deg, #aeb6c4 0 4.5%, transparent 4.5% 9.2%);
+  .ain-chip-art { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .ain-chip-cold path { fill: none; stroke: #5d5674; stroke-width: 0.7; stroke-linejoin: round; opacity: 0.75; }
+  .ain-chip-die { fill: #100e19; stroke: rgb(201 184 255 / 0.28); stroke-width: 0.5; }
+  .ain-chip-core { opacity: var(--core); }
+  .ain-chip-pads rect { fill: #8b86a3; }
+  .ain-chip-pins rect { fill: #aeb6c4; }
+  .ain-chip-one { fill: rgb(255 255 255 / 0.38); }
+  .ain-chip-fid circle { fill: none; stroke: rgb(255 255 255 / 0.22); stroke-width: 0.5; }
+  .ain-chip-lead { fill: none; stroke: #7cf2ff; stroke-width: 0.9; stroke-linejoin: round; stroke-dasharray: 1; filter: drop-shadow(0 0 0.8px #7cf2ff); }
+  .ain-chip-pin-lit { fill: #c8fbff; filter: drop-shadow(0 0 1.2px #7cf2ff); }
+  .ain-chip img {
+    position: absolute; inset: 30%; width: 40%; height: 40%; object-fit: contain; opacity: 0.6; animation: ain-beat 1s infinite; /* ambient: its own loop */
+    filter: drop-shadow(0 0 calc(var(--core) * var(--cs) * 0.06) #c38cff) brightness(calc(1 + var(--core) * 0.5));
   }
-  .ain-chip::before { inset: -7% 9%; background: var(--pin) top / 100% 6% no-repeat, var(--pin) bottom / 100% 6% no-repeat; }
-  .ain-chip::after {
-    inset: 9% -7%;
-    background: repeating-linear-gradient(180deg, #aeb6c4 0 4.5%, transparent 4.5% 9.2%) left / 6% 100% no-repeat,
-      repeating-linear-gradient(180deg, #aeb6c4 0 4.5%, transparent 4.5% 9.2%) right / 6% 100% no-repeat;
-  }
-  .ain-chip img { position: absolute; inset: 27%; width: 46%; height: 46%; object-fit: contain; opacity: 0.6; animation: ain-beat 1s infinite; } /* ambient: its own loop */
   .ai[data-chapter="core"] .ain-chip { animation: ain-float 6s ease-in-out infinite; } /* ambient: its own loop */
   .ai:not([data-chapter="core"]) .ain-chip {
-    box-shadow: 0 0 0 1px rgb(124 242 255 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 calc(var(--cs) * 0.6) rgb(60 240 255 / 0.4), 0 0 calc(var(--cs) * 1.5) rgb(163 16 231 / 0.45);
+    box-shadow: 0 0 0 1px rgb(124 242 255 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 calc(var(--cs) * 0.6) rgb(60 240 255 / 0.4), 0 0 calc(var(--cs) * 1.5) rgb(163 16 231 / 0.45);
   }
+  /* the board: three lines out of each side, from just past the pins to the edge of the screen (the chip
+     stands in the middle of it), drawn out from the chip as it powers up, a pulse running out along each */
+  .ain-board { position: absolute; inset: 0; pointer-events: none; }
+  .ain-board span { position: absolute; top: 0; bottom: 0; width: max(0px, calc(50vw - var(--cs) * 0.57)); }
+  .ain-board-l { right: calc(100% + var(--cs) * 0.07); }
+  .ain-board-r { left: calc(100% + var(--cs) * 0.07); }
+  .ain-board i { position: absolute; left: 0; right: 0; height: 1px; overflow: hidden; will-change: transform; }
+  .ain-board i:nth-child(1) { top: 26.6%; }
+  .ain-board i:nth-child(2) { top: 50%; }
+  .ain-board i:nth-child(3) { top: 73.4%; }
+  .ain-board-l i { transform-origin: right; background: linear-gradient(270deg, #7cf2ff, rgb(124 242 255 / 0.35) 45%, rgb(163 16 231 / 0.18) 80%, transparent); }
+  .ain-board-r i { transform-origin: left; background: linear-gradient(90deg, #7cf2ff, rgb(124 242 255 / 0.35) 45%, rgb(163 16 231 / 0.18) 80%, transparent); }
+  /* a via where each leaves the chip */
+  .ain-board i::before { content: ""; position: absolute; top: -2px; width: 5px; height: 5px; border-radius: 50%; background: #c8fbff; box-shadow: 0 0 6px #7cf2ff; }
+  .ain-board-l i::before { right: 0; }
+  .ain-board-r i::before { left: 0; }
+  .ain-board i::after {
+    content: ""; position: absolute; inset: 0; will-change: transform;
+    background: linear-gradient(90deg, transparent 0 44%, #ffffff 50%, transparent 56%);
+    animation: ain-board-run 2.4s linear infinite; /* ambient: its own loop */
+  }
+  .ain-board-l i::after { animation-direction: reverse; }
+  .ain-board i:nth-child(2)::after { animation-delay: -0.8s; }
+  .ain-board i:nth-child(3)::after { animation-delay: -1.6s; }
 }
+@keyframes ain-board-run { from { transform: translateX(-56%); } to { transform: translateX(56%); } }
 /* lub-dub, once a second, as his heart beats everywhere else */
 @keyframes ain-beat {
   0%, 100% { scale: 1; opacity: 0.5; }
@@ -1944,7 +1976,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   0%, 100% { transform: perspective(600px) rotateX(18deg) rotateY(-24deg) translateY(-5%); }
   50% { transform: perspective(600px) rotateX(2deg) rotateY(16deg) translateY(5%); }
 }
-@media (prefers-reduced-motion: reduce) { .ain-chip, .ain-chip img { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .ain-chip, .ain-chip img, .ain-board i::after { animation: none !important; } }
 
 /* a panel: out along its trace from the core (--e), from where it was found to its place (--k) */
 .ain-panels { position: absolute; inset: 0; }
@@ -2009,11 +2041,11 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 .ain-rows li { display: grid; grid-template-columns: 1fr auto 64px; gap: 8px; align-items: center; padding: 6px 9px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
 .ain-rows li span { font-family: var(--mono); font-size: 9px; color: rgba(223, 232, 240, 0.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ain-rows li b { font-weight: 500; color: #f4f8fa; }
-.ain-chip { grid-column: 3; grid-row: 1; justify-self: end; font-style: normal; font-family: var(--mono); font-size: 8.5px; padding: 2px 6px; border-radius: 2px; border: 1px solid currentColor; white-space: nowrap; }
-.ain-chip.is-after { color: #6ff2b5; }
-.ain-chip.is-before { color: #ffb36b; }
-.ain-chip.is-late { color: #ff7b8a; }
-.ain-chip.is-warn { color: #ffd166; }
+em.ain-chip { grid-column: 3; grid-row: 1; justify-self: end; font-style: normal; font-family: var(--mono); font-size: 8.5px; padding: 2px 6px; border-radius: 2px; border: 1px solid currentColor; white-space: nowrap; }
+em.ain-chip.is-after { color: #6ff2b5; }
+em.ain-chip.is-before { color: #ffb36b; }
+em.ain-chip.is-late { color: #ff7b8a; }
+em.ain-chip.is-warn { color: #ffd166; }
 
 .ain-kanban { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; height: 104px; padding: 6px; }
 .ain-col { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #8aa3ad; padding: 1px 5px; border-left: 1px dashed rgba(255, 255, 255, 0.08); }
@@ -2409,19 +2441,18 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
   --car-w: 84vw; --car-gap: 10px; --car-h: calc(var(--car-w) * 0.64); /* a carriage: long and low */
   --wheel: 18px; --under: 16px; /* the wheels, and the depth of the running gear under the body */
   --rail-h: 5px; --deck-h: 16px; --pillar-h: 54px;
-  --in: 0;
 }
 .solc-pin {
   position: sticky; top: 0; height: 100svh; display: flex; flex-direction: column; justify-content: center; gap: 22px;
   padding: calc(var(--gutter) * 3.4) 0 calc(var(--gutter) * 1.4); overflow: hidden; isolation: isolate; will-change: transform;
 }
-/* the dark it stands in, faded up as it arrives */
-.solc-pin::before {
-  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+/* the dark it stands in, faded up as it arrives (SolutionsRail.tsx writes the fades straight onto the
+   elements: a variable they all read would restyle the whole scene every frame of the arrival) */
+.solc-shade {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
   background: linear-gradient(180deg, rgba(5, 5, 9, 0.55), rgba(5, 5, 9, 0.92) 16%, rgba(5, 5, 9, 0.92) 84%, rgba(5, 5, 9, 0.6));
-  opacity: min(1, calc(var(--in) * 1.8));
 }
-.solc-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--gutter); opacity: min(1, calc(var(--in) * 1.8)); }
+.solc-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--gutter); opacity: 0; }
 .solc-head .eyebrow { font-size: 12px; margin: 0; }
 
 /* the scene: the line, and the train on it */
@@ -2461,7 +2492,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 }
 
 /* the train: a row, carriages first (the last solution furthest back), the engine leading on the right */
-.solc-train { position: absolute; left: 0; bottom: calc(var(--rail-h) + var(--deck-h) + var(--pillar-h)); display: flex; align-items: flex-end; will-change: transform; --roll: 0rad; }
+.solc-train { position: absolute; left: 0; bottom: calc(var(--rail-h) + var(--deck-h) + var(--pillar-h)); display: flex; align-items: flex-end; will-change: transform; }
 .solc-car, .solc-engine { position: relative; flex: 0 0 var(--car-w); height: var(--car-h); margin-right: var(--car-gap); }
 .solc-engine { flex-basis: calc(var(--car-h) * 1.32); margin-right: 0; }
 /* the gangway between carriages: dark bellows */
@@ -2528,7 +2559,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
     radial-gradient(circle, #d9d6e6 0 2px, #2a2836 2.5px 4px, transparent 4.5px),
     conic-gradient(#7a7690 0 8%, #1b1a24 8% 25%, #7a7690 25% 33%, #1b1a24 33% 50%, #7a7690 50% 58%, #1b1a24 58% 75%, #7a7690 75% 83%, #1b1a24 83% 100%);
   border: 2px solid #b8b5c8; box-shadow: 0 0 0 1px #0b0a10;
-  transform: rotate(var(--roll));
+  transform: rotate(var(--roll, 0rad)); will-change: transform; /* (a layer each: turning, they don't repaint the train) */
 }
 .solc-bogie::before { left: 8%; }
 .solc-bogie::after { right: 8%; }
@@ -2548,11 +2579,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 
 /* the words under the train, changing channel as it moves on: the wide screen's copy, for a phone.
    They come up once the train has run in. */
-.solc-copy {
-  display: flex; flex-direction: column; gap: 18px; padding: 0 var(--gutter);
-  opacity: clamp(0, calc((var(--in) - 0.55) * 2.3), 1);
-  translate: 0 calc((1 - clamp(0, calc((var(--in) - 0.55) * 2.3), 1)) * 14px);
-}
+.solc-copy { display: flex; flex-direction: column; gap: 18px; padding: 0 var(--gutter); opacity: 0; }
 .solc .sol-title { margin-top: 0; font-size: clamp(28px, 8.6vw, 40px); }
 .solc .sol-desc { margin-top: 10px; font-size: 15px; line-height: 1.45; }
 .solc .sol-proof { margin-top: 12px; font-size: 12px; line-height: 1.7; }
