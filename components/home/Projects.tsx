@@ -58,13 +58,17 @@ export function Projects() {
       }),
     ];
 
+    /* the pin the captions live in is 100svh tall: on a phone that is less than the viewport once the
+       browser's bars have slid away, and anything placed by innerHeight would be cut off at its foot.
+       Its height is read when it changes, not every frame (a read in the frame forces a layout). */
+    const pin = section.current?.firstElementChild as HTMLElement | null;
+    let ph = pin?.clientHeight || innerHeight;
+    const ro = pin ? new ResizeObserver(() => { ph = pin.clientHeight || innerHeight; }) : null;
+    if (pin) ro?.observe(pin);
     // landing: the frame before the engine has placed the windows for this scroll (coming back from a
     // case): nothing is laid over the tower yet, its own glass shows the project until the next frame
     const apply = (landing = false) => {
       const vw = innerWidth, vh = innerHeight;
-      /* the pin the captions live in is 100svh tall: on a phone that is less than the viewport once the
-         browser's bars have slid away, and anything placed by innerHeight would be cut off at its foot */
-      const ph = (section.current?.firstElementChild as HTMLElement | null)?.clientHeight || vh;
       const hidden: number[] = [];
       const gap = Math.max(20, vw * 0.025), edge = Math.max(16, vw * 0.03), foot = edge + 12;
       for (let k = 0; k < N; k++) {
@@ -113,7 +117,7 @@ export function Projects() {
     // coming back from a case, HomeEnter puts the scroll back and asks for the frame at once, so the
     // project the case grew from is on screen, full, before the transition takes its picture
     signals.workApply = () => { ScrollTrigger.update(); apply(true); };
-    return () => { sts.forEach((s) => s.kill()); signals.onWorkFrame = null; signals.workApply = null; signals.workHidden = []; };
+    return () => { sts.forEach((s) => s.kill()); ro?.disconnect(); signals.onWorkFrame = null; signals.workApply = null; signals.workHidden = []; };
   }, [reduce]);
 
   // a project at full screen opens into its case: the picture becomes the case's banner

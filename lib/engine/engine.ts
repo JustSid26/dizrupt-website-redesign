@@ -57,7 +57,10 @@ const smooth = (a: number, b: number, t: number) => {
 
 export async function createEngine({ canvas, indexLayer, onOpenProject }: EngineOptions) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-  const pixelRatio = PIXEL_RATIO;
+  /* the picture's resolution: the device's own, capped (config.ts). A phone's cap is only a floor to
+     start from: once the scene is built it is measured against the phone it is on (see the benchmark
+     before `ready`), and a phone that can afford it draws at up to 2x */
+  let pixelRatio = PIXEL_RATIO;
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.setClearColor(0x000000, 1);
@@ -123,17 +126,29 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      1x instead of 1.25x and the bloom from a quarter-size picture; once the build is done and frames
      are quick again the full quality comes back. Fast phones never see the change. */
   let qualityAt = 0, slowShare = 0;
-  const applyQuality = (low: boolean) => {
-    lowQuality = low;
-    qualityAt = performance.now();
-    const pr = low ? 1 : pixelRatio;
+  /* draw at this many device pixels per CSS pixel: the renderer, the composer and the bloom resized,
+     and every material that sizes its points by the ratio told, so nothing drawn as points changes
+     size on screen (the field's particles, the city's lights, the stations', the sky's) */
+  const setRatio = (pr: number) => {
     renderer.setPixelRatio(pr);
     composer.setPixelRatio(pr);
     composer.setSize(innerWidth, innerHeight);
     const b = bloomSize();
     bloom.setSize(b.x, b.y);
-    u.uPixelRatio.value = pr; // his particles keep their size on screen
     aiPass.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr);
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
+        const uni = (mat as THREE.ShaderMaterial).uniforms?.uPixelRatio;
+        if (uni) uni.value = pr;
+      }
+    });
+    u.uPixelRatio.value = pr;
+  };
+  const applyQuality = (low: boolean) => {
+    lowQuality = low;
+    qualityAt = performance.now();
+    setRatio(low ? Math.min(pixelRatio, 1) : pixelRatio);
   };
   let aiWorld: AiWorld | null = null;
   let aiIdle = 0; // seconds it has been out of reach
@@ -538,6 +553,33 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      landing aren't spent compiling shaders and uploading textures while the city is trying to move */
   renderer.compile(scene, camera);
   composer.render();
+  /* A phone is measured, not assumed. The heaviest picture there is (the city whole, from the air,
+     with him standing in it) is drawn a few frames at each resolution in turn, from 2x down, and the
+     first the phone draws comfortably inside a frame's budget is the one it gets; if none, it keeps
+     its floor (config.ts). The count is still running: this takes a few tenths of a second behind it.
+     A phone that keeps up gets the desktop's picture; one that can't still runs smoothly. */
+  if (isMobile && !reducedMotion) {
+    const gl = renderer.getContext();
+    camera.position.copy(aerialPos);
+    camera.lookAt(aerialLook);
+    city.update(0, 1, 1, camera.position, 1);
+    tower.update(0, camera, 1, []);
+    const cost = (pr: number) => {
+      setRatio(pr);
+      composer.render();
+      gl.finish(); // (the first frame at a size pays for its buffers: not counted)
+      const N = 6, t0 = performance.now();
+      for (let i = 0; i < N; i++) { composer.render(); gl.finish(); }
+      return (performance.now() - t0) / N;
+    };
+    const cap = Math.min(2, devicePixelRatio);
+    let chosen = pixelRatio;
+    for (const pr of [2, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
+      if (cost(pr) <= 11) { chosen = pr; break; }
+    }
+    pixelRatio = chosen;
+    setRatio(chosen);
+  }
   signals.ready = true;
 
   /* ---------- glitch bursts (Spider-Verse: rare, abrupt, over in a few held frames) ---------- */
@@ -1298,7 +1340,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     {
       const ai = signals.ai;
       if (!aiWorld && !phone && (ai.warm || ai.mix > 0)) {
-        aiWorld = createAiWorld(renderer, pixelRatio);
+        aiWorld = createAiWorld(renderer, lowQuality ? Math.min(pixelRatio, 1) : pixelRatio);
         aiWorld.render(dt, time, 0, 0, 0); // compile it now, not on the first frame of the transition
       }
       // a touch screen can't hold both worlds for long: once the page is well past it, it is freed (and
