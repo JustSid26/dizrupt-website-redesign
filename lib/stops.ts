@@ -66,13 +66,16 @@ export function scrollRuns(): ScrollStop[][] {
     // the count, in its windows: late in it, so the ride on starts where the camera does (0.76)
     { y: top + span * introRaw(0.72), kind: "signature", train: null }, // the figure dissolving into the count is worth watching
   ];
+  const phone = isPhoneLayout();
   const onward: ScrollStop[] = [
-    // on to AI & Automation in two: him whole again, seen for a moment (Bridge.tsx: its progress runs
-    // from its top at the middle of the screen to its bottom there), and the page carries itself on …
-    ...(bridge ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, kind: "scene" as const, train: null, onward: 1200 }] : []),
+    /* on to AI & Automation. A wide screen in two: him whole again, seen for a moment (Bridge.tsx:
+       its progress runs from its top at the middle of the screen to its bottom there), and the page
+       carries itself on into his heart. A phone in one: from the cards, one ride the whole way, out
+       to him whole and in to his heart and the chip, nothing to scroll for in between. */
+    ...(bridge && !phone ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, kind: "scene" as const, train: null, onward: 1200 }] : []),
     // … then into his heart and through the glitch to the chip, floating in the dark: seen for a moment,
     // and the page carries on by itself into what we do, so the chip isn't left standing still …
-    ...(ai ? [{ y: ai.offsetTop + 2, kind: "scene" as const, train: null, onward: 600 }] : []),
+    ...(ai ? [{ y: ai.offsetTop + 2, kind: phone ? ("passage" as const) : ("scene" as const), train: null, onward: 600 }] : []),
     /* … and one gesture per beat of AI & Automation: powered on, the three stages of how, said
        plainly. The page glides to each and the beat's animation plays on the same clock, ending as the
        page lands (AiNetwork.tsx). */
@@ -107,14 +110,16 @@ export function workStops(): ScrollStop[] {
   const top = work.getBoundingClientRect().top + scrollY, span = work.offsetHeight - innerHeight;
   // one window to the next: a hop, a little slower (lib/motion.ts: window)
   const stops: ScrollStop[] = clients.map((_, k) => ({ y: top + span * workProgress(k), kind: "window", train: null }));
-  /* the whole tower is a stop of its own, seen across the street with WORK on the hoarding at its
-     foot; then, after a moment and with no gesture, the page carries itself on in to the first
-     window (a scene change), on every screen (SmoothScroll.tsx: onward) */
+  /* the whole tower, seen across the street with WORK on the hoarding at its foot. A wide screen
+     rests there a moment, then carries itself on in to the first window (SmoothScroll.tsx: onward).
+     A phone doesn't stop at all: from AI & Automation one ride runs out to the whole tower and on in
+     to the first window, nothing to scroll for in between. */
+  const phone = isPhoneLayout();
   stops[0].kind = "scene";
-  stops.unshift({ y: top, kind: "scene", train: null, onward: 1500 });
+  if (!phone) stops.unshift({ y: top, kind: "scene", train: null, onward: 1500 });
   /* led in from AI & Automation's statement: from there one gesture is one ride the whole way out —
      the network clears and the glitch hands back to the city inside it (it plays in time as the
-     section's end passes), to the tower's wide shot */
+     section's end passes), to the tower's wide shot (a phone: and in to the window) */
   const ai = document.getElementById("ai");
   if (ai) {
     const at = (p: number) => ai.getBoundingClientRect().top + scrollY + (ai.offsetHeight - innerHeight) * p;
