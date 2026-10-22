@@ -1387,6 +1387,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       if (!lowQuality && heavy) applyQuality(true);
       else if (lowQuality && !heavy && !building && slowShare < 0.1) applyQuality(false);
     }
+    /* the DIZRUPT screen: the canvas is under solid black until the hole the cursor opens has opened.
+       A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
+       it would only be work: the frame's state is kept up, the picture is skipped */
+    if (isMobile && landing && !view && !preview && signals.introHole < 0.02) return;
     composer.render();
   }
   frame();

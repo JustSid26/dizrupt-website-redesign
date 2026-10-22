@@ -300,6 +300,7 @@ export function Intro() {
       spot.x += (p.px - spot.x) * (1 - Math.exp(-11 * dt));
       spot.y += (p.py - spot.y) * (1 - Math.exp(-11 * dt));
       spot.r += ((p.active && beat === "landing" && useStore.getState().loaded ? HOLE : 0) - spot.r) * (1 - Math.exp(-4 * dt));
+      signals.introHole = spot.r / HOLE;
       const mask = `radial-gradient(circle ${spot.r.toFixed(0)}px at ${spot.x.toFixed(0)}px ${spot.y.toFixed(0)}px, transparent 0%, rgba(0,0,0,0.5) 42%, #000 76%)`;
       if (mask !== lastMask && veil.current) {
         lastMask = mask;

@@ -2492,6 +2492,9 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
    picture under it moves, and on a phone's GPU that is the difference between smooth and not. */
 @media (max-aspect-ratio: 1/1) {
   .intro-static { mix-blend-mode: normal; }
+  /* nor anything repainted every frame over it: the scanlines hold still and the grain sits still
+     (each is a full-screen layer redrawn on every frame of its loop) */
+  .intro-scan, .grain { animation: none; }
   .work-shot-open { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--pa) 30%, rgba(5, 4, 10, 0.82)); }
 }
 

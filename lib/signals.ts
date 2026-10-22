@@ -21,6 +21,9 @@ export const signals = {
   glance: null as [number, number] | null,
   // the intro's staged beats, written by <Intro/>
   introBeat: 'landing' as 'landing' | 'reveal' | 'stats' | 'profile',
+  // how far the hole the cursor opens in the landing's black has opened (0 none, 1 whole): while it is
+  // shut nothing of the canvas can be seen, and a phone needn't draw it (engine.ts)
+  introHole: 0,
   // the case page's model, when a case study is open
   caseShape: null as null | { shape: string; colors: [string, string]; spin?: boolean },
   // the spiral card being presented before its case page opens (-1 none)
