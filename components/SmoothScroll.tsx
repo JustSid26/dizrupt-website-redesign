@@ -24,13 +24,12 @@ export function SmoothScroll() {
     }
     /* From the DIZRUPT screen to the contact the scroll goes stop to stop: one gesture and you are
        carried to the next stop at the ride's own pace (lib/motion.ts), however hard or soft the
-       gesture was. A ride's own momentum (a trackpad's tail) is ignored, so the animation between two
-       stops always plays out whole. A second, real gesture while it plays isn't thrown away: one more
-       stop the same way is queued for when it lands; a gesture the other way turns the ride round. */
-    // auto: a ride the page started by itself (an onward stop), not a gesture: a gesture while it runs
-    // doesn't queue another stop on top of it, or the visitor would find a stop skipped
+       gesture was. Everything the hand does while a ride plays is swallowed, the ride's own momentum
+       (a trackpad's tail) and real gestures alike, so the animation between two stops always plays
+       out whole, at its own pace, and never skips ahead: the next gesture counts once it has landed. */
+    // auto: a ride the page started by itself (an onward stop), not a gesture
     let glide: { stops: ScrollStop[]; i: number; dir: number; auto?: boolean } | null = null;
-    let queued = false; // one more stop the same way, once this ride lands
+    let queued = false; // (kept for the landing's bookkeeping; nothing queues a stop any more)
     let landedAt = 0; // when the last ride came to rest: its momentum is still arriving for a moment
     let seq = 0;
     let lastEvent = 0, lastAbs = 0, peak = 0, trough = 0, freshAt = 0, rising = 0;
@@ -119,36 +118,22 @@ export function SmoothScroll() {
        keeps sending events for a second or more after the swipe, so a pause alone can't tell them apart. */
     // sure: unmistakably a new gesture (a key, a wheel's notch, a swipe after a pause), not momentum
     const gesture = (dir: number, fresh: boolean, sure = false) => {
-      /* a ride waiting on the scene counts as under way: a second gesture queues behind it, the other
-         way calls it off. A ride the page is about to take by itself (an onward stop's dwell) is
-         different: a gesture its way just takes it now, nothing queued, so no stop is skipped. */
+      /* A ride under way plays out whole, whatever the hand does: every gesture during it is
+         swallowed, never queued (so it can't skip a stop) and never turned round (so it can't be cut
+         short or hurried). The same while a ride waits on a stop's scene, with one exception: at a
+         stop the page is about to leave by itself (an onward stop's dwell), a gesture its way takes
+         that ride now rather than waiting out the dwell. */
       if (pending && !glide) {
-        if (!fresh) return true;
-        if (dir === pending.dir) {
-          if (pending.auto) {
-            const p = pending;
-            seq++; // (the wait lets go: see afterScene)
-            pending = null;
-            queued = false;
-            go(p.stops, p.i);
-          } else queued = true;
-        } else {
-          seq++;
+        if (fresh && pending.auto && dir === pending.dir) {
+          const p = pending;
+          seq++; // (the wait lets go: see afterScene)
+          pending = null;
           queued = false;
+          go(p.stops, p.i);
         }
         return true;
       }
-      if (glide) {
-        if (!fresh) return true; // its own momentum
-        if (dir === glide.dir) { if (!glide.auto) queued = true; } // one more stop, never more than one (none on a ride the page took itself)
-        else {
-          // the other way: back to where it came from, from where it is
-          queued = false;
-          const back = glide.i - glide.dir;
-          if (glide.stops[back]) go(glide.stops, back, { turning: true });
-        }
-        return true;
-      }
+      if (glide) return true;
       const y = window.scrollY;
       lastDir = dir;
       // the run of stops this point is in: from the landing to AI & Automation, or the work's tower
