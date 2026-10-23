@@ -8,7 +8,7 @@ import { setLenis, setRideCanceller, setRideTo } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { scrollRuns, workStops, type ScrollStop } from "@/lib/stops";
-import { LINGER, lingering, onward, QUEUED, ride, T } from "@/lib/motion";
+import { LINGER, lingering, onward, QUEUED, RAMP, ride, settling, T } from "@/lib/motion";
 
 // One Lenis instance for the whole site, ticking with GSAP so ScrollTriggers stay in step.
 export function SmoothScroll() {
@@ -50,13 +50,14 @@ export function SmoothScroll() {
     let pending: { stops: ScrollStop[]; i: number; dir: number; auto?: boolean } | null = null; // the ride waiting on it
     // minMs: a dwell the page keeps at the stop whatever the scene is doing (the wide shot of the tower,
     // seen under its sign, before the page carries itself on into the first window)
-    const afterScene = (fn: () => void, minMs = 0) => {
+    // eager: don't wait for anything else's scene, only the dwell (lib/stops.ts)
+    const afterScene = (fn: () => void, minMs = 0, eager = false) => {
       if (waiting) gsap.ticker.remove(waiting);
       const t0 = performance.now(), token = seq;
       const wait = () => {
         if (token !== seq) return void (gsap.ticker.remove(wait), (waiting = null), (pending = null));
         const held = performance.now() - t0;
-        if (held < minMs || (busy() && held < T.hold * 1000)) return;
+        if (held < minMs || (!eager && busy() && held < T.hold * 1000)) return;
         gsap.ticker.remove(wait);
         waiting = null;
         pending = null;
@@ -73,6 +74,8 @@ export function SmoothScroll() {
       // the whole leg takes its full time; from partway along it, that part of it
       const part = from ? Math.min(1, Math.abs(to.y - y) / Math.max(1, Math.abs(to.y - from.y))) : 1;
       const r = ride(leg.kind, dir as 1 | -1);
+      // a leg that arrives rather than creeps (lib/stops.ts: settle), riding into its stop
+      if (dir > 0 && leg.settle !== undefined && leg.kind !== "signature") r.ease = settling(leg.settle);
       // a leg that lingers over a stretch of its way (lib/stops.ts: slow): that stretch, in this ride's terms
       const prev = stops[stops.indexOf(leg) - 1];
       if (leg.slow && prev && to.y !== y) {
@@ -81,7 +84,9 @@ export function SmoothScroll() {
         const [lo, hi] = [u(a), u(b)].sort((m, n) => m - n);
         if (hi - lo > 0.01) r.ease = lingering(r.ease, lo, hi, leg.linger ?? LINGER);
       }
-      const duration = Math.max(T.micro * 4, r.duration * part * (how.queued ? QUEUED : 1));
+      // (a quicker settle, and the ride is shorter by just what it saves: its run is at the pace it was)
+      const settled = dir > 0 && leg.settle !== undefined && leg.kind !== "signature" ? (1 - RAMP) / (1 - RAMP / 2 - leg.settle / 2) : 1;
+      const duration = Math.max(T.micro * 4, r.duration * part * settled * (how.queued ? QUEUED : 1));
       // the train drives itself there now, rather than when the page catches up
       signals.rideTarget = to.train;
       signals.rideEnd = performance.now() + duration * 1000;
@@ -103,7 +108,7 @@ export function SmoothScroll() {
             // a stop the page doesn't rest at (lib/stops.ts: onward): once its scene is done, on it goes
             if (dir > 0 && to.onward && stops[i + 1]) {
               pending = { stops, i: i + 1, dir: 1, auto: true };
-              afterScene(() => go(stops, i + 1, { auto: true }), typeof to.onward === "number" ? to.onward : DWELL);
+              afterScene(() => go(stops, i + 1, { auto: true }), typeof to.onward === "number" ? to.onward : DWELL, to.eager);
             }
             return;
           }
@@ -250,7 +255,7 @@ export function SmoothScroll() {
         const i = run.findIndex((st) => st.onward && Math.abs(st.y - y) < TOL);
         if (i < 0 || !run[i + 1]) continue;
         pending = { stops: run, i: i + 1, dir: 1, auto: true };
-        afterScene(() => go(run, i + 1, { auto: true }), typeof run[i].onward === "number" ? run[i].onward : DWELL);
+        afterScene(() => go(run, i + 1, { auto: true }), typeof run[i].onward === "number" ? run[i].onward : DWELL, run[i].eager);
         return;
       }
     };

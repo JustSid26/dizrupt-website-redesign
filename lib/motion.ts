@@ -57,6 +57,13 @@ export const camera = (ramp = RAMP) => {
   return (t: number) =>
     t < ramp ? (vmax * t * t) / (2 * ramp) : t > 1 - ramp ? 1 - (vmax * (1 - t) * (1 - t)) / (2 * ramp) : vmax * (t - ramp / 2);
 };
+/** The same curve, settling into its stop in a shorter share of the ride than it takes to pull away
+    (a ride whose arrival shouldn't creep: lib/stops.ts, settle). */
+export const settling = (settle: number, ramp = RAMP) => {
+  const vmax = 1 / (1 - ramp / 2 - settle / 2);
+  return (t: number) =>
+    t < ramp ? (vmax * t * t) / (2 * ramp) : t > 1 - settle ? 1 - (vmax * (1 - t) * (1 - t)) / (2 * settle) : vmax * (t - ramp / 2);
+};
 /** The signature rides: from rest and back to rest with no steady run, so they breathe. */
 export const sine = (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * t);
 /** A ride that lingers over part of its way: `base`'s pace in time, but the stretch of the distance

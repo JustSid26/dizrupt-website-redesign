@@ -56,7 +56,9 @@ const introRaw = (p: number) =>
    its usual dwell, or after this many ms */
 /* slow: the share of the leg into this stop (from its start) the ride takes at another pace, `linger`
    times slower (lib/motion.ts: LINGER unless said; under 1 is quicker) */
-export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; linger?: number; onward?: boolean | number };
+/* settle: riding into this stop, the share of the ride its arrival takes (lib/motion.ts: settling;
+   RAMP unless said). eager: an onward stop that carries on without waiting for anything else's scene */
+export type ScrollStop = { y: number; kind: RideKind; train: number | null; slow?: number; linger?: number; onward?: boolean | number; settle?: number; eager?: boolean };
 
 /** The runs of stops from the DIZRUPT screen to AI & Automation's last beat. On a phone the train is
     drawn flat: it pulls in (a scene change), then a hop a carriage. */
@@ -125,7 +127,9 @@ export function workStops(): ScrollStop[] {
      to the first window, nothing to scroll for in between. */
   const phone = isPhoneLayout();
   stops[0].kind = "scene";
-  if (!phone) stops.unshift({ y: top, kind: "scene", train: null, onward: 400 });
+  /* (a wide screen: the zoom in to the first window follows the moment the tower is reached, without
+     a pause there, and without waiting on AI & Automation's own animations, which aren't this scene) */
+  if (!phone) stops.unshift({ y: top, kind: "scene", train: null, onward: 1, eager: true });
   /* led in from AI & Automation's statement: from there one gesture is one ride the whole way out —
      the network clears and the glitch hands back to the city inside it (it plays in time as the
      section's end passes), to the tower's wide shot (a phone: and in to the window) */
@@ -139,6 +143,8 @@ export function workStops(): ScrollStop[] {
     const from = at(AI_STOPS[AI_STOPS.length - 1]), end = ai.getBoundingClientRect().top + scrollY + ai.offsetHeight - innerHeight;
     stops[0].slow = Math.min(0.9, Math.max(0, (end - from) / Math.max(1, stops[0].y - from)));
     if (phone) stops[0].linger = 0.4;
+    // a wide screen's ride arrives at the tower rather than creeping up to it, so the zoom in starts sooner
+    else stops[0].settle = 0.08;
     stops.unshift({ y: at(AI_STOPS[AI_STOPS.length - 1]), kind: "beat", train: null });
   }
   /* and from the last project, one gesture all the way out: the camera pulls back from the tower and
