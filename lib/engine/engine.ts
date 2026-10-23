@@ -311,6 +311,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   const api0: Record<string, unknown> = {};
   const CAM_FOLLOW = 2.6; // how tightly the camera follows the train (per second)
+  const CAM_FOLLOW_BACK = 5; // … and riding back, when its trailing would put it on the far side (see rideBack)
   /* ---------- his heart: the DIZRUPT mark, beating in his chest ---------- */
   const heartTex = new THREE.TextureLoader().load('/heart.png');
   heartTex.colorSpace = THREE.SRGBColorSpace;
@@ -660,7 +661,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let scrubbing = false; // uProgress is being driven by the scroll
   let scrubFrom = '';
   const ride = { s: 0, v: 0 };
-  let camLead = 0; // how far the camera frames ahead of the train, riding back (see camPose)
+  let rideBack = 0; // 0..1, how much the train is riding back: the camera follows it tighter then (see follow)
   const contactLook = new THREE.Vector3();
   let wasContact = false;
   let formedAt = -1;
@@ -744,7 +745,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const corner = new THREE.Vector3();
   let wasCase = false;
   const rideCamPos = new THREE.Vector3(), rideCamLook = new THREE.Vector3();
-  let rideCamAt = -1; // the time the ride's camera last ran (a gap means it is picked up afresh)
+  /* the frame the ride's camera last ran (if not the one before, it is picked up afresh: by frames, not
+     time, so a slow frame (a shader compiled the first time the station is seen) doesn't snap it) */
+  let rideCamFrame = -2, frameNo = 0;
+  const rideFrame = { flat: 0, out: 0 }; // the ride camera's framing directions, as headings, eased riding back
   let wasBridge = false;
   let bridgeZoom = 0;
   const bridgeLook = new THREE.Vector3(), bridgeFrom = new THREE.Vector3(), bridgeFromLook = new THREE.Vector3(), heartWorld = new THREE.Vector3();
@@ -758,6 +762,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   function frame() {
     raf = requestAnimationFrame(frame);
+    frameNo++;
     clock.update();
     const rawDt = clock.getDelta();
     const dt = Math.min(rawDt, 0.05);
@@ -922,15 +927,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        that station's own framing, rather than drifting with the train through it. */
     const nearStop = Math.round(ride.s);
     const dock = nearStop >= 1 ? 1 - smooth(0.03, 0.14, Math.abs(ride.s - nearStop)) : 0; // only as it pulls in
-    /* Riding back, the camera's follow (below) would leave it on the far side of the train, looking
-       the way it came and away from the train: frame where the train is going instead, as far
-       behind it as the follow trails it going forward, so it stays in view either way. */
-    camLead = damp(camLead, ride.v < 0 ? Math.max(-1, (2 * ride.v) / CAM_FOLLOW) : 0, 6, dt);
+    /* Riding back, the camera's follow (below) trails the train the way it came, which going back is
+       ahead of it: left loose, it ends up on the far side looking away. Aiming it further along the
+       line to make up for that sent it far from the train on a fast ride or through a bend (the train
+       off the bottom of the screen near a billboard; out of frame altogether on the way back to the
+       station) and swung it back round on arrival. So riding back it follows tighter, and is aimed
+       ahead by exactly what that follow trails at the train's speed (a follow of rate k trails a steady
+       speed v by v / k): it frames the train as it does riding forward, and as the train slows the aim
+       comes back onto it, never past the stop it is riding to. */
+    rideBack = damp(rideBack, ride.v < -0.01 ? 1 : 0, 4, dt);
     const camBase = signals.rideTarget !== null ? ride.s + (nearStop - ride.s) * dock : ride.s; // scrolling: no hold at a station
-    /* ahead of the train riding back, but never past the stop it is riding to: framed past it, the
-       camera overshot that stop's framing and, the train already in, swung back round to it */
-    let camS = camBase + camLead;
-    if (signals.rideTarget !== null && camLead < 0) camS = Math.max(camS, Math.min(camBase, signals.rideTarget));
+    const followK = CAM_FOLLOW + (CAM_FOLLOW_BACK - CAM_FOLLOW) * rideBack;
+    let camS = camBase + (ride.v < 0 ? (ride.v / followK) * rideBack : 0);
+    if (signals.rideTarget !== null && ride.v < 0) camS = Math.max(camS, Math.min(camBase, signals.rideTarget));
     const camPose = line.poseAt(Math.max(0, camS));
     if (riding) {
       // on the line: eased onto it while the morph lands, then held to it exactly
@@ -1132,6 +1141,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const beside = tmpOut.set(-flat.z, 0, flat.x);
       const radial = tmpB.set(camPose.pos.x, 0, camPose.pos.z).normalize();
       const out = beside.lerp(radial, smooth(33, 36, r)).normalize(); // only once it is on the loop itself
+      /* Riding back the camera follows the train tightly (rideBack), so it would turn as fast as the line
+         does where it comes off the loop: there the framing turns at its own pace instead, as it does
+         going forward behind the looser follow. Going forward it is the line's own, as it always was. */
+      /* (turned as headings, the short way round: eased as vectors, one swinging round to face the
+         other way passes through nothing and snaps) */
+      const freshRide = rideCamFrame !== frameNo - 1;
+      rideCamFrame = frameNo;
+      const kDir = freshRide ? 1 : 1 - Math.exp(-(30 - 27 * rideBack) * dt);
+      const turn = (from: number, to: number) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * kDir;
+      rideFrame.flat = turn(rideFrame.flat, Math.atan2(flat.x, flat.z));
+      rideFrame.out = turn(rideFrame.out, Math.atan2(out.x, out.z));
+      flat.set(Math.sin(rideFrame.flat), 0, Math.cos(rideFrame.flat));
+      out.set(Math.sin(rideFrame.out), 0, Math.cos(rideFrame.out));
       // docked, it stands further back and wider, so the whole billboard is in frame beside the train
       const chase = tmpA.copy(camPose.pos).addScaledVector(out, 9 + 3 * dock).addScaledVector(flat, -5 - 5 * dock).add(tmpUp.set(0, 6 + 0.5 * dock + 5 * (1 - dock) * smooth(0.05, 0.3, ride.s), 0)); // over the rooftops while it runs
       // between the train and its billboard (which stands on the far side of the track), a little ahead
@@ -1144,9 +1166,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       /* The camera follows that framing with a little weight rather than bolted to the train: through
          a bend, and as it settles into or swings out of a billboard's framing, the view eases round
          instead of whipping round with the train. Picked up where it is on the first frame. */
-      if (time - rideCamAt > 0.25) { rideCamPos.copy(camPos); rideCamLook.copy(camLook); }
-      rideCamAt = time;
-      const follow = 1 - Math.exp(-CAM_FOLLOW * dt);
+      if (freshRide) { rideCamPos.copy(camPos); rideCamLook.copy(camLook); }
+      const follow = 1 - Math.exp(-followK * dt);
       rideCamPos.lerp(camPos, follow);
       rideCamLook.lerp(camLook, follow);
       camera.position.copy(rideCamPos);
