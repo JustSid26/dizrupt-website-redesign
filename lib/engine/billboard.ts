@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isMobile } from './config';
 
 /* =========================================================
    The billboard. The landing you first see — DIZRUPT on black
@@ -45,12 +46,14 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
   // read the landing's layout off the page, as fractions of the screen
   function measure() {
     aspect = innerWidth / innerHeight;
-    const W = 1600;
+    /* the board is drawn afresh every other frame and sent to the GPU whole: a phone's no sharper than
+       the picture it fills (a phone's screen at up to 2x, a quarter of a 1600-wide board stood on end) */
+    const W = isMobile ? Math.min(1600, Math.round(innerWidth * Math.min(2, devicePixelRatio))) : 1600;
     const H = Math.round(W / aspect);
-    canvas.width = W;
-    canvas.height = H;
-    snow.width = 200;
-    snow.height = Math.max(1, Math.round(200 / aspect));
+    // (set only when it changes: setting a canvas's size, even to the same, throws its picture away)
+    if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+    const sh = Math.max(1, Math.round(200 / aspect));
+    if (snow.width !== 200 || snow.height !== sh) { snow.width = 200; snow.height = sh; }
     const k = W / innerWidth;
     /* Measured against the landing's own frame, not the window: once you have scrolled on, the
        landing sits above the screen, and reading it against the window put every letter off the
@@ -194,7 +197,7 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
        and blue, pulled apart, and bands of it slip sideways, for a few held frames. */
     if (time > boardNext) { boardUntil = time + 0.18 + Math.random() * 0.25; boardNext = boardUntil + 2 + Math.random() * 4; }
     if (time < boardUntil) {
-      snap.width = W; snap.height = H;
+      if (snap.width !== W || snap.height !== H) { snap.width = W; snap.height = H; } // (else it's a new canvas every frame of it)
       const sx = snap.getContext('2d')!;
       sx.drawImage(canvas, 0, 0);
       const sp = W * (0.006 + Math.random() * 0.018);

@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CAMERA_Z, COUNT, PIXEL_RATIO, isMobile, reducedMotion } from './config';
 import { ParticleField } from './field';
 import { BUST_DROP, BUST_HEIGHT, loadMascot } from './mascot';
@@ -494,8 +495,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const rig = new THREE.Group();
   {
     const BWb = BOARD_HEIGHT * (innerWidth / innerHeight), BHb = BOARD_HEIGHT;
-    const steel = new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
-    const edge = new THREE.MeshStandardMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4, roughness: 0.4 });
+    /* (a phone lights it matt: no metal's sheen, a fraction of the work for every pixel of it, and on the
+       landing its steel back is the whole screen behind the board's picture. Its steel is darker for it:
+       a metal shows little of its own colour) */
+    const steel = isMobile ? new THREE.MeshLambertMaterial({ color: '#15171c' }) : new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
+    const edge = isMobile ? new THREE.MeshLambertMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4 }) : new THREE.MeshStandardMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4, roughness: 0.4 });
     const lamp = new THREE.MeshBasicMaterial({ color: '#fff4dc' });
     const put = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, rz = 0) => {
       const mesh = new THREE.Mesh(geo, m);
@@ -526,6 +530,25 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   billboard.group.add(rig);
   scene.updateMatrixWorld(true);
   const buildRig = particleBuilder(rig, scene, pixelRatio, 26);
+  /* its pieces, once the particles have been sampled from them one by one, merged by material: three
+     draws a frame where there were fifty-odd */
+  {
+    const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    for (const m of [...rig.children] as THREE.Mesh[]) {
+      m.updateMatrix();
+      const mat = m.material as THREE.Material;
+      if (!byMat.has(mat)) byMat.set(mat, []);
+      byMat.get(mat)!.push(m.geometry.clone().applyMatrix4(m.matrix));
+      m.geometry.dispose();
+      rig.remove(m);
+    }
+    for (const [mat, gs] of byMat) {
+      const g = mergeGeometries(gs);
+      gs.forEach((x) => x.dispose());
+      if (g) rig.add(new THREE.Mesh(g, mat));
+    }
+    rig.updateMatrixWorld(true);
+  }
 
   /* The landing's camera move. It starts square on to the board at the distance where the board
      exactly fills the screen, so the page can hand over to it without a seam; pulls back and swings
@@ -613,8 +636,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   };
   /* A phone is measured, not assumed. The heaviest picture there is (the city whole, from the air,
      with him standing in it) is drawn a few frames at each resolution in turn, from 2x down, and the
-     first the phone draws in well under a frame's budget (10ms of the 16.7: the rest is the page's own
-     layers over it, and the frame's work) is the one it gets; if none, it keeps its floor (config.ts).
+     first the phone draws in well under a frame's budget (8ms of the 16.7: the landing's city building
+     itself costs about twice what the city standing does, and the rest of the frame is the page's own
+     layers over it and the frame's work) is the one it gets; if none, it keeps its floor (config.ts).
      The count is still running: this takes a few tenths of a second behind it. A phone that keeps up
      gets the desktop's picture; one that can't still runs smoothly. */
   if (isMobile && !reducedMotion) {
@@ -639,7 +663,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const cap = Math.min(2, devicePixelRatio);
     let chosen = pixelRatio;
     for (const pr of [2, 1.75, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
-      if (cost(pr) <= 10) { chosen = pr; break; }
+      if (cost(pr) <= 8) { chosen = pr; break; }
     }
     pixelRatio = chosen;
     // the governor's notches: from what the phone can hold, down to 1x
@@ -704,10 +728,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
   /* The count, as four windows of his light. Laid out for the close framing the camera lands on
      (2 × 2 across a wide screen, stacked on a narrow one), each a lit frame round a pane of glass
-     made of the same particles he was. Rebuilt when the window changes shape. */
+     made of the same particles he was. Rebuilt when the window changes shape: once the page is still,
+     not in the frame the window changed (a phone's toolbar going away is a resize), unless the count is
+     wanted first (see `want`). */
   type Panel = { x: number; y: number; z: number; w: number; h: number; yaw: number; pitch: number; m: THREE.Matrix4 };
   const statPanels: Panel[] = [];
+  let statGlyphs: number[][] | null = null; // the figures' lit pixels: the window's shape doesn't change them
+  let statsStale = false;
   function buildStatWindows() {
+    statsStale = false;
     const aspect = innerWidth / innerHeight;
     const halfH = CAMERA_Z * Math.tan(THREE.MathUtils.degToRad(22.5));
     const halfW = halfH * aspect;
@@ -731,7 +760,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     /* No windows: his particles write the numbers themselves, big, one figure in each place. Each
        number is set in type on a small canvas and the particles land on its lit pixels; particle i
        goes to a number by its own random number, so as the morph runs the four arrive together. */
-    const glyphs = site.stats.map((st) => {
+    const glyphs = (statGlyphs ??= site.stats.map((st) => {
       const W = 512, H = 176;
       const c = document.createElement('canvas');
       c.width = W;
@@ -746,7 +775,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const px: number[] = [];
       for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) if (data[(y * W + x) * 4 + 3] > 128) px.push(x / W - 0.5, 0.5 - y / H);
       return px;
-    });
+    }));
     const arr = new Float32Array(COUNT * 3);
     const v = new THREE.Vector3();
     const R = field.randoms;
@@ -775,7 +804,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     field.register('stats', attr);
   }
   buildStatWindows();
-  addEventListener('resize', () => { if (key !== 'stats') buildStatWindows(); });
+  addEventListener('resize', () => { statsStale = true; });
+  // (and once the page's fonts are in, so the figures are set in their own face, not the stand-in)
+  void document.fonts?.ready.then(() => { statGlyphs = null; statsStale = true; });
   const corner = new THREE.Vector3();
   let wasCase = false;
   const rideCamPos = new THREE.Vector3(), rideCamLook = new THREE.Vector3();
@@ -839,6 +870,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       want = 'mascot:full'; // back where he began, head to toe on his plinth
     }
     // coming apart into the windows is scrubbed by the scroll, as the camera flies in
+    // the count laid out again for the window's new shape: now if it's wanted, else once the page is still
+    if (statsStale && key !== 'stats' && (want === 'stats' || now > signals.rideEnd)) buildStatWindows();
     const gather = section === 'intro' && !view && !preview
       && ((key === 'mascot:full' && want === 'stats') || (key === 'stats' && want === 'train:station'));
     // the train leaving its station and setting off are the same particles: swap the frame, not the shape
@@ -1502,8 +1535,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     }
     /* the governor, once a second: a second with more than a sixth of its frames late steps the picture
        down a notch at once; five comfortably quick seconds in a row step it back up, one notch, unless a
-       notch up has just failed (see quality, above). The second after a change isn't judged: its first
-       frames pay for the new buffers */
+       notch up has just failed (see quality, above), and only while the page is still (a change remakes
+       the picture's buffers: a hitch, which a ride would show). The second after a change isn't judged:
+       its first frames pay for the new buffers */
     if (isMobile && now - late.at > 1000) {
       /* late: a refresh missed. A phone held to 30 frames a second (iOS's Low Power Mode does it) runs
          every frame at 33ms, steadily; that is its pace, not lateness, and nothing here would mend it */
@@ -1527,7 +1561,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         if (level < levels.length - 1 || thin > 0.5) down();
         goodFor = 0;
       } else if (share < 0.03) {
-        if (++goodFor >= 5 && (level > 0 || thin < 1) && now > holdUntil) { up(); goodFor = 0; }
+        if (++goodFor >= 5 && (level > 0 || thin < 1) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
       } else goodFor = 0;
       late.at = now; late.n = 0;
     }

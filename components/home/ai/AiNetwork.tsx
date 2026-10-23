@@ -170,6 +170,9 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
     const ctx = gsap.context(() => {
       const q = gsap.utils.selector(el);
       const panels = q<HTMLElement>(".ain-panel");
+      /* a value only one part reads is written onto that part, not the network's root: on the root,
+         every frame it changes restyles the whole network under it */
+      const scan = q<HTMLElement>(".ain-scan")[0] ?? el, report = q<HTMLElement>(".ain-matrix")[0] ?? el, pulses = q<SVGGElement>(".ain-thread-flow")[0] ?? el;
       // (linear inside: the play head that drives it carries the ease, lib/motion.ts)
       const tl = gsap.timeline({ paused: true, defaults: { ease: "none" } });
       /* each beat is placed as a fraction of the ride it plays in, so the stops can move (the network's
@@ -215,9 +218,9 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
 
       // 01 Audit: a scan sweeps it and flags each panel as it passes; the hand-offs are traced, and where they break
       const span = scanSpan(tall);
-      tl.fromTo(el, { "--scanO": 0 }, { "--scanO": 1, duration: g2 * 0.02 }, in2(0.12));
-      tl.fromTo(el, { "--scan": 0 }, { "--scan": 1, duration: g2 * 0.18, ease: EASE.inOut }, in2(0.13));
-      tl.to(el, { "--scanO": 0, duration: g2 * 0.02 }, in2(0.31));
+      tl.fromTo(scan, { "--scanO": 0 }, { "--scanO": 1, duration: g2 * 0.02 }, in2(0.12));
+      tl.fromTo(scan, { "--scan": 0 }, { "--scan": 1, duration: g2 * 0.18, ease: EASE.inOut }, in2(0.13));
+      tl.to(scan, { "--scanO": 0, duration: g2 * 0.02 }, in2(0.31));
       panels.forEach((p) => {
         const at = (found[p.dataset.id as PanelId].x - span.from) / (span.to - span.from);
         tl.fromTo(p, { "--f": 0 }, { "--f": 1, duration: g2 * 0.03 }, in2(0.13 + 0.18 * Math.min(1, Math.max(0, at))));
@@ -228,23 +231,23 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
 
       // 02 Evaluate: the map steps back and the report rises over it; the workflows settle into their ranking
       tl.fromTo(el, { "--v": 0 }, { "--v": 1, duration: g2 * 0.07, ease: EASE.inOut }, in2(0.37));
-      tl.fromTo(el, { "--mx": 0 }, { "--mx": 1, duration: g2 * 0.07, ease: EASE.in }, in2(0.4));
+      tl.fromTo(report, { "--mx": 0 }, { "--mx": 1, duration: g2 * 0.07, ease: EASE.in }, in2(0.4));
       q<HTMLElement>(".aim-row").forEach((r) => {
         const found = Number(r.style.getPropertyValue("--from")) || 0;
         tl.fromTo(r, { "--in": 0 }, { "--in": 1, duration: s2(T.ui), ease: EASE.in }, in2(0.44) + found * s2(T.stagger));
         tl.fromTo(r, { "--m": 0 }, { "--m": 1, duration: g2 * 0.06 }, in2(0.46) + found * s2(T.stagger));
       });
-      tl.fromTo(el, { "--rk": 0 }, { "--rk": 1, duration: g2 * 0.08, ease: EASE.inOut }, in2(0.56));
+      tl.fromTo(report, { "--rk": 0 }, { "--rk": 1, duration: g2 * 0.08, ease: EASE.inOut }, in2(0.56));
 
       // 03 Implement: the report gives way, the workflows worth it are wired to the core and set running
-      tl.to(el, { "--mx": 0, duration: g2 * 0.05, ease: EASE.out }, in2(0.66));
+      tl.to(report, { "--mx": 0, duration: g2 * 0.05, ease: EASE.out }, in2(0.66));
       tl.to(el, { "--v": 0, duration: g2 * 0.07, ease: EASE.inOut }, in2(0.69));
       tl.to(q(".ain-map, .ain-faults"), { autoAlpha: 0, duration: g2 * 0.04 }, in2(0.72));
       // the tools, found scattered and askew, are gathered into order before the core is wired to them
       panels.forEach((p, i) => tl.fromTo(p, { "--k": 0 }, { "--k": 1, duration: g2 * 0.06, ease: EASE.inOut }, in2(0.71) + i * s2(T.stagger) * 0.5));
       tl.fromTo(q(".ain-link"), hide, { ...draw, duration: g2 * 0.06, stagger: s2(T.stagger) }, in2(0.74));
       tl.fromTo(hub.current, { "--live": 0 }, { "--live": 1, duration: g2 * 0.04 }, in2(0.78));
-      tl.fromTo(el, { "--tl": 0 }, { "--tl": 1, duration: g2 * 0.04 }, in2(0.8));
+      tl.fromTo(pulses, { "--tl": 0 }, { "--tl": 1, duration: g2 * 0.04 }, in2(0.8));
       tl.fromTo(q(".ain-flows"), { autoAlpha: 0 }, { autoAlpha: 1, duration: g2 * 0.03 }, in2(0.83));
       panels.forEach((p) => tl.fromTo(p, { "--a": 0 }, { "--a": 1, duration: g2 * 0.04 }, in2(0.8 + DONE.indexOf(p.dataset.id as PanelId) * 0.022)));
 
