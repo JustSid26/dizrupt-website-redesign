@@ -83,10 +83,10 @@ export function scrollRuns(): ScrollStop[][] {
        carries itself on into his heart. A phone in one: from the cards, one ride the whole way, out
        to him whole and in to his heart and the chip, nothing to scroll for in between. */
     ...(bridge && !phone ? [{ y: bridge.offsetTop - innerHeight / 2 + bridge.offsetHeight * 0.36, kind: "scene" as const, train: null, onward: 1200 }] : []),
-    /* … then into his heart and through the glitch to the chip, floating in the dark. A wide screen sees
-       it for a moment and carries on by itself into what we do, so the chip isn't left standing still;
-       a phone, arriving on one long ride, stops here: AI & Automation, read, and left on a gesture */
-    ...(ai ? [phone ? { y: ai.offsetTop + 2, kind: "passage" as const, train: null } : { y: ai.offsetTop + 2, kind: "scene" as const, train: null, onward: 600 }] : []),
+    /* … then into his heart and through the glitch to the chip, floating in the dark, and the page stops
+       here on every screen: AI & Automation, read (and the chip turned, on a wide one), and left on a
+       gesture. (A phone arrives on one long ride from the cards; a wide screen from him whole.) */
+    ...(ai ? [{ y: ai.offsetTop + 2, kind: phone ? ("passage" as const) : ("scene" as const), train: null }] : []),
     /* … and one gesture per beat of AI & Automation: powered on, the three stages of how, said
        plainly. The page glides to each and the beat's animation plays on the same clock, ending as the
        page lands (AiNetwork.tsx). */
