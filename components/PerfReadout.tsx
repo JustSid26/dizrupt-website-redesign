@@ -6,8 +6,8 @@ import { signals } from "@/lib/signals";
 
 /* A readout for tuning on a real phone, shown only when the address ends in ?perf: the frame rate
    over the last second, the resolution the engine chose (device pixels per CSS pixel), whether it
-   has dropped to the lighter picture, and the section. Nothing of it runs otherwise. */
-type Eng = { renderer?: { getPixelRatio(): number }; quality?: () => { low: boolean; base: number } };
+   has dropped to the lighter picture (and thinned his points, below that), and the section. Nothing of it runs otherwise. */
+type Eng = { renderer?: { getPixelRatio(): number }; quality?: () => { low: boolean; base: number; thin: number } };
 
 export function PerfReadout() {
   const [on, setOn] = useState(false);
@@ -25,7 +25,7 @@ export function PerfReadout() {
       const eng = (window as unknown as { engine?: Eng }).engine;
       const q = eng?.quality?.();
       const dpr = eng?.renderer?.getPixelRatio() ?? 0;
-      setText(`${frames} fps · worst ${worst.toFixed(0)}ms · ${dpr.toFixed(2)}x of ${devicePixelRatio}x${q?.low ? " · LIGHT" : ""} · ${signals.scroll.section}`);
+      setText(`${frames} fps · worst ${worst.toFixed(0)}ms · ${dpr.toFixed(2)}x of ${devicePixelRatio}x${q?.low ? " · LIGHT" : ""}${q && q.thin < 1 ? ` · points ${Math.round(q.thin * 100)}%` : ""} · ${signals.scroll.section}`);
       frames = 0;
       worst = 0;
       last = now;

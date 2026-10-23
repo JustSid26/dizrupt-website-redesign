@@ -47,7 +47,7 @@ const CAPTIONS: Record<string, Caption> = {
 };
 
 /* How we do it: the three stages on one page, beside the network as one gesture plays them
-   (AiNetwork.tsx writes which is up onto the section, --h0..--h2: the one playing opens out) */
+   (AiNetwork.tsx writes which is up onto it, --h0..--h2: the one playing opens out) */
 type Stage = { no: string; name: string; title: string; line: string; points: string[] };
 const STAGES: Stage[] = [
   {
@@ -238,7 +238,7 @@ export function AiAutomation() {
     </article>
   );
   return (
-    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} data-chapter={id} aria-labelledby="ai-title" style={{ height: "380svh", "--h0": 0, "--h1": 0, "--h2": 0 } as React.CSSProperties}>
+    <section ref={section} id="ai" className={`ai${on ? " is-on" : ""}`} data-chapter={id} aria-labelledby="ai-title" style={{ height: "380svh" }}>
       <div className="ai-pin">
         {/* the business the core runs, the method played on it, and what it adds up to */}
         <AiNetwork section={section} chapter={id} onBeat={setChapter} seek={seek} />
@@ -309,7 +309,7 @@ export function AiAutomation() {
           <div className="ai-placed">{CAPTION_LIST.map(caption)}</div>
 
           {/* how we do it: the three stages together, the one playing opened out */}
-          <div className="ai-how" data-on={id === "how" || undefined} aria-hidden={id !== "how"}>
+          <div className="ai-how" data-on={id === "how" || undefined} aria-hidden={id !== "how"} style={{ "--h0": 0, "--h1": 0, "--h2": 0 } as React.CSSProperties}>
             <p className="ai-kicker ai-how-title">How we do it</p>
             {/* the three stages as a dial: the one playing lit and long */}
             <div className="ai-how-dial" aria-hidden>

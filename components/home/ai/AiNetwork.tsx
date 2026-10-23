@@ -144,7 +144,7 @@ function useTall() {
    and the implementation connects the ones worth it and sets them running. One workflow (an enquiry
    becoming a qualified lead) is followed all the way. Last, the same business, running, its two sides
    named: how it makes life simple. The text for each is the HUD's (AiAutomation.tsx); which of the
-   three stages is up is written onto the section (--h0..--h2) for it to follow. */
+   three stages is up is written onto its text (--h0..--h2) for it to follow. */
 export function AiNetwork({ section, chapter, onBeat, seek }: {
   section: RefObject<HTMLElement | null>; chapter: string; onBeat: (k: number) => void; seek: MutableRefObject<((step: number) => void) | null>;
 }) {
@@ -204,12 +204,14 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       tl.to(q(".ai-say"), { autoAlpha: 0, y: -24, duration: s2(T.uiOut), ease: EASE.out }, in2(0));
       tl.fromTo(hub.current, { autoAlpha: 0, scale: 0.6 }, { autoAlpha: 1, scale: 1, duration: g2 * 0.06, ease: EASE.in }, in2(0.02));
       panels.forEach((p, i) => tl.fromTo(p, { "--e": 0 }, { "--e": 1, duration: s2(T.ui), ease: EASE.in }, in2(0.05) + i * s2(T.stagger)));
-      // which stage the text is on
-      tl.fromTo(sec, { "--h0": 0 }, { "--h0": 1, duration: g2 * 0.04 }, in2(0.04));
-      tl.to(sec, { "--h0": 0, duration: g2 * 0.04 }, in2(0.36));
-      tl.fromTo(sec, { "--h1": 0 }, { "--h1": 1, duration: g2 * 0.04 }, in2(0.36));
-      tl.to(sec, { "--h1": 0, duration: g2 * 0.04 }, in2(0.66));
-      tl.fromTo(sec, { "--h2": 0 }, { "--h2": 1, duration: g2 * 0.04 }, in2(0.66));
+      /* which stage the text is on: written onto the text (not the section, where every change would
+         restyle the whole network under it, frame after frame) */
+      const how = sec.querySelector<HTMLElement>(".ai-how") ?? sec;
+      tl.fromTo(how, { "--h0": 0 }, { "--h0": 1, duration: g2 * 0.04 }, in2(0.04));
+      tl.to(how, { "--h0": 0, duration: g2 * 0.04 }, in2(0.36));
+      tl.fromTo(how, { "--h1": 0 }, { "--h1": 1, duration: g2 * 0.04 }, in2(0.36));
+      tl.to(how, { "--h1": 0, duration: g2 * 0.04 }, in2(0.66));
+      tl.fromTo(how, { "--h2": 0 }, { "--h2": 1, duration: g2 * 0.04 }, in2(0.66));
 
       // 01 Audit: a scan sweeps it and flags each panel as it passes; the hand-offs are traced, and where they break
       const span = scanSpan(tall);

@@ -125,8 +125,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      the benchmark (before `ready`) found the phone can hold down to 1x. Whenever frames run late it
      steps down a notch; once frames have been comfortably quick for a good while it steps back up.
      So the phone settles, in each view, at the sharpest picture it can draw at full frame rate: the
-     close-ups sharp, the whole city from the air a notch softer, never a stutter in either. */
-  let qualityAt = 0, slowShare = 0, fastSince = 0;
+     close-ups sharp, the whole city from the air a notch softer, never a stutter in either. A notch
+     up that can't be held isn't tried again for a while (longer each time), so it never see-saws
+     between the two, stuttering every time it goes up. Below 1x there is one more step: his points
+     thinned (fewer drawn, each brighter: the same light), down to about half. */
+  let qualityAt = 0, goodFor = 0, upAt = -1e9, holdUntil = 0, hold = 15000, thin = 1;
+  // the frames since the governor last looked: how long each took
+  const late = { at: 0, n: 0, dts: new Float32Array(256) };
   let levels: number[] = [PIXEL_RATIO], level = 0, curPr = PIXEL_RATIO;
   /* draw at this many device pixels per CSS pixel: the renderer, the composer and the bloom resized,
      and every material that sizes its points by the ratio told, so nothing drawn as points changes
@@ -576,16 +581,45 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   // build the six solution models now, so scrolling onto one never stalls on it
   SOLUTIONS.forEach((s) => field.shape(s.shape));
   /* and compile every material and draw one frame now, behind the count, so the first frames of the
-     landing aren't spent compiling shaders and uploading textures while the city is trying to move */
+     landing aren't spent compiling shaders and uploading textures while the city is trying to move.
+     Compiled as they will be drawn: into the composer's buffer (the same material drawn to the screen is
+     another program, converting to sRGB on its way out, and compiling only that one left every hidden
+     thing to compile in the middle of the ride that first shows it), and the hand-over's pass too */
+  renderer.setRenderTarget(composer.readBuffer);
   renderer.compile(scene, camera);
+  renderer.setRenderTarget(null);
+  aiPass.enabled = true;
   composer.render();
+  aiPass.enabled = false;
+  /* and the pictures not yet on the GPU (a client's banner, once it has loaded) go up one at a time
+     while the page is still, not in the frame of a ride that first shows them */
+  const unsent: THREE.Texture[] = [];
+  scene.traverse((o) => {
+    const ms = (o as THREE.Mesh).material;
+    for (const m of Array.isArray(ms) ? ms : ms ? [ms] : []) {
+      const vals = [...Object.values(m), ...Object.values((m as THREE.ShaderMaterial).uniforms ?? {}).map((v) => v?.value)];
+      for (const t of vals) if (t?.isTexture && !t.isVideoTexture && !unsent.includes(t)) unsent.push(t);
+    }
+  });
+  const sendOne = () => {
+    for (let i = 0; i < unsent.length; i++) {
+      const t = unsent[i];
+      if ((renderer.properties.get(t) as { __version?: number }).__version !== undefined) { unsent.splice(i--, 1); continue; }
+      if (t.version === 0) continue; // (its picture hasn't arrived)
+      renderer.initTexture(t);
+      unsent.splice(i, 1);
+      return;
+    }
+  };
   /* A phone is measured, not assumed. The heaviest picture there is (the city whole, from the air,
      with him standing in it) is drawn a few frames at each resolution in turn, from 2x down, and the
-     first the phone draws comfortably inside a frame's budget is the one it gets; if none, it keeps
-     its floor (config.ts). The count is still running: this takes a few tenths of a second behind it.
-     A phone that keeps up gets the desktop's picture; one that can't still runs smoothly. */
+     first the phone draws in well under a frame's budget (10ms of the 16.7: the rest is the page's own
+     layers over it, and the frame's work) is the one it gets; if none, it keeps its floor (config.ts).
+     The count is still running: this takes a few tenths of a second behind it. A phone that keeps up
+     gets the desktop's picture; one that can't still runs smoothly. */
   if (isMobile && !reducedMotion) {
     const gl = renderer.getContext();
+    bloom.enabled = false; // (a phone never draws it: measured without)
     camera.position.copy(aerialPos);
     camera.lookAt(aerialLook);
     city.update(0, 1, 1, camera.position, 1);
@@ -605,7 +639,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const cap = Math.min(2, devicePixelRatio);
     let chosen = pixelRatio;
     for (const pr of [2, 1.75, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
-      if (cost(pr) <= 12) { chosen = pr; break; }
+      if (cost(pr) <= 10) { chosen = pr; break; }
     }
     pixelRatio = chosen;
     // the governor's notches: from what the phone can hold, down to 1x
@@ -768,8 +802,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const dt = Math.min(rawDt, 0.05);
     const time = clock.getElapsed();
     const now = performance.now();
-    // the share of recent frames that ran late (over 24ms): what the quality decision reads
-    slowShare += ((rawDt > 0.024 ? 1 : 0) - slowShare) * 0.08;
+    // how long each frame took is what the quality decision reads (the governor, below); a pause (the
+    // tab away, the phone asleep) isn't a frame
+    if (rawDt < 0.25 && late.n < late.dts.length) late.dts[late.n++] = rawDt;
     const s = signals.scroll;
     const view = signals.caseShape;
     const preview = signals.preview;
@@ -1055,6 +1090,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       trainClip.constant = solidK >= 1 ? 1e4 : baseY - 0.05 + solidK * 1.8;
     }
     u.uOpacity.value = fieldOpacity * mascotVisible * (1 - 0.92 * Math.max(0, (solidK - 0.3) / 0.7));
+    // faded right out (the work, the landing's black) his points aren't drawn at all: forty thousand of
+    // them at nothing are still forty thousand to place and fill (his heart, hung on them, still is)
+    (points.material as THREE.Material).visible = u.uOpacity.value > 0.002;
     field.update(now, time, dt);
     // what is still playing after the scroll lands: the scroll waits for it (SmoothScroll.tsx)
     signals.busy.morph = field.morphing && !view;
@@ -1270,7 +1308,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     u.uGain.value = damp(u.uGain.value, isMobile && isMascot ? 1 + 2.2 * (1 - u.uAurora.value) : 1, 4, dt);
     /* drawn as light, every point is a wide soft sprite piled on the next: a phone draws half as many
        of them then (each brighter, the same light), which is what it drew before it had finer points */
-    u.uKeep.value = isMobile ? 0.75 - 0.36 * u.uAurora.value : 1;
+    u.uKeep.value = isMobile ? (0.75 - 0.36 * u.uAurora.value) * thin : 1; // (thin: the governor's last step, see quality)
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
@@ -1292,7 +1330,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const ahead = pose.u + (TRAIN_HALF + 1.5) / line.length;
     const lineReveal = ride.s > 0.001 ? Math.max(at0, ahead)
       : section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, ahead) : 1.02;
-    line.update(time, lineReveal, cityDim, ride.s, stationT);
+    // (a phone never has the line: its boards aren't drawn, nor its first film fetched)
+    if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT);
     if (wasIsolating || phone) line.group.visible = false; // the work's tower alone: the line and its stations go with the city (a phone never has them)
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
@@ -1455,21 +1494,44 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
           renderer.setClearColor(0x000000, 1);
           dark = true;
         }
+        // (the frames here are the page's, not the picture's: the governor doesn't count them)
+        late.at = now; late.n = 0;
         return;
       }
       dark = false;
     }
-    /* the governor: late frames step the picture down a notch at once (well, within a second or so);
-       a good stretch of comfortably quick frames steps it back up, one notch at a time */
-    if (isMobile && levels.length > 1 && now - qualityAt > 1200) {
-      if (slowShare > 0.35) {
+    /* the governor, once a second: a second with more than a sixth of its frames late steps the picture
+       down a notch at once; five comfortably quick seconds in a row step it back up, one notch, unless a
+       notch up has just failed (see quality, above). The second after a change isn't judged: its first
+       frames pay for the new buffers */
+    if (isMobile && now - late.at > 1000) {
+      /* late: a refresh missed. A phone held to 30 frames a second (iOS's Low Power Mode does it) runs
+         every frame at 33ms, steadily; that is its pace, not lateness, and nothing here would mend it */
+      const dts = late.dts.subarray(0, late.n).sort(), n = late.n;
+      const capped = n > 10 && dts[Math.floor(n * 0.2)] > 0.03 && dts[Math.floor(n * 0.8)] < 0.036;
+      const period = capped ? 1 / 30 : 1 / 60;
+      let slow = 0;
+      for (let i = 0; i < n; i++) if (dts[i] > period * 1.45) slow++;
+      const share = n ? slow / n : 0;
+      const down = () => {
+        if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
         if (level < levels.length - 1) setLevel(level + 1);
-        fastSince = 0;
-      } else if (slowShare < 0.04) {
-        if (!fastSince) fastSince = now;
-        else if (now - fastSince > 6000 && level > 0) { setLevel(level - 1); fastSince = 0; }
-      } else fastSince = 0;
+        else { thin = Math.max(0.5, thin - 0.25); qualityAt = now; }
+      };
+      const up = () => {
+        if (thin < 1) { thin = Math.min(1, thin + 0.25); qualityAt = now; } else setLevel(level - 1);
+        upAt = now;
+      };
+      if (now - qualityAt < 900) goodFor = 0;
+      else if (share > 0.16) {
+        if (level < levels.length - 1 || thin > 0.5) down();
+        goodFor = 0;
+      } else if (share < 0.03) {
+        if (++goodFor >= 5 && (level > 0 || thin < 1) && now > holdUntil) { up(); goodFor = 0; }
+      } else goodFor = 0;
+      late.at = now; late.n = 0;
     }
+    if (unsent.length && now > signals.rideEnd && frameNo % 10 === 0) sendOne(); // (still: no ride under way)
     /* the DIZRUPT screen: the canvas is under solid black until the hole the cursor opens has opened.
        A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
        it would only be work: the frame's state is kept up, the picture is skipped */
@@ -1478,7 +1540,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {

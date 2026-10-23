@@ -65,6 +65,13 @@ export function Projects() {
     let ph = pin?.clientHeight || innerHeight;
     const ro = pin ? new ResizeObserver(() => { ph = pin.clientHeight || innerHeight; }) : null;
     if (pin) ro?.observe(pin);
+    // the captions' sizes, likewise: read when they change, not in the frame after its writes
+    const capSize = caps.current.map((c) => ({ w: c?.offsetWidth ?? 0, h: c?.offsetHeight ?? 0 }));
+    const capRo = new ResizeObserver((es) => es.forEach((e) => {
+      const c = e.target as HTMLDivElement, k = caps.current.indexOf(c);
+      if (k >= 0) capSize[k] = { w: c.offsetWidth, h: c.offsetHeight };
+    }));
+    caps.current.forEach((c) => c && capRo.observe(c));
     // landing: the frame before the engine has placed the windows for this scroll (coming back from a
     // case): nothing is laid over the tower yet, its own glass shows the project until the next frame
     const apply = (landing = false) => {
@@ -101,7 +108,7 @@ export function Projects() {
         const on = settle > 0.9;
         el.classList.toggle("is-on", on);
         // beside the window if there's room, under it if not (a phone)
-        const cw = cap.offsetWidth, ch = cap.offsetHeight;
+        const { w: cw, h: ch } = capSize[k];
         const side = r.x + r.w + gap + cw <= vw - edge;
         const cx = side ? r.x + r.w + gap : edge;
         const cy = side ? r.y + r.h / 2 - ch / 2 : Math.min(ph - ch - foot, r.y + r.h + gap);
@@ -117,7 +124,7 @@ export function Projects() {
     // coming back from a case, HomeEnter puts the scroll back and asks for the frame at once, so the
     // project the case grew from is on screen, full, before the transition takes its picture
     signals.workApply = () => { ScrollTrigger.update(); apply(true); };
-    return () => { sts.forEach((s) => s.kill()); ro?.disconnect(); signals.onWorkFrame = null; signals.workApply = null; signals.workHidden = []; };
+    return () => { sts.forEach((s) => s.kill()); ro?.disconnect(); capRo.disconnect(); signals.onWorkFrame = null; signals.workApply = null; signals.workHidden = []; };
   }, [reduce]);
 
   // a project at full screen opens into its case: the picture becomes the case's banner

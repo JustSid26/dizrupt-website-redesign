@@ -1785,7 +1785,7 @@ html[data-vt="back"]::view-transition-old(work-hero):only-child { animation: var
 }
 .ai-note b::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #6ff2b5; box-shadow: 0 0 8px #6ff2b5; }
 
-/* how we do it: the three stages on one page, the one playing opened out (--h, from the section) */
+/* how we do it: the three stages on one page, the one playing opened out (--h, written onto it) */
 /* (centred by its transform alone: a separate translate in the same rule doesn't survive the build) */
 .ai-how {
   position: absolute; left: var(--gutter); top: 52%; width: min(470px, 33vw); --y: -50%;
@@ -2528,9 +2528,16 @@ em.ain-chip.is-warn { color: #ffd166; }
   position: relative; width: 100%; height: 100%; border-radius: 8px; overflow: hidden;
   background: linear-gradient(120deg, var(--a), var(--b));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--a) 60%, transparent), 0 0 18px color-mix(in srgb, var(--a) 30%, transparent);
-  transition: box-shadow var(--t-ui), filter var(--t-ui);
+  transition: box-shadow var(--t-ui);
 }
-.solc-car:not(.is-at) .solc-window { filter: brightness(0.55) saturate(0.8); box-shadow: none; }
+.solc-car:not(.is-at) .solc-window { box-shadow: none; }
+/* the windows of the carriages not at the platform sit back in the dark: a veil over the film, faded
+   (a filter on the film would redraw it, and the film under it, on every frame) */
+.solc-window::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: rgb(8 8 16 / 0.48);
+  opacity: 0; transition: opacity var(--t-ui);
+}
+.solc-car:not(.is-at) .solc-window::before { opacity: 1; }
 .solc-window :is(video, img) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 /* the glass over it */
 .solc-window::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), transparent 34%, transparent 72%, rgba(0, 0, 0, 0.22)); }
@@ -2622,7 +2629,32 @@ em.ain-chip.is-warn { color: #ffd166; }
   /* nor anything repainted every frame over it: the scanlines hold still and the grain sits still
      (each is a full-screen layer redrawn on every frame of its loop) */
   .intro-scan, .grain { animation: none; }
+  .grain { inset: 0; width: 100%; height: 100%; } /* (and, still, no bigger than the screen it covers) */
   .work-shot-open { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--pa) 30%, rgba(5, 4, 10, 0.82)); }
+  /* Nor blurred as it moves. A blur that changes is redrawn whole on every frame it changes, and a
+     glow round a line that moves is redrawn with it: on a phone, what comes in and goes out of focus
+     does so by its fade and its travel alone, and the moving lines go without their glow. */
+  .ai-ch, .ai-how, .ai.is-on .ai-hud > .ai-how[data-on], .aip [data-reveal], .intro-pin.reveal .intro-tag, #intro-word.out .char { filter: none; }
+  .ai-hw-name, .ain-thread-flow path, .ain-flows path { filter: none; }
+  /* the break marks pulse by their size, not by their glow (a shadow that changes is redrawn every frame) */
+  .ain-faults i {
+    box-shadow: 0 0 0 2.5px rgba(255, 125, 145, 1), 0 0 28px rgba(255, 60, 90, 0.85), 0 0 58px rgba(255, 60, 90, 0.45);
+    animation-name: ain-fault-beat; will-change: transform;
+  }
+  @keyframes ain-fault-beat { 0%, 100% { transform: scale(0.94); } 50% { transform: scale(1.14); } }
+  @keyframes intro-counter-glyph {
+    0% { opacity: 0; }
+    70% { opacity: 1; transform: translateY(calc((var(--i) - 3) * 0.3%)) rotateX(0); }
+    100% { opacity: 1; transform: none; }
+  }
+  @keyframes contact-counter-glyph {
+    0% { opacity: 0; }
+    72% { opacity: 1; transform: translateY(calc((var(--i) - 7) * 0.18%)) rotateX(0); }
+    100% { opacity: 1; transform: none; }
+  }
+  @keyframes contact-detail-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  @keyframes intro-copy-focus { 0%, 18% { transform: scale(1); opacity: 1; } 100% { transform: scale(.97); opacity: 0; } }
+  @keyframes intro-tag-focus { to { transform: translateY(10px) scale(.98); opacity: 0; } }
 }
 
 /* Reduced motion: no travel, no loops; whatever still changes does so as a quick crossfade, never a
@@ -2642,21 +2674,27 @@ em.ain-chip.is-warn { color: #ffd166; }
    (NavMenu.tsx). A wide screen keeps the rail across the top and never shows this. */
 .nav-menu { display: none; position: relative; margin-left: auto; pointer-events: auto; }
 /* the mark, set in the brand violet and glowing a little; brighter, and turned a touch, while the menu is open */
-.nav-menu-logo { display: block; padding: 6px; }
+.nav-menu-logo { display: block; position: relative; padding: 6px; }
 .nav-menu-mark {
-  display: block; width: 42px; height: 42px; background: var(--violet);
+  display: block; position: relative; width: 42px; height: 42px; background: var(--violet);
   -webkit-mask: url("/heart.png") center / contain no-repeat; mask: url("/heart.png") center / contain no-repeat;
-  /* a halo of its own violet: a bright edge and a wide spill, breathing slowly (ambient: its own loop) */
-  filter: drop-shadow(0 0 8px rgba(196, 92, 255, 1)) drop-shadow(0 0 22px rgba(163, 16, 231, 0.95)) drop-shadow(0 0 44px rgba(163, 16, 231, 0.6));
-  animation: nav-mark-breathe 3.6s ease-in-out infinite;
-  transition: filter var(--t-ui-out) var(--ease-out), background var(--t-micro);
+  /* a halo of its own violet: a bright edge, held still (a filter that changes is redrawn every frame) */
+  filter: drop-shadow(0 0 8px rgba(196, 92, 255, 1)) drop-shadow(0 0 22px rgba(163, 16, 231, 0.95));
+  transition: background var(--t-micro);
+}
+/* and a wide spill behind it, breathing slowly: only its size and its fade move (ambient: its own loop) */
+.nav-menu-logo::before {
+  content: ""; position: absolute; inset: -26px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(163, 16, 231, 0.6), rgba(163, 16, 231, 0.22) 55%, transparent);
+  animation: nav-mark-breathe 3.6s ease-in-out infinite; will-change: transform, opacity;
 }
 @keyframes nav-mark-breathe {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(196, 92, 255, 1)) drop-shadow(0 0 22px rgba(163, 16, 231, 0.95)) drop-shadow(0 0 44px rgba(163, 16, 231, 0.6)); }
-  50% { filter: drop-shadow(0 0 10px rgba(196, 92, 255, 1)) drop-shadow(0 0 30px rgba(163, 16, 231, 1)) drop-shadow(0 0 60px rgba(163, 16, 231, 0.8)); }
+  0%, 100% { opacity: 0.7; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
 }
-@media (prefers-reduced-motion: reduce) { .nav-menu-mark { animation: none; } }
-.nav-menu-logo[aria-expanded="true"] .nav-menu-mark { background: #c45cff; animation: none; filter: drop-shadow(0 0 10px rgba(196, 92, 255, 1)) drop-shadow(0 0 32px rgba(163, 16, 231, 1)) drop-shadow(0 0 64px rgba(163, 16, 231, 0.85)); }
+@media (prefers-reduced-motion: reduce) { .nav-menu-logo::before { animation: none; } }
+.nav-menu-logo[aria-expanded="true"] .nav-menu-mark { background: #c45cff; filter: drop-shadow(0 0 10px rgba(196, 92, 255, 1)) drop-shadow(0 0 32px rgba(163, 16, 231, 1)); }
+.nav-menu-logo[aria-expanded="true"]::before { animation: none; opacity: 1; transform: scale(1.18); }
 /* the pane: a dark glass, a violet hairline, the wordmark at its head and the sections under it */
 .nav-menu-list {
   position: absolute; right: 0; top: calc(100% + 8px); min-width: 236px; margin: 0; padding: 0 0 8px; list-style: none;
