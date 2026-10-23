@@ -285,11 +285,6 @@ export function SolutionsRail() {
                 <p className="sol-desc" data-line style={i ? { opacity: 0 } : undefined}>
                   {sol.line}
                 </p>
-                {sol.work && (
-                  <p className="sol-proof" data-line style={i ? { opacity: 0 } : undefined}>
-                    <span>Proof</span> {sol.work}
-                  </p>
-                )}
               </div>
             ))}
           </div>

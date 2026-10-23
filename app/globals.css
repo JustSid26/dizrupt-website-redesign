@@ -1051,8 +1051,6 @@ body:has(.case-page) .nav::before { opacity: 1; }
 }
 .sol-title span { display: inline-block; background: linear-gradient(100deg, var(--fg) 30%, var(--a)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .sol-desc { margin-top: 26px; max-width: 42ch; font-size: clamp(16px, 1.3vw, 20px); line-height: 1.55; color: rgba(242, 240, 235, 0.74); }
-.sol-proof { margin-top: 22px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }
-.sol-proof span { color: var(--dim); margin-right: 1em; }
 .sol-item.glitching .sol-title { filter: drop-shadow(6px 0 rgba(255, 45, 79, 0.8)) drop-shadow(-6px 0 rgba(47, 107, 255, 0.8)); transform: translateX(4px); }
 .sol-dial { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; list-style: none; max-width: 560px; }
 .sol-dial li { display: grid; gap: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--dim); }
@@ -2305,8 +2303,6 @@ em.ain-chip.is-warn { color: #ffd166; }
 
 /* ---------- Solutions: the chapter dial reads as a control ---------- */
 .sol-desc { text-wrap: pretty; }
-.sol-proof { display: inline-flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--hair); }
-.sol-proof span { margin-right: 0.4em; }
 .sol-dial li { transition: color var(--t-state) var(--e-hand); }
 .sol-dial-bar { transition: background var(--t-state); }
 .sol-dial li[aria-current] .sol-dial-bar { background: color-mix(in srgb, var(--a) 22%, transparent); box-shadow: 0 0 12px color-mix(in srgb, var(--a) 35%, transparent); }
@@ -2582,7 +2578,6 @@ em.ain-chip.is-warn { color: #ffd166; }
 .solc-copy { display: flex; flex-direction: column; gap: 18px; padding: 0 var(--gutter); opacity: 0; }
 .solc .sol-title { margin-top: 0; font-size: clamp(28px, 8.6vw, 40px); }
 .solc .sol-desc { margin-top: 10px; font-size: 15px; line-height: 1.45; }
-.solc .sol-proof { margin-top: 12px; font-size: 12px; line-height: 1.7; }
 .solc-cta {
   align-self: center;
   display: inline-flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 20px; border-radius: 999px;
@@ -2597,7 +2592,6 @@ em.ain-chip.is-warn { color: #ffd166; }
   .solc-pin { gap: 14px; }
   .solc .sol-title { font-size: clamp(24px, 7.4vw, 32px); }
   .solc .sol-desc { margin-top: 6px; font-size: 14px; line-height: 1.4; }
-  .solc .sol-proof { margin-top: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .solc-bogie::before, .solc-bogie::after { transform: none; } }
 @media (max-aspect-ratio: 1/1) {
