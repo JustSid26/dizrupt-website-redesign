@@ -514,7 +514,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const side = new THREE.Vector3();
   const tan = new THREE.Vector3();
   const P = new THREE.Vector3();
-  const strips = lean ? 1500 : 3000;
+  // (the track keeps every point on any device: it is the line he rides, and its points are tiny)
+  const strips = 3000;
   for (let i = 0; i < strips; i++) {
     const u = i / strips;
     curve.getPointAt(u, P);
@@ -526,7 +527,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     }
   }
   // building particles: a cloud that rises into the deck just ahead of where it is laid
-  const builders = lean ? 16000 : 42000;
+  const builders = 42000;
   for (let i = 0; i < builders; i++) {
     const u = Math.random();
     curve.getPointAt(u, P);
@@ -560,7 +561,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     vertexShader: /* glsl */ `
       uniform float uReveal, uTime, uPixelRatio, uFrom, uLead;
       attribute float aU, aKind, aRand;
-      varying float vA, vKind;
+      varying float vA, vKind, vSize;
       void main() {
         vec3 p = position;
         float ahead = aU - uReveal; // > 0: not yet built
@@ -581,17 +582,23 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         float s = aKind < 0.5 ? 1.8 : aKind < 1.5 ? 2.2 : 1.2;
-        gl_PointSize = max(2.0, s * 16.0 * uPixelRatio / -mv.z);
+        // (never under three pixels: an odd size has a pixel at its centre, an even one only pixels at its edge)
+        gl_PointSize = max(3.0, s * 16.0 * uPixelRatio / -mv.z);
         vKind = aKind;
+        vSize = gl_PointSize;
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uDim; varying float vA, vKind;
+      uniform float uDim; varying float vA, vKind, vSize;
       void main() {
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5 || vA < 0.01) discard;
         vec3 col = vKind < 0.5 ? vec3(0.85, 0.55, 1.0) : vKind < 1.5 ? vec3(0.62, 0.36, 1.0) : vec3(0.45, 0.28, 0.75);
         float core = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(col * uDim * 1.6, (core * core * 0.7 + exp(-d * d * 40.0) * 0.9) * vA);
+        /* a point only a few pixels across is a solid dot: its soft falloff would leave those few pixels
+           next to nothing (they all sit near its edge), and the far track would all but vanish. From
+           seven pixels up it is the soft light it was */
+        float a = mix(0.8, core * core * 0.7 + exp(-d * d * 40.0) * 0.9, smoothstep(3.0, 7.0, vSize));
+        gl_FragColor = vec4(col * uDim * 1.6, a * vA);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
