@@ -14,10 +14,12 @@ import { LINGER, lingering, onward, QUEUED, RAMP, ride, settling, T } from "@/li
 export function SmoothScroll() {
   const reducedMotion = useStore((s) => s.reducedMotion);
   const loaded = useStore((s) => s.loaded);
+  // the light version (no 3D, LiteHome.tsx) is a plain page: the browser's own scroll, no rides
+  const lite = useStore((s) => s.gl === "none");
   const home = usePathname() === "/";
 
   useEffect(() => {
-    if (reducedMotion) {
+    if (reducedMotion || lite) {
       const onScroll = () => ScrollTrigger.update();
       window.addEventListener("scroll", onScroll, { passive: true });
       return () => window.removeEventListener("scroll", onScroll);
@@ -272,7 +274,7 @@ export function SmoothScroll() {
       lenis.destroy();
       setLenis(null);
     };
-  }, [reducedMotion]);
+  }, [reducedMotion, lite]);
 
   // the landing holds until the count reaches 100 (only the home page counts: a project page opened
   // directly never does, and must not be held)

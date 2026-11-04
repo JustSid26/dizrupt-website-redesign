@@ -67,7 +67,8 @@ export function Intro() {
     let raf = 0;
     const step = () => {
       const t = Math.min((performance.now() - start) / 1600, 1); // (the loader's own count: 1.6 s at least, longer if the scene isn't ready)
-      if (meter.current) meter.current.textContent = String(Math.round((1 - (1 - t) ** 3) * 100));
+      // (it reads 99 until the scene really is ready: a 100 that sits there looks like a page that's broken)
+      if (meter.current) meter.current.textContent = String(Math.min(signals.ready ? 100 : 99, Math.round((1 - (1 - t) ** 3) * 100)));
       if (t < 1 || !signals.ready) raf = requestAnimationFrame(step);
       else set({ loaded: true });
     };

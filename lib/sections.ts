@@ -1,11 +1,14 @@
 import { scrollToTarget } from "@/lib/scroll";
 import { SOLUTIONS } from "@/content/solutions";
 import { stopPositions, workProgress } from "@/lib/stops";
+import { useStore } from "@/lib/store";
 
 // Where each named place on the home page is, as a scroll position. Pinned sections are taller
 // than the screen, so "the second solution" is a point partway through one of them.
 export function sectionTop(id: string) {
   const top = (el: Element | null) => (el ? el.getBoundingClientRect().top + scrollY : 0);
+  // the light version (LiteHome.tsx): plain sections, one after the other, named lite-<id>
+  if (useStore.getState().gl === "none") return id === "intro" ? 0 : top(document.getElementById(`lite-${id}`));
   const span = (el: Element | null) => (el ? (el as HTMLElement).offsetHeight - innerHeight : 0);
   if (id === "intro") return 0;
   // Solutions: the first billboard, where the train stands (its top would leave it between stations);
