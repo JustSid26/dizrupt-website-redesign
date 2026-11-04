@@ -15,7 +15,9 @@ export const isMobile =
    AMD's and NVIDIA's older and entry-level chips, a phone's chip in a Chromebook), when it has 4GB of
    memory or less, or when it won't say what its graphics are (Safari calls every Mac's "Apple GPU") and
    has four cores or fewer (the cores alone don't decide: Brave reports a random number of them).
-   ?tier=lean or ?tier=full on a computer forces either (for testing). */
+   Apple silicon is full in any browser: where its name is hidden, it gives itself away by the
+   compressed textures (ASTC) only Apple's own graphics read, which an Intel Mac's can't, so it never
+   rests on the cores Safari reports. ?tier=lean or ?tier=full on a computer forces either (for testing). */
 const WEAK_GPU = [
   /\bIntel\b(?!.*\b(Xe|Arc)\b)/i, // Intel's integrated graphics before Iris Xe: HD, UHD, Iris, Iris Plus, Iris Pro
   /Radeon(\(TM\))? (HD|R[2-7]|Vega \d)/i, // AMD's older integrated graphics
@@ -24,12 +26,13 @@ const WEAK_GPU = [
 ];
 const NAMED_GPU = /\b(Intel|AMD|Radeon|NVIDIA|GeForce|Quadro|Apple M\d|Mali|Adreno|PowerVR)\b/i;
 
-/** The graphics chip's name, as the browser gives it ('' when it won't). */
-function gpuName() {
+/** The graphics chip's name, as the browser gives it ('' when it won't), and whether it reads ASTC. */
+function gpuProbe() {
   try {
     // (asked for as the engine's renderer asks: a Mac with two chips answers for the one it will use)
     const gl = document.createElement('canvas').getContext('webgl2', { powerPreference: 'high-performance' });
-    if (!gl) return '';
+    if (!gl) return { name: '', astc: false };
+    const astc = !!gl.getExtension('WEBGL_compressed_texture_astc');
     let name = String(gl.getParameter(gl.RENDERER) ?? '');
     // (Chrome and Safari give a generic name there, the real one through the extension; Firefox the reverse)
     if (/^WebKit/i.test(name)) {
@@ -37,22 +40,25 @@ function gpuName() {
       if (ext) name = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) ?? name);
     }
     gl.getExtension('WEBGL_lose_context')?.loseContext();
-    return name;
+    return { name, astc };
   } catch {
-    return '';
+    return { name: '', astc: false };
   }
 }
 
-export function chooseTier(gpu: string, threads: number, memory: number, phone: boolean, forced: string | null): { tier: 'full' | 'lean'; why: string } {
+export function chooseTier(gpu: string, threads: number, memory: number, phone: boolean, forced: string | null, astc = false): { tier: 'full' | 'lean'; why: string } {
   if (phone) return { tier: 'lean', why: 'phone' };
   if (forced === 'lean' || forced === 'full') return { tier: forced, why: '?tier' };
+  // Apple's own graphics (named, or "Apple GPU" and reading ASTC): every Apple silicon Mac
+  if (/\bApple\b/i.test(gpu) && (astc || /\bApple M\d/i.test(gpu))) return { tier: 'full', why: 'Apple silicon' };
   if (WEAK_GPU.some((re) => re.test(gpu))) return { tier: 'lean', why: 'graphics' };
   if (memory <= 4) return { tier: 'lean', why: `${memory}GB` };
   if (threads <= 4 && !NAMED_GPU.test(gpu)) return { tier: 'lean', why: `${threads} cores` };
   return { tier: 'full', why: 'graphics' };
 }
 
-export const GPU = typeof window !== 'undefined' ? gpuName() : '';
+const probe = typeof window !== 'undefined' ? gpuProbe() : { name: '', astc: false };
+export const GPU = probe.name;
 const decided =
   typeof window !== 'undefined'
     ? chooseTier(
@@ -61,6 +67,7 @@ const decided =
         (navigator as { deviceMemory?: number }).deviceMemory ?? 8,
         isMobile,
         new URLSearchParams(location.search).get('tier'),
+        probe.astc,
       )
     : { tier: 'full' as const, why: '' };
 export const TIER = decided.tier;
