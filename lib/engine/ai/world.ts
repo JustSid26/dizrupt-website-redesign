@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signals } from '@/lib/signals';
 import { applyFrame } from '../frame';
 import { lean } from '../config';
+import { LightBloomPass } from '../lightBloom';
 
 const REST = { lift: 0, shift: 0, zoom: 1 };
 
@@ -499,7 +500,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
 
   /* ================= its own buffers ================= */
   // (a phone goes without the multisampling: four samples a pixel, twice over, is ~100 MB it can't spare;
-  // a lean computer too: config.ts. No bloom, as the city has none)
+  // a lean computer too: config.ts)
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: lean ? 0 : 4 });
   const composer = new EffectComposer(renderer, rt);
   composer.renderToScreen = false;
@@ -530,6 +531,11 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       }`,
   });
   composer.addPass(glitchPass);
+  /* the neon's glow, for a fraction of a bloom's work (lightBloom.ts), only where it is brightest; no
+     single glint may outshine the rest (a pinpoint specular would flare into a halo). A lean computer
+     goes without, as the city does */
+  const glow = lean ? null : new LightBloomPass({ strength: 1, threshold: 1.4, clamp: 3, weights: [0.55, 0.45, 0.2], composite: true });
+  if (glow) composer.addPass(glow);
 
   /* ================= the camera: up close, then pulled back to the network ================= */
   const poses = [
@@ -572,6 +578,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       composer.setPixelRatio(pr);
       resize();
     },
+    /** The glow on or off (the engine's governor: a computer that struggles goes without). */
+    setGlow(on: boolean) {
+      if (glow) glow.enabled = on;
+    },
     /** Off screen: nothing runs on its own here. */
     sleep() {},
     /** Gone for good (a phone frees it once the page is well past it): everything it put on the GPU. */
@@ -590,6 +600,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       textures.forEach((t) => t.dispose());
       scene.environment?.dispose();
       key.dispose(); // (its shadow map)
+      glow?.dispose();
       composer.dispose();
       rt.dispose();
     },

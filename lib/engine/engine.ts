@@ -22,6 +22,7 @@ import { site } from '@/content/site';
 import { createAiWorld, type AiWorld } from './ai/world';
 import { createTransitionPass } from './ai/transition';
 import { createWorkTower } from './workTower';
+import { LightBloomPass, glowInOutput } from './lightBloom';
 import { isPhoneLayout } from '@/lib/layout';
 import { workP, WORK_LEAD } from '@/lib/stops';
 import { bannerFor } from '@/content/banners';
@@ -108,15 +109,20 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.setSize(innerWidth, innerHeight);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
-  /* (no bloom, on any device: the haze it put round every light in the city was a whole picture's
-     work again, every frame, for a softness the lights carry well enough without; the heart keeps a
-     glow of its own, below) */
+  /* the glow round the city's lights, for a fraction of a bloom's work (lightBloom.ts), on a computer
+     that draws the full scene. A lean one (config.ts) goes without, and the heart keeps a halo of its
+     own there (below); the governor can switch it off on a computer that struggles (quality, below) */
+  const glow = lean ? null : new LightBloomPass({ strength: 1, threshold: 0.26, weights: [0.6, 0.45, 0.25] });
+  if (glow) composer.addPass(glow);
+  let glowOn = !!glow, glowIn = 0; // (glowIn: the landing brings it in, below)
   // the hand-over to the AI world: both pictures, one transition (ai/transition.ts)
   const aiPass = createTransitionPass();
   aiPass.enabled = false;
   aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
   composer.addPass(aiPass);
-  composer.addPass(new OutputPass());
+  const output = new OutputPass();
+  composer.addPass(output);
+  const glowAmount = glow ? glowInOutput(output, glow) : null; // (added as the picture is tone-mapped)
   /* Quality: a governor, on every device (a weak laptop is as likely to struggle as a phone). The
      picture is drawn at one of a few resolutions, from the one the benchmark (before `ready`) found
      the device can hold down to 1x. Whenever frames run late it
@@ -160,6 +166,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const setThin = (v: number) => {
     thin = v;
     qualityAt = performance.now();
+  };
+  // the glow off or back on (the AI world's with it)
+  const setGlow = (on: boolean) => {
+    glowOn = on && !!glow;
+    qualityAt = performance.now();
+    aiWorld?.setGlow(glowOn);
   };
   let aiWorld: AiWorld | null = null;
   let aiIdle = 0; // seconds it has been out of reach
@@ -1516,7 +1528,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heartMat.opacity = heartShow * (0.55 + 0.45 * beat) * close;
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
       (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18 * close;
-      // (the stand-in for a bloom: wider and brighter as the camera comes in to it)
+      // (the stand-in for the glow, where there is none: wider and brighter as the camera comes in to it)
+      heartHalo.visible = !glowOn;
       heartHalo.scale.setScalar(2.4 + beat * 0.5 + bridgeZoom * 1.2);
       (heartHalo.material as THREE.MeshBasicMaterial).opacity = heartShow * (0.32 + 0.22 * beat) * (0.25 + 0.75 * bridgeZoom); // (faint while he stands in the city: it is the zoom in it belongs to)
     }
@@ -1527,6 +1540,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const ai = signals.ai;
       if (!aiWorld && !phone && (ai.warm || ai.mix > 0)) {
         aiWorld = createAiWorld(renderer, curPr);
+        aiWorld.setGlow(glowOn);
         aiWorld.render(dt, time, 0, 0, 0); // compile it now, not on the first frame of the transition
       }
       // a touch screen can't hold both worlds for long: once the page is well past it, it is freed (and
@@ -1542,6 +1556,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       aiPass.enabled = on;
       const full = ai.mix >= 0.9999;
       renderPass.enabled = !full;
+      if (glow) {
+        // the city's glow, while there is a city to see: the landing brings it in as the board comes away
+        // from the screen, and the AI world takes it out as it takes over
+        glowIn = onIntro && s.intro < 0.2 ? smooth(0.015, 0.12, s.intro) : damp(glowIn, 1, 3, dt);
+        glow.enabled = glowOn && !full;
+        glowAmount!.value = glow.enabled ? glowIn * (1 - ai.mix) : 0;
+      }
       if (on) {
         if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
         aiPass.uniforms.uMix.value = ai.mix;
@@ -1581,18 +1602,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
         if (level < levels.length - 1) setLevel(level + 1);
+        else if (glowOn) setGlow(false); // (at the floor: the glow goes before his points thin)
         else setThin(Math.max(0.5, thin - 0.25));
       };
       const up = () => {
-        if (thin < 1) setThin(Math.min(1, thin + 0.25)); else setLevel(level - 1);
+        if (thin < 1) setThin(Math.min(1, thin + 0.25)); else if (glow && !glowOn) setGlow(true); else setLevel(level - 1);
         upAt = now;
       };
       if (now - qualityAt < 900) goodFor = 0;
       else if (share > 0.16) {
-        if (level < levels.length - 1 || thin > 0.5) down();
+        if (level < levels.length - 1 || glowOn || thin > 0.5) down();
         goodFor = 0;
       } else if (share < 0.03) {
-        if (++goodFor >= 5 && (level > 0 || thin < 1) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
+        if (++goodFor >= 5 && (level > 0 || thin < 1 || (glow && !glowOn)) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
       } else goodFor = 0;
       late.at = now; late.n = 0; late.long = 0;
     }
@@ -1605,7 +1627,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
