@@ -58,6 +58,15 @@ const smooth = (a: number, b: number, t: number) => {
 
 export async function createEngine({ canvas, indexLayer, onOpenProject }: EngineOptions) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  /* a lean computer's picture is lifted as it goes to the screen (the output pass: nothing extra to draw).
+     Its scene is a phone's, lit for a phone's small bright screen, and on a laptop's it reads dull; more
+     so once the governor has taken the glow away, so it is lifted further then (frame(), below). A phone
+     keeps the light it was tuned in */
+  const lift = lean && !isMobile;
+  if (lift) {
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 1.15;
+  }
   /* the picture's resolution: the device's own, capped (config.ts). A phone's cap is only a floor to
      start from: once the scene is built it is measured against the phone it is on (see the benchmark
      before `ready`), and a phone that can afford it draws at up to 1.5x (config.ts: MAX_PIXEL_RATIO) */
@@ -1401,11 +1410,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
-    /* (a phone, while he stands whole in the city on the landing: the city steps back to half, or his
+    /* (a phone, while he stands whole in the city on the landing: the city steps back a little, or his
        points, drawn without the glow a wide screen gives him, are lost among its windows) */
     // (only without the glow: with it his points stand out on their own, and the city needn't go dull for them)
     const himWhole = lean && !(glow && glowOn) && onIntro && ip > 0.2 && ip < 0.5;
-    cityDim = damp(cityDim, himWhole ? 0.5 : section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview && !phone) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
+    cityDim = damp(cityDim, himWhole ? 0.7 : section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview && !phone) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
     // the board's rig goes up first, as the camera pulls back from its screen
@@ -1574,6 +1583,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         glow.strength = 0.45 * glowIn;
         glow.enabled = glowOn && !full;
       }
+      // (the lift: a little with the glow, more without it, easing between)
+      if (lift) renderer.toneMappingExposure = damp(renderer.toneMappingExposure, glow && glowOn ? 1.15 : 1.4, 2, dt);
       if (on) {
         if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
         aiPass.uniforms.uMix.value = ai.mix;
@@ -1612,15 +1623,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const share = n + late.long ? slow / (n + late.long) : 0;
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
-        // (at 1x the glow goes before anything else: before a lean computer's picture goes below 1x, and
-        // before his points thin)
-        if (glowOn && (curPr <= 1.001 || level >= levels.length - 1)) setGlow(false);
+        /* a full computer at 1x gives up its glow before its points thin. A lean one keeps its glow to the
+           last (by then from a quarter-size picture, a small part of the frame, and most of its light):
+           the picture goes softer and his points thin first, for without the glow it reads dull */
+        if (!lean && glowOn && (curPr <= 1.001 || level >= levels.length - 1)) setGlow(false);
         else if (level < levels.length - 1) setLevel(level + 1);
-        else setThin(Math.max(0.5, thin - 0.25));
+        else if (thin > 0.5) setThin(Math.max(0.5, thin - 0.25));
+        else if (glowOn) setGlow(false);
       };
       const up = () => {
-        // (back the way it came: his points, the picture up to 1x, the glow, then sharper)
-        if (thin < 1) setThin(Math.min(1, thin + 0.25));
+        // (back the way it came: a lean computer's glow first; then his points, the picture up to 1x, a
+        // full computer's glow, then sharper)
+        if (lean && glow && !glowOn) setGlow(true);
+        else if (thin < 1) setThin(Math.min(1, thin + 0.25));
         else if (curPr < 0.999) setLevel(level - 1);
         else if (glow && !glowOn) setGlow(true);
         else setLevel(level - 1);
