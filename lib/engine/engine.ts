@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -109,13 +108,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.setSize(innerWidth, innerHeight);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
-  /* the bloom is a soft glow: drawn from a half-size picture (a quarter of the work), on every device,
-     and nobody can tell; when frames are running late it drops to a quarter (see quality, below) */
-  const bloomScale = () => (lowQuality ? 0.25 : 0.5);
-  const bloomSize = () => new THREE.Vector2(Math.round(innerWidth * bloomScale()), Math.round(innerHeight * bloomScale()));
-  let lowQuality = false;
-  const bloom = new UnrealBloomPass(bloomSize(), 0.45, 0.22, 0.26);
-  composer.addPass(bloom);
+  /* (no bloom, on any device: the haze it put round every light in the city was a whole picture's
+     work again, every frame, for a softness the lights carry well enough without; the heart keeps a
+     glow of its own, below) */
   // the hand-over to the AI world: both pictures, one transition (ai/transition.ts)
   const aiPass = createTransitionPass();
   aiPass.enabled = false;
@@ -130,23 +125,20 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      close-ups sharp, the whole city from the air a notch softer, never a stutter in either. A notch
      up that can't be held isn't tried again for a while (longer each time), so it never see-saws
      between the two, stuttering every time it goes up. Below 1x there is one more step: his points
-     thinned (fewer drawn, each brighter: the same light), down to about half; on a computer the bloom
-     goes to a half-size picture once it is at the floor. */
+     thinned (fewer drawn, each brighter: the same light), down to about half. */
   let qualityAt = 0, goodFor = 0, upAt = -1e9, holdUntil = 0, hold = 15000, thin = 1;
   // the frames since the governor last looked: how long each took
   // (long: frames of a quarter to a whole second, counted apart: see frame())
   const late = { at: 0, n: 0, long: 0, dts: new Float32Array(256) };
   const bench: Record<string, number> = {}; // the benchmark's measurements, ms a frame at each resolution tried
   let levels: number[] = [PIXEL_RATIO, ...[1.75, 1.5, 1.25, 1].filter((v) => v < PIXEL_RATIO - 0.01)], level = 0, curPr = PIXEL_RATIO;
-  /* draw at this many device pixels per CSS pixel: the renderer, the composer and the bloom resized,
+  /* draw at this many device pixels per CSS pixel: the renderer and the composer resized,
      and every material that sizes its points by the ratio told, so nothing drawn as points changes
      size on screen (the field's particles, the city's lights, the stations', the sky's) */
   const setRatio = (pr: number) => {
     renderer.setPixelRatio(pr);
     composer.setPixelRatio(pr);
     composer.setSize(innerWidth, innerHeight);
-    const b = bloomSize();
-    bloom.setSize(b.x, b.y);
     aiPass.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr);
     aiWorld?.setPixelRatio(pr); // (its own buffers, at the same resolution as the city's)
     scene.traverse((o) => {
@@ -158,24 +150,16 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     });
     u.uPixelRatio.value = pr;
   };
-  /* low: a phone at 1x (its bloom, where it has one, a quarter-size picture); a computer once it has
-     come down to 1x from something sharper, or is thinning his points (its bloom at half) */
-  const isLow = () => (lean ? curPr <= 1 : (level > 0 && curPr <= 1) || thin < 1);
   const setLevel = (i: number) => {
     level = Math.max(0, Math.min(levels.length - 1, i));
     curPr = levels[level];
-    lowQuality = isLow();
     qualityAt = performance.now();
     setRatio(curPr);
   };
-  // the points thinned or brought back: the bloom's size may follow (see isLow)
+  // the points thinned or brought back
   const setThin = (v: number) => {
     thin = v;
     qualityAt = performance.now();
-    if (isLow() === lowQuality) return;
-    lowQuality = !lowQuality;
-    const b = bloomSize();
-    bloom.setSize(b.x, b.y);
   };
   let aiWorld: AiWorld | null = null;
   let aiIdle = 0; // seconds it has been out of reach
@@ -193,8 +177,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight, false);
     composer.setSize(innerWidth, innerHeight);
-    const b = bloomSize();
-    bloom.setSize(b.x, b.y);
     aiPass.uniforms.uRes.value.set(innerWidth * curPr, innerHeight * curPr);
     aiWorld?.resize();
     atmosphere.resize();
@@ -342,8 +324,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const heart = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), heartMat);
   const heartGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: heartTex, color: new THREE.Color("#b46bff"), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
   heart.add(heartGlow);
-  /* a phone draws no bloom (the haze it puts round every light in the city): the heart's own glow
-     stands in for it there, a soft violet light round the mark, beating with it (drawn first, under it) */
+  /* nothing draws a bloom (the haze it put round every light in the city): the heart's own glow
+     stands in for it, a soft violet light round the mark, beating with it (drawn first, under it) */
   const haloTex = (() => {
     const c = document.createElement('canvas');
     c.width = c.height = 128;
@@ -361,8 +343,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   })();
   const heartHalo = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
   heartHalo.renderOrder = 39;
-  heartHalo.visible = lean; // (where there is no bloom: a phone, a lean computer)
-  heart.add(heartHalo);
+    heart.add(heartHalo);
   heart.renderOrder = 40;
   if (mascot) {
     // left of his chest (his left, your right), just in front of the surface
@@ -661,7 +642,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      tenths of a second behind it. */
   if (!reducedMotion) {
     const gl = renderer.getContext();
-    if (lean) bloom.enabled = false; // (a phone or a lean computer never draws it: measured without)
     camera.position.copy(aerialPos);
     camera.lookAt(aerialLook);
     city.update(0, 1, 1, camera.position, 1);
@@ -1186,7 +1166,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     signals.busy.morph = field.morphing && !view;
     signals.busy.train = signals.rideTarget !== null && Math.abs(signals.rideTarget - ride.s) > 0.02;
 
-    bloom.strength = onIntro && ip < 0.2 ? 0.45 * smooth(0.015, 0.12, ip) : damp(bloom.strength, 0.45, 3, dt);
     const upright = onIntro || section === 'contact' || section === 'projects' || section === 'solutions';
     field.group.rotation.x = damp(field.group.rotation.x, upright ? 0 : -p.y * 0.2, 2, dt);
     field.group.rotation.z = damp(field.group.rotation.z, upright ? 0 : -p.x * 0.08, 2, dt);
@@ -1537,11 +1516,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heartMat.opacity = heartShow * (0.55 + 0.45 * beat) * close;
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
       (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18 * close;
-      if (lean) {
-        // (a phone's stand-in for the bloom, and a lean computer's: wider and brighter as the camera comes in to it)
-        heartHalo.scale.setScalar(2.4 + beat * 0.5 + bridgeZoom * 1.2);
-        (heartHalo.material as THREE.MeshBasicMaterial).opacity = heartShow * (0.32 + 0.22 * beat) * (0.25 + 0.75 * bridgeZoom); // (faint while he stands in the city: it is the zoom in it belongs to)
-      }
+      // (the stand-in for a bloom: wider and brighter as the camera comes in to it)
+      heartHalo.scale.setScalar(2.4 + beat * 0.5 + bridgeZoom * 1.2);
+      (heartHalo.material as THREE.MeshBasicMaterial).opacity = heartShow * (0.32 + 0.22 * beat) * (0.25 + 0.75 * bridgeZoom); // (faint while he stands in the city: it is the zoom in it belongs to)
     }
     /* ---- AI & Automation: built ahead of time, drawn only while it is on screen. A phone has no AI
        world: the page draws its chip (AiNetwork.tsx), the hand-over is to the dark, and once it is
@@ -1565,7 +1542,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       aiPass.enabled = on;
       const full = ai.mix >= 0.9999;
       renderPass.enabled = !full;
-      bloom.enabled = !full && !lean; // (a phone, or a lean computer, draws its lights without the bloom's haze round them)
       if (on) {
         if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
         aiPass.uniforms.uMix.value = ai.mix;
@@ -1629,7 +1605,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {

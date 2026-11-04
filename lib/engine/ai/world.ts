@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -498,11 +497,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   rimV.position.set(3, -1.5, -3.5);
   scene.add(rimC, rimV);
 
-  /* ================= its own buffers and bloom ================= */
+  /* ================= its own buffers ================= */
   // (a phone goes without the multisampling: four samples a pixel, twice over, is ~100 MB it can't spare;
-  // a lean computer too: config.ts. The bloom is drawn from a half-size picture everywhere, as the city's is)
+  // a lean computer too: config.ts. No bloom, as the city has none)
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: lean ? 0 : 4 });
-  const bloomK = 0.5;
   const composer = new EffectComposer(renderer, rt);
   composer.renderToScreen = false;
   composer.setPixelRatio(pixelRatio);
@@ -532,15 +530,6 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       }`,
   });
   composer.addPass(glitchPass);
-  // no single glint may outshine the rest: a pinpoint specular would bloom into a halo
-  composer.addPass(new ShaderPass({
-    uniforms: { tDiffuse: { value: null } },
-    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */ `uniform sampler2D tDiffuse; varying vec2 vUv;
-      void main(){ vec4 c = texture2D(tDiffuse, vUv); float m = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c.rgb * min(1.0, 3.0 / max(m, 1e-4)), c.a); }`,
-  }));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth * bloomK, innerHeight * bloomK), 0.5, 0.2, 1.4);
-  composer.addPass(bloom);
 
   /* ================= the camera: up close, then pulled back to the network ================= */
   const poses = [
@@ -557,7 +546,6 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     camera.fov = camera.aspect < 1 ? 58 : 32; // a phone needs the wider lens
     camera.updateProjectionMatrix();
     composer.setSize(innerWidth, innerHeight);
-    bloom.setSize(Math.round(innerWidth * bloomK), Math.round(innerHeight * bloomK));
     traces.u.uViewH.value = innerHeight * pixelRatio;
   };
   resize();
@@ -576,7 +564,6 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   return {
     scene,
     camera,
-    bloom,
     resize,
     /** Drawn at another resolution: the engine's governor has moved the city's, and this follows it. */
     setPixelRatio(pr: number) {
@@ -603,7 +590,6 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       textures.forEach((t) => t.dispose());
       scene.environment?.dispose();
       key.dispose(); // (its shadow map)
-      bloom.dispose();
       composer.dispose();
       rt.dispose();
     },

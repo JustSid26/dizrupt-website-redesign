@@ -8,8 +8,8 @@ export const isMobile =
    when the scene is (how many points the city, his line and the field are made of, how the steel is lit,
    whether there is a bloom at all), and the governor (engine.ts) can only move what can be changed
    while it runs (the resolution, his points thinned).
-   'full': everything. 'lean': the scene a phone was tuned for (fewer, finer points, matt steel, no bloom,
-   no sprite huge), drawn at the computer's own layout, and down to 0.75x if it must.
+   'full': everything. 'lean': the scene a phone was tuned for (fewer, finer points, matt steel, him as
+   points rather than light, no sprite huge), drawn at the computer's own layout, and down to 0.75x if it must.
    Every phone is lean. A computer is when its graphics are known to be weak (Intel's before Iris Xe,
    AMD's and NVIDIA's older and entry-level chips, a phone's chip in a Chromebook), when it has 4GB of
    memory or less, or when it won't say what its graphics are (Safari calls every Mac's "Apple GPU") and
