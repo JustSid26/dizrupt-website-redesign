@@ -185,6 +185,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     qualityAt = performance.now();
     glowSize();
   };
+  // held to 30 frames a second, or let go again (frame(), above)
+  const setThirty = (on: boolean) => {
+    thirty = on || force30;
+    qualityAt = performance.now();
+  };
   // the glow off or back on (the AI world's with it)
   const setGlow = (on: boolean) => {
     glowOn = on && !!glow;
@@ -886,9 +891,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let night = signals.night;
   const clock = new THREE.Timer();
   let raf = 0;
+  // the governor's last step but one (quality, below): a steady 30 frames a second (?fps=30 holds it there, to see it)
+  const force30 = new URLSearchParams(location.search).get('fps') === '30';
+  let thirty = force30, lastDrawn = 0;
 
   function frame() {
     raf = requestAnimationFrame(frame);
+    /* held to 30 a second: every other refresh (every fourth at 120Hz) is skipped whole, so each frame
+       has twice the time and every one takes the same, where a device that can't keep 60 would otherwise
+       jump between the two. What moves is timed by the clock, not by frames, so nothing slows; the
+       page's own scroll runs at its own rate (SmoothScroll.tsx) */
+    const t0 = performance.now();
+    if (thirty && t0 - lastDrawn < 1000 / 30 - 4) return;
+    lastDrawn = t0;
     frameNo++;
     clock.update();
     const rawDt = clock.getDelta();
@@ -1623,30 +1638,47 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const share = n + late.long ? slow / (n + late.long) : 0;
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
-        /* a full computer at 1x gives up its glow before its points thin. A lean one keeps its glow to the
-           last (by then from a quarter-size picture, a small part of the frame, and most of its light):
-           the picture goes softer and his points thin first, for without the glow it reads dull */
-        if (!lean && glowOn && (curPr <= 1.001 || level >= levels.length - 1)) setGlow(false);
-        else if (level < levels.length - 1) setLevel(level + 1);
-        else if (thin > 0.5) setThin(Math.max(0.5, thin - 0.25));
-        else if (glowOn) setGlow(false);
+        /* Each a notch down its own ladder (and back up it the same way, below).
+           A lean computer, once at 1x: a steady 30 a second first, every frame given twice the time, the
+           picture still sharp, every point and the glow kept; only then softer than 1x, his points thinned,
+           and its glow last of all (by then from a quarter-size picture: a small part of the frame, and
+           most of its light, without which it reads dull).
+           A full computer: down to 1x, its glow, his points, and a steady 30 the last resort */
+        const step = (s: number) => setThin(Math.max(0.5, thin - s));
+        if (lean) {
+          if (curPr > 1.001 && level < levels.length - 1) setLevel(level + 1);
+          else if (!thirty) setThirty(true);
+          else if (level < levels.length - 1) setLevel(level + 1);
+          else if (thin > 0.5) step(0.25);
+          else if (glowOn) setGlow(false);
+        } else {
+          if (level < levels.length - 1) setLevel(level + 1);
+          else if (glowOn) setGlow(false);
+          else if (thin > 0.5) step(0.25);
+          else if (!thirty) setThirty(true);
+        }
       };
       const up = () => {
-        // (back the way it came: a lean computer's glow first; then his points, the picture up to 1x, a
-        // full computer's glow, then sharper)
-        if (lean && glow && !glowOn) setGlow(true);
-        else if (thin < 1) setThin(Math.min(1, thin + 0.25));
-        else if (curPr < 0.999) setLevel(level - 1);
-        else if (glow && !glowOn) setGlow(true);
-        else setLevel(level - 1);
+        if (lean) {
+          if (glow && !glowOn) setGlow(true);
+          else if (thin < 1) setThin(Math.min(1, thin + 0.25));
+          else if (curPr < 0.999) setLevel(level - 1);
+          else if (thirty) setThirty(false);
+          else setLevel(level - 1);
+        } else {
+          if (thirty) setThirty(false);
+          else if (thin < 1) setThin(Math.min(1, thin + 0.25));
+          else if (glow && !glowOn) setGlow(true);
+          else setLevel(level - 1);
+        }
         upAt = now;
       };
       if (now - qualityAt < 900) goodFor = 0;
       else if (share > 0.16) {
-        if (level < levels.length - 1 || glowOn || thin > 0.5) down();
+        if (level < levels.length - 1 || glowOn || thin > 0.5 || !thirty) down();
         goodFor = 0;
       } else if (share < 0.03) {
-        if (++goodFor >= 5 && (level > 0 || thin < 1 || (glow && !glowOn)) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
+        if (++goodFor >= 5 && (level > 0 || thin < 1 || thirty || (glow && !glowOn)) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
       } else goodFor = 0;
       late.at = now; late.n = 0; late.long = 0;
     }
@@ -1659,7 +1691,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
