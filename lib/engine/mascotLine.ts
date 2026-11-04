@@ -4,7 +4,7 @@ import { createBrandingFilm } from './brandingFilm';
 
 // the films drawn in code, by the name a solution asks for
 const LIVE_FILMS = { branding: createBrandingFilm };
-import { COUNT, isMobile } from './config';
+import { COUNT, lean } from './config';
 import { isPhoneLayout } from '@/lib/layout';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
@@ -259,7 +259,7 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
     g.computeBoundingBox();
     const sz = g.boundingBox!.getSize(v);
     const area = 2 * (sz.x * sz.y + sz.y * sz.z + sz.x * sz.z);
-    const cnt = Math.min(5000, Math.round(area * (isMobile ? 16 : 34)));
+    const cnt = Math.min(5000, Math.round(area * (lean ? 16 : 34)));
     const mat = m.material as THREE.MeshStandardMaterial;
     c.copy(mat.color ?? new THREE.Color(1, 1, 1));
     if (mat.emissive && mat.emissive.getHex()) c.add(mat.emissive);
@@ -337,7 +337,7 @@ export function particleBuilder(obj: THREE.Object3D, parent: THREE.Object3D, pix
     g.computeBoundingBox();
     const sz = g.boundingBox!.getSize(v);
     const area = 2 * (sz.x * sz.y + sz.y * sz.z + sz.x * sz.z);
-    const cnt = Math.min(6000, Math.round(area * (isMobile ? density * 0.5 : density)));
+    const cnt = Math.min(6000, Math.round(area * (lean ? density * 0.5 : density)));
     c.copy(mats[0].color ?? new THREE.Color(1, 1, 1));
     if ((mats[0] as unknown as THREE.MeshStandardMaterial).emissive?.getHex()) c.add((mats[0] as unknown as THREE.MeshStandardMaterial).emissive);
     if (mats[0].map) c.setRGB(0.85, 0.8, 1.0); // a picture: pale light
@@ -514,7 +514,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const side = new THREE.Vector3();
   const tan = new THREE.Vector3();
   const P = new THREE.Vector3();
-  const strips = isMobile ? 1500 : 3000;
+  const strips = lean ? 1500 : 3000;
   for (let i = 0; i < strips; i++) {
     const u = i / strips;
     curve.getPointAt(u, P);
@@ -526,7 +526,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     }
   }
   // building particles: a cloud that rises into the deck just ahead of where it is laid
-  const builders = isMobile ? 16000 : 42000;
+  const builders = lean ? 16000 : 42000;
   for (let i = 0; i < builders; i++) {
     const u = Math.random();
     curve.getPointAt(u, P);
@@ -852,7 +852,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     group.add(sign);
     signs.push(sign);
     // the hologram: the solution's model, sampled down, turning above the platform ahead of the train
-    const every = isMobile ? 10 : 6;
+    const every = lean ? 10 : 6;
     const n = Math.floor(COUNT / every);
     const hp = new Float32Array(n * 3);
     const hr = new Float32Array(n);

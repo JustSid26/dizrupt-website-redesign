@@ -5,7 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CAMERA_Z, COUNT, PIXEL_RATIO, isMobile, reducedMotion } from './config';
+import { CAMERA_Z, COUNT, GPU, PIXEL_RATIO, TIER, TIER_WHY, isMobile, lean, reducedMotion } from './config';
 import { ParticleField } from './field';
 import { BUST_DROP, BUST_HEIGHT, loadMascot } from './mascot';
 import { createIndex } from './spiral';
@@ -110,8 +110,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
   /* the bloom is a soft glow: a phone draws it from a half-size picture (a quarter of the work) and
-     nobody can tell; when frames are running late it drops to a quarter (see quality, below) */
-  const bloomScale = () => (isMobile ? (lowQuality ? 0.25 : 0.5) : 1);
+     nobody can tell; when frames are running late it drops to a quarter, and a computer's from whole
+     to half (see quality, below) */
+  const bloomScale = () => (lean ? (lowQuality ? 0.25 : 0.5) : lowQuality ? 0.5 : 1);
   const bloomSize = () => new THREE.Vector2(Math.round(innerWidth * bloomScale()), Math.round(innerHeight * bloomScale()));
   let lowQuality = false;
   const bloom = new UnrealBloomPass(bloomSize(), 0.45, 0.22, 0.26);
@@ -122,18 +123,22 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
   composer.addPass(aiPass);
   composer.addPass(new OutputPass());
-  /* Quality, on a phone: a governor. The picture is drawn at one of a few resolutions, from the one
-     the benchmark (before `ready`) found the phone can hold down to 1x. Whenever frames run late it
+  /* Quality: a governor, on every device (a weak laptop is as likely to struggle as a phone). The
+     picture is drawn at one of a few resolutions, from the one the benchmark (before `ready`) found
+     the device can hold down to 1x. Whenever frames run late it
      steps down a notch; once frames have been comfortably quick for a good while it steps back up.
      So the phone settles, in each view, at the sharpest picture it can draw at full frame rate: the
      close-ups sharp, the whole city from the air a notch softer, never a stutter in either. A notch
      up that can't be held isn't tried again for a while (longer each time), so it never see-saws
      between the two, stuttering every time it goes up. Below 1x there is one more step: his points
-     thinned (fewer drawn, each brighter: the same light), down to about half. */
+     thinned (fewer drawn, each brighter: the same light), down to about half; on a computer the bloom
+     goes to a half-size picture once it is at the floor. */
   let qualityAt = 0, goodFor = 0, upAt = -1e9, holdUntil = 0, hold = 15000, thin = 1;
   // the frames since the governor last looked: how long each took
-  const late = { at: 0, n: 0, dts: new Float32Array(256) };
-  let levels: number[] = [PIXEL_RATIO], level = 0, curPr = PIXEL_RATIO;
+  // (long: frames of a quarter to a whole second, counted apart: see frame())
+  const late = { at: 0, n: 0, long: 0, dts: new Float32Array(256) };
+  const bench: Record<string, number> = {}; // the benchmark's measurements, ms a frame at each resolution tried
+  let levels: number[] = [PIXEL_RATIO, ...[1.75, 1.5, 1.25, 1].filter((v) => v < PIXEL_RATIO - 0.01)], level = 0, curPr = PIXEL_RATIO;
   /* draw at this many device pixels per CSS pixel: the renderer, the composer and the bloom resized,
      and every material that sizes its points by the ratio told, so nothing drawn as points changes
      size on screen (the field's particles, the city's lights, the stations', the sky's) */
@@ -144,6 +149,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const b = bloomSize();
     bloom.setSize(b.x, b.y);
     aiPass.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr);
+    aiWorld?.setPixelRatio(pr); // (its own buffers, at the same resolution as the city's)
     scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
       for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
@@ -153,12 +159,24 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     });
     u.uPixelRatio.value = pr;
   };
+  /* low: a phone at 1x (its bloom, where it has one, a quarter-size picture); a computer once it has
+     come down to 1x from something sharper, or is thinning his points (its bloom at half) */
+  const isLow = () => (lean ? curPr <= 1 : (level > 0 && curPr <= 1) || thin < 1);
   const setLevel = (i: number) => {
     level = Math.max(0, Math.min(levels.length - 1, i));
     curPr = levels[level];
-    lowQuality = curPr <= 1; // (the bloom goes to a quarter-size picture at the floor)
+    lowQuality = isLow();
     qualityAt = performance.now();
     setRatio(curPr);
+  };
+  // the points thinned or brought back: the bloom's size may follow (see isLow)
+  const setThin = (v: number) => {
+    thin = v;
+    qualityAt = performance.now();
+    if (isLow() === lowQuality) return;
+    lowQuality = !lowQuality;
+    const b = bloomSize();
+    bloom.setSize(b.x, b.y);
   };
   let aiWorld: AiWorld | null = null;
   let aiIdle = 0; // seconds it has been out of reach
@@ -178,8 +196,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     composer.setSize(innerWidth, innerHeight);
     const b = bloomSize();
     bloom.setSize(b.x, b.y);
-    const pr = lowQuality ? 1 : pixelRatio;
-    aiPass.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr);
+    aiPass.uniforms.uRes.value.set(innerWidth * curPr, innerHeight * curPr);
     aiWorld?.resize();
     atmosphere.resize();
     if (!built) return;
@@ -345,7 +362,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   })();
   const heartHalo = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
   heartHalo.renderOrder = 39;
-  heartHalo.visible = isMobile;
+  heartHalo.visible = lean; // (where there is no bloom: a phone, a lean computer)
   heart.add(heartHalo);
   heart.renderOrder = 40;
   if (mascot) {
@@ -424,7 +441,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       return gm;
     });
     // the particles: each has its spot on the banner, and flies there from his hand, bottom row first
-    const n = isMobile ? 2200 : 5000;
+    const n = lean ? 2200 : 5000;
     const tgt = new Float32Array(n * 3), rnd = new Float32Array(n), col = new Float32Array(n * 3);
     const v = new THREE.Vector3(), brand = new THREE.Color(soc.color).lerp(new THREE.Color(1, 1, 1), 0.3);
     for (let i = 0; i < n; i++) {
@@ -498,8 +515,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     /* (a phone lights it matt: no metal's sheen, a fraction of the work for every pixel of it, and on the
        landing its steel back is the whole screen behind the board's picture. Its steel is darker for it:
        a metal shows little of its own colour) */
-    const steel = isMobile ? new THREE.MeshLambertMaterial({ color: '#15171c' }) : new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
-    const edge = isMobile ? new THREE.MeshLambertMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4 }) : new THREE.MeshStandardMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4, roughness: 0.4 });
+    const steel = lean ? new THREE.MeshLambertMaterial({ color: '#15171c' }) : new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.4, metalness: 0.8 });
+    const edge = lean ? new THREE.MeshLambertMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4 }) : new THREE.MeshStandardMaterial({ color: '#b98bff', emissive: '#b98bff', emissiveIntensity: 1.4, roughness: 0.4 });
     const lamp = new THREE.MeshBasicMaterial({ color: '#fff4dc' });
     const put = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, rz = 0) => {
       const mesh = new THREE.Mesh(geo, m);
@@ -634,16 +651,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       return;
     }
   };
-  /* A phone is measured, not assumed. The heaviest picture there is (the city whole, from the air,
-     with him standing in it) is drawn a few frames at each resolution in turn, from 2x down, and the
-     first the phone draws in well under a frame's budget (8ms of the 16.7: the landing's city building
+  /* Every device is measured, not assumed. The heaviest picture there is (the city whole, from the
+     air, with him standing in it) is drawn a few frames at each resolution in turn, and the sharpest
+     the device draws in well under a frame's budget (8ms of the 16.7: the landing's city building
      itself costs about twice what the city standing does, and the rest of the frame is the page's own
-     layers over it and the frame's work) is the one it gets; if none, it keeps its floor (config.ts).
-     The count is still running: this takes a few tenths of a second behind it. A phone that keeps up
-     gets the desktop's picture; one that can't still runs smoothly. */
-  if (isMobile && !reducedMotion) {
+     layers over it and the frame's work) is the one it gets. A phone starts from its floor (config.ts)
+     and is tried upwards: one that keeps up gets the desktop's picture. A computer starts from its
+     screen's own (up to 2x) and is tried downwards to 1x: a weak laptop's integrated graphics get a
+     picture they can hold, not a 2x one they can't. The count is still running: this takes a few
+     tenths of a second behind it. */
+  if (!reducedMotion) {
     const gl = renderer.getContext();
-    bloom.enabled = false; // (a phone never draws it: measured without)
+    if (lean) bloom.enabled = false; // (a phone or a lean computer never draws it: measured without)
     camera.position.copy(aerialPos);
     camera.lookAt(aerialLook);
     city.update(0, 1, 1, camera.position, 1);
@@ -652,26 +671,59 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        (gl.finish() returns early on iOS, and would time only the handing over) */
     const px = new Uint8Array(4);
     const drawn = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    /* a frame's cost at a resolution: a phone's as the mean of a few (as it was tuned), a computer's as
+       their median (its frames are quick enough that one held up by something else would decide) */
     const cost = (pr: number) => {
       setRatio(pr);
       composer.render();
       drawn(); // (the first frame at a size pays for its buffers: not counted)
-      const N = 6, t0 = performance.now();
-      for (let i = 0; i < N; i++) { composer.render(); drawn(); }
-      return (performance.now() - t0) / N;
+      const N = 6, t: number[] = [];
+      for (let i = 0; i < N; i++) { const t0 = performance.now(); composer.render(); drawn(); t.push(performance.now() - t0); }
+      t.sort((a, b) => a - b);
+      const ms = isMobile ? t.reduce((a, b) => a + b, 0) / N : (t[N / 2 - 1] + t[N / 2]) / 2;
+      bench[pr.toFixed(2)] = +ms.toFixed(2); // (for ?perf: what each resolution cost)
+      return ms;
     };
-    const cap = Math.min(2, devicePixelRatio);
+    const BUDGET = 8; // ms
+    // (a lean computer no sharper than 1.5x, and down to 0.75x if it must: its 1x is still a laptop's whole screen)
+    const cap = Math.min(lean && !isMobile ? 1.5 : 2, devicePixelRatio);
     let chosen = pixelRatio;
-    for (const pr of [2, 1.75, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
-      if (cost(pr) <= 8) { chosen = pr; break; }
+    if (isMobile) {
+      for (const pr of [2, 1.75, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
+        if (cost(pr) <= BUDGET) { chosen = pr; break; }
+      }
+      pixelRatio = chosen;
+      // the governor's notches: from what the phone can hold, down to 1x
+      levels = [2, 1.75, 1.5, 1.25, 1].filter((v) => v < chosen - 0.01);
+      levels.unshift(chosen);
+      if (levels[levels.length - 1] > 1) levels.push(1);
+    } else {
+      /* A computer: its screen's own resolution (up to 2x), unless that is over budget AND a lower one
+         would actually be cheaper. A frame's cost is a part that goes with its pixels (the square of
+         the ratio) and a part that doesn't (the city's geometry, his points placed, the frame's own
+         work): timed at the top and at 1x, the two parts are told apart, and the sharpest notch whose
+         cost comes within budget is the one. A fast GPU whose frames cost about the same at any
+         resolution keeps its sharpest (lowering it would only blur it); a weak one that pays for its
+         pixels comes down as far as it must. The governor may still take it back up (or down) from
+         there, on what the real frames cost. */
+      const floor = Math.min(lean ? 0.75 : 1, cap);
+      const notches = [cap, 1.75, 1.5, 1.25, 1, 0.85, 0.75].filter((v, k, a) => v <= cap + 0.001 && v >= floor - 0.001 && a.indexOf(v) === k);
+      chosen = cap;
+      const top = cost(cap);
+      if (top > BUDGET && cap > floor + 0.01) {
+        const low = cost(floor);
+        const perPx = (top - low) / (cap * cap - floor * floor);
+        if (perPx > 0 && low < top * 0.85) {
+          const fixed = low - perPx * floor * floor;
+          chosen = notches.find((pr) => fixed + perPx * pr * pr <= BUDGET) ?? floor;
+        }
+      }
+      pixelRatio = chosen;
+      // the governor's notches: the screen's own down to 1x, starting at the one chosen (see below)
+      levels = notches;
     }
-    pixelRatio = chosen;
-    // the governor's notches: from what the phone can hold, down to 1x
-    levels = [2, 1.75, 1.5, 1.25, 1].filter((v) => v < chosen - 0.01);
-    levels.unshift(chosen);
-    if (levels[levels.length - 1] > 1) levels.push(1);
   }
-  setLevel(0);
+  setLevel(Math.max(0, levels.indexOf(pixelRatio)));
   signals.ready = true;
 
   /* ---------- glitch bursts (Spider-Verse: rare, abrupt, over in a few held frames) ---------- */
@@ -835,7 +887,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const now = performance.now();
     // how long each frame took is what the quality decision reads (the governor, below); a pause (the
     // tab away, the phone asleep) isn't a frame
+    /* (a frame of a quarter to a whole second is the page struggling, not a pause: a device that can only
+       manage a few frames a second draws nothing but those, and counted as pauses they would leave the
+       governor a second with no frames in it, which it took for a good one) */
     if (rawDt < 0.25 && late.n < late.dts.length) late.dts[late.n++] = rawDt;
+    else if (rawDt < 1) late.long++;
     const s = signals.scroll;
     const view = signals.caseShape;
     const preview = signals.preview;
@@ -1058,7 +1114,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        there the light is the animation (the camera comes in and he dissolves round the heart into
        it), so a phone draws him as light there too, from the bridge to the hand-over */
     const intoHeart = section === 'bridge' || s.section === 'ai';
-    if (isMobile && !intoHeart) u.uAurora.value = 0;
+    if (lean && !intoHeart) u.uAurora.value = 0;
     else if (fromWhole) u.uAurora.value = 1 - smooth(0.35, 1, u.uProgress.value);
     else u.uAurora.value = damp(u.uAurora.value, isMascot ? 1 : 0, 4, dt);
 
@@ -1335,19 +1391,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const far = camera.position.distanceTo(points.getWorldPosition(tmpV)) / CAMERA_Z;
     u.uSolid.value = damp(u.uSolid.value, key.startsWith('train') ? 1 : 0, 3, dt);
     // (a phone draws its points smaller, there being more of them (config.ts: COUNT); its count's figures bigger, to stand out against the city)
-    u.uSize.value = 22 * (isMobile ? 0.95 : 1) * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
+    u.uSize.value = 22 * (lean ? 0.95 : 1) * Math.min(3.2, Math.max(1, Math.sqrt(far))) * (key.startsWith('train') ? 1.1 : key === 'stats' && phone ? 1.45 : 1);
     // a phone's figure, drawn as points rather than light, is lifted well up so his violet reads against the city
     // (as points only: drawn as light, on the way into his heart, he is as bright as he ever was)
-    u.uGain.value = damp(u.uGain.value, isMobile && isMascot ? 1 + 2.2 * (1 - u.uAurora.value) : 1, 4, dt);
+    u.uGain.value = damp(u.uGain.value, lean && isMascot ? 1 + 2.2 * (1 - u.uAurora.value) : 1, 4, dt);
     /* drawn as light, every point is a wide soft sprite piled on the next: a phone draws half as many
        of them then (each brighter, the same light), which is what it drew before it had finer points */
-    u.uKeep.value = isMobile ? (0.75 - 0.36 * u.uAurora.value) * thin : 1; // (thin: the governor's last step, see quality)
+    u.uKeep.value = (lean ? 0.75 - 0.36 * u.uAurora.value : 1) * thin; // (thin: the governor's last step, see quality)
 
     // the city is the world he stands in: whole on the landing, a dim backdrop behind everything else
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
     /* (a phone, while he stands whole in the city on the landing: the city steps back to half, or his
        points, drawn without the glow a wide screen gives him, are lost among its windows) */
-    const himWhole = isMobile && onIntro && ip > 0.2 && ip < 0.5;
+    const himWhole = lean && onIntro && ip > 0.2 && ip < 0.5;
     cityDim = damp(cityDim, himWhole ? 0.5 : section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview && !phone) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
@@ -1473,7 +1529,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const P = 1.0, ph = time % P; // one beat a second
       const beat = Math.exp(-Math.pow((ph - 0.05) / 0.06, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.3) / 0.07, 2));
       // (on the landing, it lights as the beam passes his chest, not once he is whole: seen within the ride)
-      const show = key.startsWith('mascot:') && !scrubbing && u.uProgress.value > 0.9 && (u.uAurora.value > 0.5 || isMobile) && (!onIntro || reveal > 0.75) ? fieldOpacity * mascotVisible : 0;
+      const show = key.startsWith('mascot:') && !scrubbing && u.uProgress.value > 0.9 && (u.uAurora.value > 0.5 || lean) && (!onIntro || reveal > 0.75) ? fieldOpacity * mascotVisible : 0;
       heartShow = damp(heartShow, show, 4, dt);
       heart.visible = heartShow > 0.01;
       heart.scale.setScalar(1 + beat * 0.22);
@@ -1482,8 +1538,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heartMat.opacity = heartShow * (0.55 + 0.45 * beat) * close;
       heartGlow.scale.setScalar(1.25 + beat * 0.5);
       (heartGlow.material as THREE.MeshBasicMaterial).opacity = heartShow * beat * 0.18 * close;
-      if (isMobile) {
-        // (a phone's stand-in for the bloom: wider and brighter as the camera comes in to it)
+      if (lean) {
+        // (a phone's stand-in for the bloom, and a lean computer's: wider and brighter as the camera comes in to it)
         heartHalo.scale.setScalar(2.4 + beat * 0.5 + bridgeZoom * 1.2);
         (heartHalo.material as THREE.MeshBasicMaterial).opacity = heartShow * (0.32 + 0.22 * beat) * (0.25 + 0.75 * bridgeZoom); // (faint while he stands in the city: it is the zoom in it belongs to)
       }
@@ -1510,7 +1566,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       aiPass.enabled = on;
       const full = ai.mix >= 0.9999;
       renderPass.enabled = !full;
-      bloom.enabled = !full && !isMobile; // (a phone draws its lights without the bloom's haze round them)
+      bloom.enabled = !full && !lean; // (a phone, or a lean computer, draws its lights without the bloom's haze round them)
       if (on) {
         if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
         aiPass.uniforms.uMix.value = ai.mix;
@@ -1528,7 +1584,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
           dark = true;
         }
         // (the frames here are the page's, not the picture's: the governor doesn't count them)
-        late.at = now; late.n = 0;
+        late.at = now; late.n = 0; late.long = 0;
         return;
       }
       dark = false;
@@ -1538,22 +1594,22 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        notch up has just failed (see quality, above), and only while the page is still (a change remakes
        the picture's buffers: a hitch, which a ride would show). The second after a change isn't judged:
        its first frames pay for the new buffers */
-    if (isMobile && now - late.at > 1000) {
+    if (now - late.at > 1000) {
       /* late: a refresh missed. A phone held to 30 frames a second (iOS's Low Power Mode does it) runs
          every frame at 33ms, steadily; that is its pace, not lateness, and nothing here would mend it */
       const dts = late.dts.subarray(0, late.n).sort(), n = late.n;
       const capped = n > 10 && dts[Math.floor(n * 0.2)] > 0.03 && dts[Math.floor(n * 0.8)] < 0.036;
       const period = capped ? 1 / 30 : 1 / 60;
-      let slow = 0;
+      let slow = late.long;
       for (let i = 0; i < n; i++) if (dts[i] > period * 1.45) slow++;
-      const share = n ? slow / n : 0;
+      const share = n + late.long ? slow / (n + late.long) : 0;
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
         if (level < levels.length - 1) setLevel(level + 1);
-        else { thin = Math.max(0.5, thin - 0.25); qualityAt = now; }
+        else setThin(Math.max(0.5, thin - 0.25));
       };
       const up = () => {
-        if (thin < 1) { thin = Math.min(1, thin + 0.25); qualityAt = now; } else setLevel(level - 1);
+        if (thin < 1) setThin(Math.min(1, thin + 0.25)); else setLevel(level - 1);
         upAt = now;
       };
       if (now - qualityAt < 900) goodFor = 0;
@@ -1563,18 +1619,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       } else if (share < 0.03) {
         if (++goodFor >= 5 && (level > 0 || thin < 1) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
       } else goodFor = 0;
-      late.at = now; late.n = 0;
+      late.at = now; late.n = 0; late.long = 0;
     }
     if (unsent.length && now > signals.rideEnd && frameNo % 10 === 0) sendOne(); // (still: no ride under way)
     /* the DIZRUPT screen: the canvas is under solid black until the hole the cursor opens has opened.
        A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
        it would only be work: the frame's state is kept up, the picture is skipped */
-    if (isMobile && landing && !view && !preview && signals.introHole < 0.02) return;
+    if (lean && landing && !view && !preview && signals.introHole < 0.02) return;
     composer.render();
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, bloom, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {

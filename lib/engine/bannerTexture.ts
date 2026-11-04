@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { isMobile } from './config';
+import { lean } from './config';
 
 /* The clients' banners are up on the city's screens, the billboards, the work's windows and the
    spiral's cards: a texture for each, but one picture on the GPU, since they share its source (and
    the settings it is uploaded with). A phone's is smaller: a 1800px banner is 8 MB there. */
-const MAX_W = isMobile ? 1024 : Infinity;
+const MAX_W = lean ? 1024 : Infinity;
 type Waiting = [THREE.Texture, ((t: THREE.Texture) => void) | undefined][];
 const cache = new Map<string, { source: THREE.TextureSource<TexImageSource | null>; waiting: Waiting | null }>();
 

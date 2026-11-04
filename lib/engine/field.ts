@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COUNT, TRANSITION_MS, isMobile } from './config';
+import { COUNT, TRANSITION_MS, lean } from './config';
 import { vertexShader, fragmentShader } from './fieldShaders';
 import { SHAPES } from './shapes';
 
@@ -57,9 +57,9 @@ export class ParticleField {
       uFill: { value: 0 },
       uSolid: { value: 0 },
       uSize: { value: 22 },
-      uKeep: { value: isMobile ? 0.75 : 1 }, // a phone draws three in four of them, each a little brighter (config.ts: COUNT)
+      uKeep: { value: lean ? 0.75 : 1 }, // a phone draws three in four of them, each a little brighter (config.ts: COUNT)
       uGain: { value: 1 }, // a lift on every point's light (engine.ts sets it: a phone's figure)
-      uMaxPoint: { value: isMobile ? 44 : 1e4 }, // and none of them huge (each pixel of a sprite is paid for, ten deep)
+      uMaxPoint: { value: lean ? 44 : 1e4 }, // and none of them huge (each pixel of a sprite is paid for, ten deep)
       uPixelRatio: { value: pixelRatio },
       uMouse: { value: new THREE.Vector3(99, 99, 0) },
       uMouseStrength: { value: 0 },

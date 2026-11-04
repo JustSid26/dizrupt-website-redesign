@@ -8,7 +8,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signals } from '@/lib/signals';
 import { applyFrame } from '../frame';
-import { isMobile } from '../config';
+import { lean } from '../config';
 
 const REST = { lift: 0, shift: 0, zoom: 1 };
 
@@ -477,7 +477,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   const key = new THREE.DirectionalLight('#fff4e8', 1.05);
   key.position.set(3, 4, 6);
   key.castShadow = true;
-  key.shadow.mapSize.setScalar(isMobile ? 512 : 1024);
+  key.shadow.mapSize.setScalar(lean ? 512 : 1024);
   key.shadow.camera.left = key.shadow.camera.bottom = -2.5;
   key.shadow.camera.right = key.shadow.camera.top = 2.5;
   key.shadow.bias = -0.0004;
@@ -499,8 +499,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   scene.add(rimC, rimV);
 
   /* ================= its own buffers and bloom ================= */
-  // (a phone goes without the multisampling: four samples a pixel, twice over, is ~100 MB it can't spare)
-  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile ? 0 : 4 });
+  // (a phone goes without the multisampling: four samples a pixel, twice over, is ~100 MB it can't spare;
+  // a lean computer too, and its bloom drawn from a half-size picture: config.ts)
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: lean ? 0 : 4 });
+  const bloomK = lean ? 0.5 : 1;
   const composer = new EffectComposer(renderer, rt);
   composer.renderToScreen = false;
   composer.setPixelRatio(pixelRatio);
@@ -537,7 +539,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     fragmentShader: /* glsl */ `uniform sampler2D tDiffuse; varying vec2 vUv;
       void main(){ vec4 c = texture2D(tDiffuse, vUv); float m = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c.rgb * min(1.0, 3.0 / max(m, 1e-4)), c.a); }`,
   }));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.2, 1.4);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth * bloomK, innerHeight * bloomK), 0.5, 0.2, 1.4);
   composer.addPass(bloom);
 
   /* ================= the camera: up close, then pulled back to the network ================= */
@@ -555,7 +557,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     camera.fov = camera.aspect < 1 ? 58 : 32; // a phone needs the wider lens
     camera.updateProjectionMatrix();
     composer.setSize(innerWidth, innerHeight);
-    bloom.setSize(innerWidth, innerHeight);
+    bloom.setSize(Math.round(innerWidth * bloomK), Math.round(innerHeight * bloomK));
     traces.u.uViewH.value = innerHeight * pixelRatio;
   };
   resize();
@@ -576,6 +578,13 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     camera,
     bloom,
     resize,
+    /** Drawn at another resolution: the engine's governor has moved the city's, and this follows it. */
+    setPixelRatio(pr: number) {
+      if (Math.abs(pr - pixelRatio) < 0.001) return;
+      pixelRatio = pr;
+      composer.setPixelRatio(pr);
+      resize();
+    },
     /** Off screen: nothing runs on its own here. */
     sleep() {},
     /** Gone for good (a phone frees it once the page is well past it): everything it put on the GPU. */

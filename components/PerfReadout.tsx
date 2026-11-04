@@ -9,7 +9,7 @@ import { signals } from "@/lib/signals";
    has dropped to the lighter picture (and thinned his points, below that), and the section; under it,
    for each section seen so far, the share of its frames dropped and its worst (a screenshot of it, from
    the top of the page to the contact, says where a phone struggles). Nothing of it runs otherwise. */
-type Eng = { renderer?: { getPixelRatio(): number }; quality?: () => { low: boolean; base: number; thin: number } };
+type Eng = { renderer?: { getPixelRatio(): number }; quality?: () => { low: boolean; base: number; thin: number; bench?: Record<string, number>; tier?: string; why?: string; gpu?: string } };
 
 export function PerfReadout() {
   const [on, setOn] = useState(false);
@@ -37,6 +37,10 @@ export function PerfReadout() {
       const q = eng?.quality?.();
       const dpr = eng?.renderer?.getPixelRatio() ?? 0;
       setText(`${frames} fps · worst ${worst.toFixed(0)}ms · ${dpr.toFixed(2)}x of ${devicePixelRatio}x${q?.low ? " · LIGHT" : ""}${q && q.thin < 1 ? ` · points ${Math.round(q.thin * 100)}%` : ""} · ${signals.scroll.section}\n`
+        // which scene this device was given (lib/engine/config.ts: lean), why, and the graphics it reported
+        + (q?.tier ? `${q.tier} (${q.why}) · ${(q.gpu || "graphics unnamed").replace(/^ANGLE \((.*)\)$/, "$1").slice(0, 70)}\n` : "")
+        // what the benchmark timed at startup: ms a frame at each resolution it tried
+        + (q?.bench && Object.keys(q.bench).length ? `test ${Object.entries(q.bench).map(([pr, ms]) => `${pr}x ${ms}ms`).join(" · ")}\n` : "")
         + Object.entries(by).map(([k, b]) => `${k} ${Math.round((b.late / b.n) * 100)}% dropped, worst ${b.worst.toFixed(0)}ms`).join("\n"));
       frames = 0;
       worst = 0;

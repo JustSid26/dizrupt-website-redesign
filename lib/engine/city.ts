@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { bannerTexture } from './bannerTexture';
-import { isMobile } from './config';
+import { isMobile, lean } from './config';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 import { FACADE_GLSL, lightingUniforms, setMode } from './facade';
 import { BANNERS } from '@/content/banners';
@@ -515,7 +515,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
      order of height, bottom first, the way the mascot is lit from the top down; the solid facade is
      only drawn below the line where they have landed. Once it is up they burn out. */
   const cp: number[] = [], cf: number[] = [], cr: number[] = [], cc: number[] = [], cs: number[] = [];
-  const dense = isMobile ? 0.55 : 1;
+  const dense = lean ? 0.55 : 1;
   // size: 1 for the fine structure (edges, dust, fins), larger for a lit window, which should read as a pane
   const push = (x: number, y: number, z: number, b: B, col: THREE.Color, k = 1, size = 1) => {
     cp.push(x, y, z);
@@ -672,7 +672,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     const a = (i / pillarCount) * Math.PI * 2;
     const px = Math.cos(a) * RAIL_R, pz = Math.sin(a) * RAIL_R;
     const st = railStart(px, pz);
-    for (let k = 0; k < (isMobile ? 70 : 150); k++) {
+    for (let k = 0; k < (lean ? 70 : 150); k++) {
       const ang = rnd() * Math.PI * 2;
       const y = rnd() * RAIL_H;
       cp.push(px + Math.cos(ang) * 0.19, GROUND + y, pz + Math.sin(ang) * 0.19);
@@ -682,7 +682,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       cc.push(railTint.r, railTint.g, railTint.b);
     }
   }
-  for (let k = 0; k < (isMobile ? 2500 : 6000); k++) {
+  for (let k = 0; k < (lean ? 2500 : 6000); k++) {
     const a = rnd() * Math.PI * 2;
     const rr = RAIL_R + (rnd() - 0.5) * 0.9;
     const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
@@ -735,7 +735,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     for (let i = 0; i < uvA.count; i++) heights.set(key(uvA.getX(i), 1 - uvA.getY(i)), uv1A.getX(i));
     const sampler = new MeshSurfaceSampler(mesh).build();
     const uvS = new THREE.Vector2(), sample = new THREE.Vector3(), normal = new THREE.Vector3();
-    const nSamples = isMobile ? 60000 : 150000;
+    const nSamples = lean ? 60000 : 150000;
     const white = new THREE.Color(0.85, 0.92, 1.0);
     for (let i = 0; i < nSamples; i++) {
       sampler.sample(sample, normal, undefined, uvS);
@@ -817,7 +817,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         tri.a.fromBufferAttribute(pos, i0); tri.b.fromBufferAttribute(pos, i1); tri.c.fromBufferAttribute(pos, i2);
         area += tri.getArea();
       }
-      const count = Math.round(area * (isMobile ? 55 : 120));
+      const count = Math.round(area * (lean ? 55 : 120));
       const fh = 0.44;
       for (let i = 0; i < count; i++) {
         sampler.sample(sample, normal);
@@ -901,9 +901,9 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   construct.frustumCulled = false;
-  // a phone builds the city without them: thousands of glowing, blended sprites over the whole screen
-  // were the build's dearest pixels, and the facades come up the same without their lights
-  construct.visible = !isMobile;
+  // a phone (or a lean computer: config.ts) builds the city without them: thousands of glowing, blended
+  // sprites over the whole screen were the build's dearest pixels, and the facades come up the same without their lights
+  construct.visible = !lean;
   group.add(construct);
 
   /* ---- the night sky: a clear, bright one, deep blue at the top, glowing at the horizon ---- */
@@ -1075,7 +1075,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     }
   }
   for (const way of [-1, 1]) lanes.push([way * 0.75, PLAZA + (EXTENT - PLAZA) / 2, 0, -way, EXTENT - PLAZA]);
-  const perLane = isMobile ? 3 : 6;
+  const perLane = lean ? 3 : 6;
   const carCount = lanes.length * perLane;
   const carGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const cLane = new Float32Array(carCount * 4), cLen = new Float32Array(carCount), cSpeed = new Float32Array(carCount), cPhase = new Float32Array(carCount), cCol = new Float32Array(carCount * 3);
@@ -1244,7 +1244,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   };
 
   /* ---- aeroplanes, crossing overhead ---- */
-  const planes = Array.from({ length: isMobile ? 3 : 5 }, (_, i) => {
+  const planes = Array.from({ length: lean ? 3 : 5 }, (_, i) => {
     const p = makePlane();
     group.add(p.points);
     return { ...p, r: 30 + i * 9 + rnd() * 6, y: GROUND + TALL + 6 + i * 3.5, speed: 0.04 + rnd() * 0.03, phase: rnd() * Math.PI * 2, way: i % 2 ? 1 : -1 };
