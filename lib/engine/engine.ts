@@ -5,7 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CAMERA_Z, COUNT, GPU, PIXEL_RATIO, TIER, TIER_WHY, isMobile, lean, reducedMotion } from './config';
+import { CAMERA_Z, COUNT, GPU, MAX_PIXEL_RATIO, PIXEL_RATIO, TIER, TIER_WHY, isMobile, lean, reducedMotion } from './config';
 import { ParticleField } from './field';
 import { BUST_DROP, BUST_HEIGHT, loadMascot } from './mascot';
 import { createIndex } from './spiral';
@@ -60,7 +60,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   /* the picture's resolution: the device's own, capped (config.ts). A phone's cap is only a floor to
      start from: once the scene is built it is measured against the phone it is on (see the benchmark
-     before `ready`), and a phone that can afford it draws at up to 2x */
+     before `ready`), and a phone that can afford it draws at up to 1.5x (config.ts: MAX_PIXEL_RATIO) */
   let pixelRatio = PIXEL_RATIO;
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(innerWidth, innerHeight, false);
@@ -109,10 +109,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.setSize(innerWidth, innerHeight);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
-  /* the bloom is a soft glow: a phone draws it from a half-size picture (a quarter of the work) and
-     nobody can tell; when frames are running late it drops to a quarter, and a computer's from whole
-     to half (see quality, below) */
-  const bloomScale = () => (lean ? (lowQuality ? 0.25 : 0.5) : lowQuality ? 0.5 : 1);
+  /* the bloom is a soft glow: drawn from a half-size picture (a quarter of the work), on every device,
+     and nobody can tell; when frames are running late it drops to a quarter (see quality, below) */
+  const bloomScale = () => (lowQuality ? 0.25 : 0.5);
   const bloomSize = () => new THREE.Vector2(Math.round(innerWidth * bloomScale()), Math.round(innerHeight * bloomScale()));
   let lowQuality = false;
   const bloom = new UnrealBloomPass(bloomSize(), 0.45, 0.22, 0.26);
@@ -657,7 +656,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      itself costs about twice what the city standing does, and the rest of the frame is the page's own
      layers over it and the frame's work) is the one it gets. A phone starts from its floor (config.ts)
      and is tried upwards: one that keeps up gets the desktop's picture. A computer starts from its
-     screen's own (up to 2x) and is tried downwards to 1x: a weak laptop's integrated graphics get a
+     screen's own (up to 1.5x) and is tried downwards to 1x: a weak laptop's integrated graphics get a
      picture they can hold, not a 2x one they can't. The count is still running: this takes a few
      tenths of a second behind it. */
   if (!reducedMotion) {
@@ -685,8 +684,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       return ms;
     };
     const BUDGET = 8; // ms
-    // (a lean computer no sharper than 1.5x, and down to 0.75x if it must: its 1x is still a laptop's whole screen)
-    const cap = Math.min(lean && !isMobile ? 1.5 : 2, devicePixelRatio);
+    // (never sharper than config.ts allows; a lean computer down to 0.75x if it must: its 1x is still a laptop's whole screen)
+    const cap = Math.min(MAX_PIXEL_RATIO, devicePixelRatio);
     let chosen = pixelRatio;
     if (isMobile) {
       for (const pr of [2, 1.75, 1.5].filter((v) => v <= cap && v > pixelRatio + 0.01)) {
@@ -698,7 +697,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       levels.unshift(chosen);
       if (levels[levels.length - 1] > 1) levels.push(1);
     } else {
-      /* A computer: its screen's own resolution (up to 2x), unless that is over budget AND a lower one
+      /* A computer: its screen's own resolution (up to 1.5x), unless that is over budget AND a lower one
          would actually be cheaper. A frame's cost is a part that goes with its pixels (the square of
          the ratio) and a part that doesn't (the city's geometry, his points placed, the frame's own
          work): timed at the top and at 1x, the two parts are told apart, and the sharpest notch whose

@@ -9,7 +9,7 @@ export const isMobile =
    whether there is a bloom at all), and the governor (engine.ts) can only move what can be changed
    while it runs (the resolution, his points thinned).
    'full': everything. 'lean': the scene a phone was tuned for (fewer, finer points, matt steel, no bloom,
-   no sprite huge), drawn at the computer's own layout, at up to 1.5x and down to 0.75x if it must.
+   no sprite huge), drawn at the computer's own layout, and down to 0.75x if it must.
    Every phone is lean. A computer is when its graphics are known to be weak (Intel's before Iris Xe,
    AMD's and NVIDIA's older and entry-level chips, a phone's chip in a Chromebook), when it has 4GB of
    memory or less, or when it won't say what its graphics are (Safari calls every Mac's "Apple GPU") and
@@ -66,9 +66,13 @@ export const TIER = decided.tier;
 export const TIER_WHY = decided.why;
 export const lean = TIER === 'lean';
 
-// a phone starts at 1.25x and is then measured (engine.ts): a phone that can hold more gets more. A lean
-// computer starts no sharper than 1.5x, a full one at its screen's own (up to 2x), and both are measured
-export const PIXEL_RATIO = typeof window !== 'undefined' ? Math.min(devicePixelRatio, isMobile ? 1.25 : lean ? 1.5 : 2) : 1;
+/* the sharpest the picture is ever drawn, on any screen: 1.5 device pixels to the CSS pixel. A 2x screen
+   at 2x is 78% more pixels than at 1.5x for a difference in the points' and lines' edges only (the type
+   is the page's, at the screen's own); those pixels are better spent on frames */
+export const MAX_PIXEL_RATIO = 1.5;
+// a phone starts at 1.25x and is then measured (engine.ts): a phone that can hold more gets more. A
+// computer starts at its screen's own, up to the most above, and is measured too
+export const PIXEL_RATIO = typeof window !== 'undefined' ? Math.min(devicePixelRatio, isMobile ? 1.25 : MAX_PIXEL_RATIO) : 1;
 /* particles in the field. A phone's figure is drawn from more, smaller points than it was: what a
    frame pays for is the pixels the points cover, not their number, so the same light from twice as
    many points at half the area each is the same work and a finer figure (field.ts, engine.ts) */

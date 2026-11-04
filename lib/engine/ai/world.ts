@@ -500,9 +500,9 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
 
   /* ================= its own buffers and bloom ================= */
   // (a phone goes without the multisampling: four samples a pixel, twice over, is ~100 MB it can't spare;
-  // a lean computer too, and its bloom drawn from a half-size picture: config.ts)
+  // a lean computer too: config.ts. The bloom is drawn from a half-size picture everywhere, as the city's is)
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: lean ? 0 : 4 });
-  const bloomK = lean ? 0.5 : 1;
+  const bloomK = 0.5;
   const composer = new EffectComposer(renderer, rt);
   composer.renderToScreen = false;
   composer.setPixelRatio(pixelRatio);
