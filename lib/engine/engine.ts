@@ -22,7 +22,7 @@ import { site } from '@/content/site';
 import { createAiWorld, type AiWorld } from './ai/world';
 import { createTransitionPass } from './ai/transition';
 import { createWorkTower } from './workTower';
-import { LightBloomPass, glowInOutput } from './lightBloom';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { isPhoneLayout } from '@/lib/layout';
 import { workP, WORK_LEAD } from '@/lib/stops';
 import { bannerFor } from '@/content/banners';
@@ -109,10 +109,13 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.setSize(innerWidth, innerHeight);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
-  /* the glow round the city's lights, for a fraction of a bloom's work (lightBloom.ts), on a computer
-     that draws the full scene. A lean one (config.ts) goes without, and the heart keeps a halo of its
-     own there (below); the governor can switch it off on a computer that struggles (quality, below) */
-  const glow = lean ? null : new LightBloomPass({ strength: 1, threshold: 0.26, weights: [0.6, 0.45, 0.25] });
+  /* the bloom: the soft glow round every light in the city, as it always was, on every computer. A phone
+     goes without, as it always did, and the heart keeps a halo of its own there (below). It is drawn
+     from a picture the page's own size (not the device's: its spread is the same at any resolution),
+     half that on a lean computer (config.ts), and half again once the picture has come down to 1x or
+     his points are thinning. The governor switches it off on a computer that struggles at 1x (quality,
+     below), before it would take the picture any softer */
+  const glow = isMobile ? null : new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 0.26);
   if (glow) composer.addPass(glow);
   let glowOn = !!glow, glowIn = 0; // (glowIn: the landing brings it in, below)
   // the hand-over to the AI world: both pictures, one transition (ai/transition.ts)
@@ -120,9 +123,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   aiPass.enabled = false;
   aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
   composer.addPass(aiPass);
-  const output = new OutputPass();
-  composer.addPass(output);
-  const glowAmount = glow ? glowInOutput(output, glow) : null; // (added as the picture is tone-mapped)
+  composer.addPass(new OutputPass());
   /* Quality: a governor, on every device (a weak laptop is as likely to struggle as a phone). The
      picture is drawn at one of a few resolutions, from the one the benchmark (before `ready`) found
      the device can hold down to 1x. Whenever frames run late it
@@ -145,6 +146,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     renderer.setPixelRatio(pr);
     composer.setPixelRatio(pr);
     composer.setSize(innerWidth, innerHeight);
+    glowSize();
     aiPass.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr);
     aiWorld?.setPixelRatio(pr); // (its own buffers, at the same resolution as the city's)
     scene.traverse((o) => {
@@ -162,10 +164,17 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     qualityAt = performance.now();
     setRatio(curPr);
   };
+  // the bloom's picture: the page's size, or half once the governor is at 1x or thinning his points
+  // (the composer sizes every pass to the device's pixels: this undoes that for the bloom)
+  function glowSize() {
+    const k = (lean ? 0.5 : 1) * ((level > 0 && curPr <= 1) || thin < 1 ? 0.5 : 1);
+    glow?.setSize(Math.round(innerWidth * k), Math.round(innerHeight * k));
+  }
   // the points thinned or brought back
   const setThin = (v: number) => {
     thin = v;
     qualityAt = performance.now();
+    glowSize();
   };
   // the glow off or back on (the AI world's with it)
   const setGlow = (on: boolean) => {
@@ -189,6 +198,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight, false);
     composer.setSize(innerWidth, innerHeight);
+    glowSize();
     aiPass.uniforms.uRes.value.set(innerWidth * curPr, innerHeight * curPr);
     aiWorld?.resize();
     atmosphere.resize();
@@ -939,7 +949,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       points.quaternion.identity();
       points.scale.setScalar(1);
       points.updateMatrix();
-      field.morphTo(field.shape(want), 3400, 0.6);
+      field.morphTo(field.shape(want), 2000, 0.6); // (quick: he is whole again a moment after the train turns back into him)
       field.rebase(points.matrix.clone().invert().multiply(oldM));
       u.uWave.value = 1;
       scrubFrom = key;
@@ -1557,11 +1567,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const full = ai.mix >= 0.9999;
       renderPass.enabled = !full;
       if (glow) {
-        // the city's glow, while there is a city to see: the landing brings it in as the board comes away
-        // from the screen, and the AI world takes it out as it takes over
+        // the bloom, while there is a city to see: the landing brings it in as the board comes away from
+        // the screen (the board fills it at first, and must meet the page's own picture without a seam)
         glowIn = onIntro && s.intro < 0.2 ? smooth(0.015, 0.12, s.intro) : damp(glowIn, 1, 3, dt);
+        glow.strength = 0.45 * glowIn;
         glow.enabled = glowOn && !full;
-        glowAmount!.value = glow.enabled ? glowIn * (1 - ai.mix) : 0;
       }
       if (on) {
         if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
@@ -1601,12 +1611,18 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const share = n + late.long ? slow / (n + late.long) : 0;
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
-        if (level < levels.length - 1) setLevel(level + 1);
-        else if (glowOn) setGlow(false); // (at the floor: the glow goes before his points thin)
+        // (at 1x the glow goes before anything else: before a lean computer's picture goes below 1x, and
+        // before his points thin)
+        if (glowOn && (curPr <= 1.001 || level >= levels.length - 1)) setGlow(false);
+        else if (level < levels.length - 1) setLevel(level + 1);
         else setThin(Math.max(0.5, thin - 0.25));
       };
       const up = () => {
-        if (thin < 1) setThin(Math.min(1, thin + 0.25)); else if (glow && !glowOn) setGlow(true); else setLevel(level - 1);
+        // (back the way it came: his points, the picture up to 1x, the glow, then sharper)
+        if (thin < 1) setThin(Math.min(1, thin + 0.25));
+        else if (curPr < 0.999) setLevel(level - 1);
+        else if (glow && !glowOn) setGlow(true);
+        else setLevel(level - 1);
         upAt = now;
       };
       if (now - qualityAt < 900) goodFor = 0;

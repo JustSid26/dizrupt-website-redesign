@@ -7,8 +7,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signals } from '@/lib/signals';
 import { applyFrame } from '../frame';
-import { lean } from '../config';
-import { LightBloomPass } from '../lightBloom';
+import { isMobile, lean } from '../config';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 const REST = { lift: 0, shift: 0, zoom: 1 };
 
@@ -531,11 +531,18 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       }`,
   });
   composer.addPass(glitchPass);
-  /* the neon's glow, for a fraction of a bloom's work (lightBloom.ts), only where it is brightest; no
-     single glint may outshine the rest (a pinpoint specular would flare into a halo). A lean computer
-     goes without, as the city does */
-  const glow = lean ? null : new LightBloomPass({ strength: 1, threshold: 1.4, clamp: 3, weights: [0.55, 0.45, 0.2], composite: true });
-  if (glow) composer.addPass(glow);
+  /* the neon's bloom, as it always was, where it is brightest, on every computer (a lean one's from a
+     half-size picture, as the city's is). No single glint may outshine the rest first: a pinpoint
+     specular would bloom into a halo */
+  const glowK = lean ? 0.5 : 1;
+  const clampPass = isMobile ? null : new ShaderPass({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `uniform sampler2D tDiffuse; varying vec2 vUv;
+      void main(){ vec4 c = texture2D(tDiffuse, vUv); float m = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c.rgb * min(1.0, 3.0 / max(m, 1e-4)), c.a); }`,
+  });
+  const glow = isMobile ? null : new UnrealBloomPass(new THREE.Vector2(innerWidth * glowK, innerHeight * glowK), 0.5, 0.2, 1.4);
+  if (clampPass && glow) { composer.addPass(clampPass); composer.addPass(glow); }
 
   /* ================= the camera: up close, then pulled back to the network ================= */
   const poses = [
@@ -552,6 +559,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     camera.fov = camera.aspect < 1 ? 58 : 32; // a phone needs the wider lens
     camera.updateProjectionMatrix();
     composer.setSize(innerWidth, innerHeight);
+    glow?.setSize(Math.round(innerWidth * glowK), Math.round(innerHeight * glowK)); // (the page's size, not the device's, as the city's is)
     traces.u.uViewH.value = innerHeight * pixelRatio;
   };
   resize();
@@ -581,6 +589,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     /** The glow on or off (the engine's governor: a computer that struggles goes without). */
     setGlow(on: boolean) {
       if (glow) glow.enabled = on;
+      if (clampPass) clampPass.enabled = on;
     },
     /** Off screen: nothing runs on its own here. */
     sleep() {},
