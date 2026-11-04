@@ -1403,7 +1403,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     // whole while it is the subject; stepping back once he is (the count, the profile, the rest)
     /* (a phone, while he stands whole in the city on the landing: the city steps back to half, or his
        points, drawn without the glow a wide screen gives him, are lost among its windows) */
-    const himWhole = lean && onIntro && ip > 0.2 && ip < 0.5;
+    // (only without the glow: with it his points stand out on their own, and the city needn't go dull for them)
+    const himWhole = lean && !(glow && glowOn) && onIntro && ip > 0.2 && ip < 0.5;
     cityDim = damp(cityDim, himWhole ? 0.5 : section === 'bridge' ? 1 - 0.7 * smooth(0.4, 0.9, s.section === 'ai' ? 1 : s.bridge) : (onIntro && (ip < 0.5 || ip > 0.76)) || (section === 'solutions' && !preview && !phone) || section === 'projects' || section === 'contact' ? 1 : view ? 0.15 : 0.35, 2, dt);
     night = damp(night, signals.night, 1.5, dt); // the switch between blue hour and night is a slow fade, not a cut
     city.update(time, onIntro ? smooth(0.1, 0.4, ip) : 1, cityDim, camera.position, night);
