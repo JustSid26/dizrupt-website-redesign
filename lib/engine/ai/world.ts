@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { signals } from '@/lib/signals';
 import { applyFrame } from '../frame';
 import { isMobile, lean } from '../config';
+import { compileFor, drawAll } from '../warm';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 const REST = { lift: 0, shift: 0, zoom: 1 };
@@ -593,6 +594,13 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
     },
     /** Off screen: nothing runs on its own here. */
     sleep() {},
+    /** Everything in it compiled and drawn once, as it will be drawn (warm.ts), and one frame through
+        its passes, while the page is still loading: none of it made in the frame that first shows it. */
+    async warm() {
+      await compileFor(renderer, scene, camera, composer.readBuffer);
+      drawAll(renderer, scene, camera, composer.readBuffer);
+      this.render(0, 0, 0, 0, 0);
+    },
     /** Gone for good (a phone frees it once the page is well past it): everything it put on the GPU. */
     dispose() {
       const textures = new Set<THREE.Texture>();

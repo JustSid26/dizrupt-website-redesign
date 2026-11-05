@@ -22,8 +22,10 @@ import { site } from '@/content/site';
 import { createAiWorld, type AiWorld } from './ai/world';
 import { createTransitionPass } from './ai/transition';
 import { createWorkTower } from './workTower';
+import { breathe, compileFor, drawAll } from './warm';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { isPhoneLayout } from '@/lib/layout';
+import { ENGINE_TIMEOUT_MS } from '@/lib/webgl';
 import { workP, WORK_LEAD } from '@/lib/stops';
 import { bannerFor } from '@/content/banners';
 
@@ -640,13 +642,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      landing aren't spent compiling shaders and uploading textures while the city is trying to move.
      Compiled as they will be drawn: into the composer's buffer (the same material drawn to the screen is
      another program, converting to sRGB on its way out, and compiling only that one left every hidden
-     thing to compile in the middle of the ride that first shows it), and the hand-over's pass too */
-  renderer.setRenderTarget(composer.readBuffer);
-  renderer.compile(scene, camera);
-  renderer.setRenderTarget(null);
+     thing to compile in the middle of the ride that first shows it), and the hand-over's pass too.
+     Then everything drawn once, hidden or not (warm.ts): what only a real draw puts on the GPU is there
+     before the first ride too */
+  await compileFor(renderer, scene, camera, composer.readBuffer);
   aiPass.enabled = true;
   composer.render();
   aiPass.enabled = false;
+  drawAll(renderer, scene, camera, composer.readBuffer);
+  await breathe();
   /* and the pictures not yet on the GPU (a client's banner, once it has loaded) go up one at a time
      while the page is still, not in the frame of a ride that first shows them */
   const unsent: THREE.Texture[] = [];
@@ -739,6 +743,22 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     }
   }
   setLevel(Math.max(0, levels.indexOf(pixelRatio)));
+  // (and a frame at it: the buffers the resolution chosen needs, the glow's too, made now, not in the first ride's first frame)
+  composer.render();
+  /* The AI world, built now too, behind the count, rather than as the page comes up to it: built, it
+     was the longest stall of the whole page (its lighting baked, its shaders compiled, its buffers
+     made), in the middle of the ride out of the bridge. Built after the benchmark, so its buffers are
+     made at the resolution chosen, and drawn whole once (warm.ts) so its first frames on screen have
+     nothing to make. A computer only: a phone has no AI world, and a touch screen frees it once the
+     page is past it and builds it again ahead of the way back (below), as it always has. And only if
+     the loading hasn't already been long (a slow connection, a slow machine): the page gives up on the
+     3D if it isn't ready in time (Stage.tsx), and the AI world can still be built on the way to it */
+  if (!isMobile && !isPhoneLayout() && performance.now() < ENGINE_TIMEOUT_MS * 0.6) {
+    await breathe();
+    aiWorld = createAiWorld(renderer, curPr);
+    aiWorld.setGlow(glowOn);
+    await aiWorld.warm();
+  }
   signals.ready = true;
 
   /* ---------- glitch bursts (Spider-Verse: rare, abrupt, over in a few held frames) ---------- */
