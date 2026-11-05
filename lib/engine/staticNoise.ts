@@ -7,6 +7,8 @@
    handful of noise tiles, cycled and shifted by a random offset each frame, is indistinguishable
    once it is moving and costs one fill instead.
    ========================================================= */
+import { isMobile, lean } from './config';
+
 const BLOCK = 2.6;  // screen pixels per grain — the chunk that makes it read as analogue, not film
 const TILE = 256;   // size of each pre-rendered noise tile
 const BANKS = 6;    // how many of them to cycle through
@@ -32,6 +34,10 @@ function makeTile() {
 }
 
 export function createStatic(canvas) {
+  /* A lean computer (config.ts) goes without: the landing is plain black under its lettering. The snow
+     is a full-screen layer repainted 30 times a second and laid over everything under it, work its
+     integrated graphics are better spared (a phone keeps it: it was tuned there and holds it) */
+  if (lean && !isMobile) return { start() {}, stop() {} };
   const ctx = canvas.getContext('2d');
   const banks = Array.from({ length: BANKS }, () => ctx.createPattern(makeTile(), 'repeat'));
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;

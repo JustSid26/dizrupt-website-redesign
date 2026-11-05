@@ -17,7 +17,9 @@ export const isMobile =
    has four cores or fewer (the cores alone don't decide: Brave reports a random number of them).
    Apple silicon is full in any browser: where its name is hidden, it gives itself away by the
    compressed textures (ASTC) only Apple's own graphics read, which an Intel Mac's can't, so it never
-   rests on the cores Safari reports. ?tier=lean or ?tier=full on a computer forces either (for testing). */
+   rests on the cores Safari reports. And so an "Apple GPU" that can't read them is an Intel Mac, lean
+   in Safari as it is in Chrome (which names its Intel graphics). ?tier=lean or ?tier=full on a
+   computer forces either (for testing). */
 const WEAK_GPU = [
   /\bIntel\b(?!.*\b(Xe|Arc)\b)/i, // Intel's integrated graphics before Iris Xe: HD, UHD, Iris, Iris Plus, Iris Pro
   /Radeon(\(TM\))? (HD|R[2-7]|Vega \d)/i, // AMD's older integrated graphics
@@ -51,6 +53,10 @@ export function chooseTier(gpu: string, threads: number, memory: number, phone: 
   if (forced === 'lean' || forced === 'full') return { tier: forced, why: '?tier' };
   // Apple's own graphics (named, or "Apple GPU" and reading ASTC): every Apple silicon Mac
   if (/\bApple\b/i.test(gpu) && (astc || /\bApple M\d/i.test(gpu))) return { tier: 'full', why: 'Apple silicon' };
+  /* Safari's "Apple GPU" that doesn't read ASTC: an Intel Mac. Its graphics (Intel's, or an older AMD)
+     are a fraction of Apple silicon's, and Safari says nothing more, not even the real number of cores
+     to go on (a quad-core MacBook Pro says 8, and was given everything) */
+  if (/^Apple GPU$/i.test(gpu.trim())) return { tier: 'lean', why: 'Intel Mac' };
   if (WEAK_GPU.some((re) => re.test(gpu))) return { tier: 'lean', why: 'graphics' };
   if (memory <= 4) return { tier: 'lean', why: `${memory}GB` };
   if (threads <= 4 && !NAMED_GPU.test(gpu)) return { tier: 'lean', why: `${threads} cores` };

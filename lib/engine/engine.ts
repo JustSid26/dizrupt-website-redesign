@@ -65,6 +65,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      so once the governor has taken the glow away, so it is lifted further then (frame(), below). A phone
      keeps the light it was tuned in */
   const lift = lean && !isMobile;
+  // (and the page's own grain, laid over the whole picture on every frame, goes: globals.css, html.lean)
+  document.documentElement.classList.toggle('lean', lift);
   if (lift) {
     renderer.toneMapping = THREE.LinearToneMapping;
     renderer.toneMappingExposure = 1.15;
@@ -145,9 +147,16 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      between the two, stuttering every time it goes up. Below 1x there is one more step: his points
      thinned (fewer drawn, each brighter: the same light), down to about half. */
   let qualityAt = 0, goodFor = 0, upAt = -1e9, holdUntil = 0, hold = 15000, thin = 1;
+  // a computer's steady 30: the browser's or its graphics' (see the governor), and the try under way
+  let capKnown: 'browser' | 'graphics' | null = null;
+  let probe: { at: number; level: number; thin: number; glow: boolean } | null = null;
+  // what each section last held (see the governor)
+  const held = new Map<string, { level: number; thin: number; thirty: boolean; glow: boolean }>();
+  let heldFor = '';
+  let lateRun = false; // the last second had a few late frames (see the governor)
   // the frames since the governor last looked: how long each took
   // (long: frames of a quarter to a whole second, counted apart: see frame())
-  const late = { at: 0, n: 0, long: 0, dts: new Float32Array(256) };
+  const late = { at: 0, n: 0, long: 0, idle: 0, dts: new Float32Array(256) };
   const bench: Record<string, number> = {}; // the benchmark's measurements, ms a frame at each resolution tried
   let levels: number[] = [PIXEL_RATIO, ...[1.75, 1.5, 1.25, 1].filter((v) => v < PIXEL_RATIO - 0.01)], level = 0, curPr = PIXEL_RATIO;
   /* draw at this many device pixels per CSS pixel: the renderer and the composer resized,
@@ -1228,7 +1237,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const baseY = new THREE.Vector3().setFromMatrixPosition(trainSolid.matrix).y;
       trainClip.constant = solidK >= 1 ? 1e4 : baseY - 0.05 + solidK * 1.8;
     }
-    u.uOpacity.value = fieldOpacity * mascotVisible * (1 - 0.92 * Math.max(0, (solidK - 0.3) / 0.7));
+    /* the solid train in, his points stay on it as a faint shimmer; a lean computer lets them go
+       altogether, and they aren't drawn (forty thousand points over the train on every frame of the
+       ride, a fifth of the frame there on integrated graphics) */
+    u.uOpacity.value = fieldOpacity * mascotVisible * (1 - (lean && !isMobile ? 1 : 0.92) * Math.max(0, (solidK - 0.3) / 0.7));
     // faded right out (the work, the landing's black) his points aren't drawn at all: forty thousand of
     // them at nothing are still forty thousand to place and fill (his heart, hung on them, still is)
     (points.material as THREE.Material).visible = u.uOpacity.value > 0.002;
@@ -1642,7 +1654,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
           dark = true;
         }
         // (the frames here are the page's, not the picture's: the governor doesn't count them)
-        late.at = now; late.n = 0; late.long = 0;
+        late.at = now; late.n = 0; late.long = 0; late.idle = 0;
         return;
       }
       dark = false;
@@ -1652,11 +1664,37 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        notch up has just failed (see quality, above), and only while the page is still (a change remakes
        the picture's buffers: a hitch, which a ride would show). The second after a change isn't judged:
        its first frames pay for the new buffers */
+    /* Each section keeps what it last settled at. They cost very different amounts (the work's tower,
+       its city dissolved round it, a fraction of the train's ride through the whole city, and the chip
+       more than either): the governor learns each one's best once, and coming into it again the
+       picture is at once what it held there, rather than shaking while it is learnt again (the work
+       left at the chip's softer picture, or the train's ride at the work's sharper one) */
+    if (s.section !== heldFor) {
+      if (heldFor) held.set(heldFor, { level, thin, thirty, glow: glowOn });
+      const h = held.get(s.section);
+      if (h && !probe) {
+        if (h.level !== level) setLevel(h.level);
+        if (h.thin !== thin) setThin(h.thin);
+        if (h.thirty !== thirty) setThirty(h.thirty);
+        if (h.glow !== glowOn) setGlow(h.glow);
+      }
+      heldFor = s.section;
+      late.at = now; late.n = 0; late.long = 0; late.idle = 0; // (the new section judged on its own frames)
+    }
     if (now - late.at > 1000) {
       /* late: a refresh missed. A phone held to 30 frames a second (iOS's Low Power Mode does it) runs
          every frame at 33ms, steadily; that is its pace, not lateness, and nothing here would mend it */
       const dts = late.dts.subarray(0, late.n).sort(), n = late.n;
-      const capped = n > 10 && dts[Math.floor(n * 0.2)] > 0.03 && dts[Math.floor(n * 0.8)] < 0.036;
+      const steady30 = n > 10 && dts[Math.floor(n * 0.2)] > 0.03 && dts[Math.floor(n * 0.8)] < 0.036;
+      /* A computer's steady 30 can be either: the browser holding it there (Chrome's Energy Saver, on
+         battery), or graphics that need a little more than a refresh for every frame and settle into
+         every other one just as steadily (a weak laptop's, in the city: it was taken for the first, and
+         left at 30 at its sharpest). Told apart by trying, below. A phone's is its own, and so is ours */
+      const capped = steady30 && (isMobile || thirty || capKnown === 'browser');
+      /* (only judged on frames that drew the picture: with nothing to draw, the DIZRUPT screen, the
+         browser may well take its frames at 30 by itself, and that says nothing about the graphics) */
+      const drawing = late.idle <= n * 0.1;
+      const unsure = steady30 && !capped && capKnown === null;
       const period = capped ? 1 / 30 : 1 / 60;
       let slow = late.long;
       for (let i = 0; i < n; i++) if (dts[i] > period * 1.45) slow++;
@@ -1664,17 +1702,17 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
         /* Each a notch down its own ladder (and back up it the same way, below).
-           A lean computer, once at 1x: a steady 30 a second first, every frame given twice the time, the
-           picture still sharp, every point and the glow kept; only then softer than 1x, his points thinned,
-           and its glow last of all (by then from a quarter-size picture: a small part of the frame, and
-           most of its light, without which it reads dull).
+           A lean computer keeps its 60 frames a second for as long as anything else can give: the
+           picture softer, down to 0.75x, then his points thinned; only then a steady 30, and its glow
+           last of all (by then from a quarter-size picture: a small part of the frame, and most of its
+           light, without which it reads dull). (It went to 30 at 1x before, to keep the picture sharp:
+           a weak laptop's frames are smoother at 60 a little softer than sharp at 30.)
            A full computer: down to 1x, its glow, his points, and a steady 30 the last resort */
         const step = (s: number) => setThin(Math.max(0.5, thin - s));
         if (lean) {
-          if (curPr > 1.001 && level < levels.length - 1) setLevel(level + 1);
-          else if (!thirty) setThirty(true);
-          else if (level < levels.length - 1) setLevel(level + 1);
+          if (level < levels.length - 1) setLevel(level + 1);
           else if (thin > 0.5) step(0.25);
+          else if (!thirty) setThirty(true);
           else if (glowOn) setGlow(false);
         } else {
           if (level < levels.length - 1) setLevel(level + 1);
@@ -1686,9 +1724,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const up = () => {
         if (lean) {
           if (glow && !glowOn) setGlow(true);
-          else if (thin < 1) setThin(Math.min(1, thin + 0.25));
-          else if (curPr < 0.999) setLevel(level - 1);
           else if (thirty) setThirty(false);
+          else if (thin < 1) setThin(Math.min(1, thin + 0.25));
           else setLevel(level - 1);
         } else {
           if (thirty) setThirty(false);
@@ -1698,25 +1735,57 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         }
         upAt = now;
       };
-      if (now - qualityAt < 900) goodFor = 0;
-      else if (share > 0.16) {
-        if (level < levels.length - 1 || glowOn || thin > 0.5 || !thirty) down();
+      /* the try: the cheapest picture there is (the lowest resolution, his points thinned, no glow) for a
+         few seconds. Still a steady 30: the browser's; everything put back as it was, and not tried
+         again. 60: it was the graphics, and the governor climbs back up from there, a notch at a time,
+         to the best it can hold at 60 (a steady 30 from then on is lateness, like any other) */
+      if (!drawing) goodFor = 0; // (nothing drawn, nothing to judge: neither way, nor the try)
+      else if (probe) {
+        if (now - probe.at > 2500 && now - qualityAt >= 900) {
+          if (steady30) {
+            capKnown = 'browser';
+            setThin(probe.thin);
+            setLevel(probe.level);
+            setGlow(probe.glow);
+          } else capKnown = 'graphics';
+          probe = null;
+        }
+        goodFor = 0;
+      } else if (unsure) {
+        // (tried while the page is still, never in the middle of a ride)
+        if (now - qualityAt >= 900 && now > signals.rideEnd) {
+          probe = { at: now, level, thin, glow: glowOn };
+          setLevel(levels.length - 1);
+          setThin(0.5);
+          setGlow(false);
+        }
+        goodFor = 0;
+      } else if (now - qualityAt < 900) goodFor = 0;
+      /* (a few late frames a second, every second, is the shake that reads as jitter: a frame rate in the
+         fifties, one frame in ten held twice as long. Two such seconds running step down too: one alone
+         is a hitch, not a pace) */
+      else if (share > 0.16 || (share > 0.06 && lateRun)) {
+        const more = () => level < levels.length - 1 || glowOn || thin > 0.5 || !thirty;
+        if (more()) down();
+        // (most of the second's frames late: two notches, so a section far over budget shakes for a second or two, not five)
+        if (share > 0.5 && more() && now - upAt >= 10000) down(); // (not after a notch up that failed: that one goes back one, and waits)
         goodFor = 0;
       } else if (share < 0.03) {
         if (++goodFor >= 5 && (level > 0 || thin < 1 || thirty || (glow && !glowOn)) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
       } else goodFor = 0;
-      late.at = now; late.n = 0; late.long = 0;
+      lateRun = drawing && share > 0.06 && share <= 0.16;
+      late.at = now; late.n = 0; late.long = 0; late.idle = 0;
     }
     if (unsent.length && now > signals.rideEnd && frameNo % 10 === 0) sendOne(); // (still: no ride under way)
     /* the DIZRUPT screen: the canvas is under solid black until the hole the cursor opens has opened.
        A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
        it would only be work: the frame's state is kept up, the picture is skipped */
-    if (lean && landing && !view && !preview && signals.introHole < 0.02) return;
+    if (lean && landing && !view && !preview && signals.introHole < 0.02) { late.idle++; return; }
     composer.render();
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {

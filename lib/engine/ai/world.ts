@@ -191,7 +191,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.02, 300);
-  renderer.shadowMap.enabled = true;
+  /* (a lean computer draws no shadow map: config.ts. Drawn and then read at every pixel of the chip and
+     the dark behind it, it was the dearest third of the chip's whole frame on integrated graphics; a
+     soft patch of dark behind it stands in for the shadow it cast there, below) */
+  renderer.shadowMap.enabled = !lean;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const uTime = { value: 0 };
 
@@ -477,7 +480,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   /* ================= light ================= */
   const key = new THREE.DirectionalLight('#fff4e8', 1.05);
   key.position.set(3, 4, 6);
-  key.castShadow = true;
+  key.castShadow = !lean;
   key.shadow.mapSize.setScalar(lean ? 512 : 1024);
   key.shadow.camera.left = key.shadow.camera.bottom = -2.5;
   key.shadow.camera.right = key.shadow.camera.top = 2.5;
@@ -488,7 +491,27 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   const catcher = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), new THREE.ShadowMaterial({ color: '#000000', opacity: 0.55 }));
   catcher.position.set(0, 0, -0.75);
   catcher.receiveShadow = true;
+  catcher.visible = !lean;
   scene.add(catcher);
+  /* the lean computer's stand-in: the chip's shadow on the dark behind it, a soft square of dark where
+     the key light (up and to the right of it) would throw it, following the chip as it floats */
+  const blob = lean ? (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    // (the square drawn out of sight, its blurred shadow in: soft-edged in every browser)
+    g.shadowColor = '#000';
+    g.shadowBlur = 16;
+    g.shadowOffsetX = 1000;
+    g.fillRect(28 - 1000, 28, 72, 72);
+    const tex = new THREE.CanvasTexture(c);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#000000', map: tex, transparent: true, opacity: 0.5, depthWrite: false, fog: false }));
+    m.scale.setScalar(((BODY + 0.5) * 128) / 72);
+    scene.add(m);
+    return m;
+  })() : null;
+  // where the key light throws the chip's shadow on it: back along the light, to the catcher's depth
+  const shadowAt = new THREE.Vector3().copy(key.position).normalize().multiplyScalar(-0.75 / (key.position.z / key.position.length()));
   // a cool fill from below, so the ceramic's edges and the leads' undersides read
   const fill = new THREE.DirectionalLight('#9fb8ff', 0.35);
   fill.position.set(-4, -3, 3);
@@ -666,6 +689,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       // the chip floats and turns on its own, then holds still, square on, once it is powered
       const free = 1 - smooth(0, 0.55, act);
       chipRoot.position.set(0, Math.sin(time * 0.9) * 0.06 * free, 0);
+      blob?.position.copy(chipRoot.position).add(shadowAt);
       chipRoot.rotation.set(Math.sin(time * 0.5) * 0.35 * free - 0.3 * free, Math.sin(time * 0.37) * 0.5 * free + 0.4 * free, Math.sin(time * 0.29) * 0.08 * free);
       {
         const g = signals.aiGrab, step = Math.max(dt, 1 / 240);
