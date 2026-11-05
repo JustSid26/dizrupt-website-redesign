@@ -11,9 +11,9 @@ import { signals } from "@/lib/signals";
    the picture was there. "Copy report" puts all of it on the clipboard, with the browser, the screen
    and the graphics, to be pasted where it can be read: what a weak laptop really does, section by
    section, rather than what a fast one guesses. Nothing of it runs otherwise. */
-type Q = { frames?: number; low: boolean; base: number; thin: number; pr?: number; bench?: Record<string, number>; tier?: string; why?: string; gpu?: string; glow?: boolean | null; fps30?: boolean; cap?: string | null; trying?: boolean };
+type Q = { frames?: number; cost?: { logic: number; boards: number; ai: number; draw: number; frame: number }; low: boolean; base: number; thin: number; pr?: number; bench?: Record<string, number>; tier?: string; why?: string; gpu?: string; glow?: boolean | null; fps30?: boolean; cap?: string | null; trying?: boolean };
 type Eng = { renderer?: { getPixelRatio(): number }; quality?: () => Q };
-type Section = { n: number; late: number; worst: number; time: number; at: string; drawn: number };
+type Section = { n: number; late: number; worst: number; time: number; at: string; drawn: number; cost: number[]; costN: number };
 
 // what the picture is, in a few words
 const look = (q: Q | undefined, dpr: number) =>
@@ -41,7 +41,7 @@ export function PerfReadout() {
       const eng = (window as unknown as { engine?: Eng }).engine;
       if (dt < 250) {
         const k = signals.scroll.section;
-        if (!by[k]) { by[k] = { n: 0, late: 0, worst: 0, time: 0, at: "", drawn: 0 }; order.push(k); }
+        if (!by[k]) { by[k] = { n: 0, late: 0, worst: 0, time: 0, at: "", drawn: 0, cost: [0, 0, 0, 0, 0], costN: 0 }; order.push(k); }
         const b = by[k];
         b.n++;
         const drawn = eng?.quality?.().frames ?? -1;
@@ -50,14 +50,20 @@ export function PerfReadout() {
         b.time += dt;
         if (dt > 24) b.late++;
         b.worst = Math.max(b.worst, dt);
-        if (b.n % 30 === 0) b.at = look(eng?.quality?.(), eng?.renderer?.getPixelRatio() ?? 0);
+        if (b.n % 30 === 0) {
+          const qq = eng?.quality?.();
+          b.at = look(qq, eng?.renderer?.getPixelRatio() ?? 0);
+          // (the engine's own split of a frame, as it stands: averaged over the section)
+          if (qq?.cost && qq.cost.frame > 0) { const c = qq.cost; [c.logic, c.boards, c.ai, c.draw, c.frame].forEach((v, i) => (b.cost[i] += v)); b.costN++; }
+        }
       }
       if (now - last < 1000) return;
       const q = eng?.quality?.();
       const dpr = eng?.renderer?.getPixelRatio() ?? 0;
       const lines = (fps: boolean) => order.map((k) => {
         const b = by[k];
-        return `${k} ${fps ? `${Math.round((b.n * 1000) / Math.max(1, b.time))}fps (3D drawn ${Math.round((b.drawn * 1000) / Math.max(1, b.time))}/s) · ` : ""}${Math.round((b.late / b.n) * 100)}% dropped, worst ${b.worst.toFixed(0)}ms${fps && b.at ? ` · at ${b.at}` : ""}`;
+        const c = b.costN ? b.cost.map((v) => (v / b.costN).toFixed(1)) : null;
+        return `${k} ${fps ? `${Math.round((b.n * 1000) / Math.max(1, b.time))}fps (3D drawn ${Math.round((b.drawn * 1000) / Math.max(1, b.time))}/s) · ` : ""}${Math.round((b.late / b.n) * 100)}% dropped, worst ${b.worst.toFixed(0)}ms${fps && b.at ? ` · at ${b.at}` : ""}${fps && c ? ` · ms/frame: logic ${c[0]}, boards ${c[1]}, AI ${c[2]}, draw ${c[3]}, whole ${c[4]}` : ""}`;
       });
       setText(`${frames} fps · worst ${worst.toFixed(0)}ms · ${dpr.toFixed(2)}x of ${devicePixelRatio}x${q?.low ? " · LIGHT" : ""}${q?.glow === false ? " · no glow" : ""}${q?.fps30 ? " · held to 30fps" : ""}${q?.trying ? " · trying for 60" : q?.cap === "browser" ? " · the browser holds 30" : ""}${q && q.thin < 1 ? ` · points ${Math.round(q.thin * 100)}%` : ""} · ${signals.scroll.section}\n`
         // which scene this device was given (lib/engine/config.ts: lean), why, and the graphics it reported

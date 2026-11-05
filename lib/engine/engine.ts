@@ -155,6 +155,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const held = new Map<string, { level: number; thin: number; thirty: boolean; glow: boolean }>();
   let heldFor = '';
   let lateRun = false; // the last second had a few late frames (see the governor)
+  /* where a frame's time goes, averaged over the last second or so (for ?perf, on a device that can't
+     be measured from here): the page's logic, the boards drawn on canvases and the films sent up, the
+     AI world, the draw itself as submitted, and the whole frame (the next frame's start less this one's) */
+  const cost = { logic: 0, boards: 0, ai: 0, draw: 0, frame: 0 };
+  const costAcc = { logic: 0, boards: 0, ai: 0, draw: 0, frame: 0, n: 0, at: 0 };
+  let frameStart = 0, boardsMs = 0, aiMs = 0;
   // the notch that is 1x (or the lowest, on a screen under 1x): where a lean computer's ladder pauses
   const oneX = () => { const i = levels.findIndex((v) => v <= 1.001); return i < 0 ? levels.length - 1 : i; };
   // the frames since the governor last looked: how long each took
@@ -963,6 +969,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        its turn: on a slow machine that comes later or sooner in each frame (whatever ran before it took
        longer or less), and the train moved on in uneven steps while the screen showed them evenly. */
     const t0 = at ?? performance.now();
+    if (frameStart) costAcc.frame += performance.now() - frameStart; // (the last frame, whole: to this one's start)
+    frameStart = performance.now();
+    boardsMs = 0; aiMs = 0;
     /* held to 30 a second: every other refresh (every fourth at 120Hz) is skipped whole, so each frame
        has twice the time and every one takes the same, where a device that can't keep 60 would otherwise
        jump between the two. What moves is timed by the clock, not by frames, so nothing slows; the
@@ -1514,11 +1523,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const lineReveal = ride.s > 0.001 ? Math.max(at0, ahead)
       : section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, ahead) : 1.02;
     // (a phone never has the line: its boards aren't drawn, nor its first film fetched)
-    if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT, look);
+    { const tb = performance.now(); if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT, look); boardsMs += performance.now() - tb; }
     if (wasIsolating || phone) line.group.visible = false; // the work's tower alone: the line and its stations go with the city (a phone never has them)
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
-    if (billboard.material.opacity > 0.05 && (landing || due(billboard.plane, time))) billboard.draw(time, !landing);
+    { const tb = performance.now(); if (billboard.material.opacity > 0.05 && (landing || due(billboard.plane, time))) billboard.draw(time, !landing); boardsMs += performance.now() - tb; }
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();
 
     sky = damp(sky, onIntro ? smooth(0.1, 0.3, ip) : 1, 3, dt);
@@ -1670,7 +1679,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       // (the lift: a little with the glow, more without it, easing between)
       if (lift) renderer.toneMappingExposure = damp(renderer.toneMappingExposure, glow && glowOn ? 1.15 : 1.4, 2, dt);
       if (on) {
-        if (aiWorld) aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y);
+        if (aiWorld) { const ta = performance.now(); aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y); aiMs += performance.now() - ta; }
         aiPass.uniforms.uMix.value = ai.mix;
         aiPass.uniforms.uMode.value = ai.mode;
         aiPass.uniforms.uTime.value = time;
@@ -1687,6 +1696,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         }
         // (the frames here are the page's, not the picture's: the governor doesn't count them)
         late.at = now; late.n = 0; late.long = 0; late.idle = 0;
+        frameStart = 0; // (not a drawn frame: the next one's whole isn't measured from it)
         return;
       }
       dark = false;
@@ -1816,17 +1826,25 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     /* the DIZRUPT screen: the canvas is under solid black until the hole the cursor opens has opened.
        A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
        it would only be work: the frame's state is kept up, the picture is skipped */
-    if (lean && landing && !view && !preview && signals.introHole < 0.02) { late.idle++; return; }
+    if (lean && landing && !view && !preview && signals.introHole < 0.02) { late.idle++; frameStart = 0; return; }
     /* With no glow and no hand-over under way the composer has nothing to add: the picture is drawn
        straight to the screen, which saves a pass over every pixel and the 16-bit buffer the composer
        draws into (on integrated graphics, Safari's above all, a frame's worth of both). The output
        (the tone mapping, sRGB) is the renderer's own either way, the same picture. */
+    const td = performance.now();
     if (direct()) renderer.render(scene, camera);
     else composer.render();
+    const tEnd = performance.now();
+    costAcc.draw += tEnd - td; costAcc.boards += boardsMs; costAcc.ai += aiMs; costAcc.logic += td - frameStart - boardsMs - aiMs; costAcc.n++;
+    if (tEnd - costAcc.at > 1000) {
+      const n = Math.max(1, costAcc.n);
+      cost.logic = costAcc.logic / n; cost.boards = costAcc.boards / n; cost.ai = costAcc.ai / n; cost.draw = costAcc.draw / n; cost.frame = costAcc.frame / n;
+      costAcc.logic = costAcc.boards = costAcc.ai = costAcc.draw = costAcc.frame = costAcc.n = 0; costAcc.at = tEnd;
+    }
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ frames: frameNo, low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ frames: frameNo, cost, low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
