@@ -1004,6 +1004,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let boardMeasure = 0;
   let cityDim = 1;
   let stationT = 0;
+  let trackShow = 1; // the track's light, 1 with the train about, 0 once it has gone (see the frame)
   let night = signals.night;
   const clock = new THREE.Timer();
   let raf = 0;
@@ -1572,7 +1573,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const lineReveal = ride.s > 0.001 ? Math.max(at0, ahead)
       : section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, ahead) : 1.02;
     // (a phone never has the line: its boards aren't drawn, nor its first film fetched)
-    { const tb = performance.now(); if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT, look); boardsMs += performance.now() - tb; }
+    /* the track's light goes with the train: once it has turned back into him (the bridge on), the line
+       of violet light round the city is a glare for nothing, and is faded out; it comes back as the page
+       returns to the ride */
+    trackShow = damp(trackShow, section === 'intro' || section === 'solutions' ? 1 : 0, 2, dt);
+    { const tb = performance.now(); if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT, look, trackShow); boardsMs += performance.now() - tb; }
     if (wasIsolating || phone) line.group.visible = false; // the work's tower alone: the line and its stations go with the city (a phone never has them)
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen

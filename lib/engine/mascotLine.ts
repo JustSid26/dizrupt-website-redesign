@@ -525,7 +525,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const stops = [nearestU(S), ...stationAngles.map((t) => nearestU(new THREE.Vector3(Math.cos(t) * R, TRACK_Y, Math.sin(t) * R)))];
 
   /* ---- the track: a deck with violet light strips, on pillars, built by particles ---- */
-  const trackUniforms = { uLead: { value: 0.01 }, uFrom: { value: 0 }, uReveal: { value: 0 }, uDim: { value: 1 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio } };
+  // (uShow: the track's light, 1 while the train is about, faded out once it has gone: engine.ts)
+  const trackUniforms = { uLead: { value: 0.01 }, uFrom: { value: 0 }, uReveal: { value: 0 }, uDim: { value: 1 }, uTime: { value: 0 }, uPixelRatio: { value: pixelRatio }, uShow: { value: 1 } };
   const deckGeo = new THREE.TubeGeometry(curve, 600, 0.55, 4, false);
   const deck = new THREE.Mesh(deckGeo, new THREE.ShaderMaterial({
     uniforms: trackUniforms,
@@ -623,9 +624,9 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       }`,
     // (a lean computer's track dimmer: lifted and through the full-size glow, at the full one's gain it floods)
     fragmentShader: /* glsl */ `
-      #define TRACK_GAIN ${lean && !isMobile ? '1.0' : '1.6'}
-      #define TRACK_DOT ${lean && !isMobile ? '0.55' : '0.8'}
-      uniform float uDim; varying float vA, vKind, vSize;
+      #define TRACK_GAIN ${lean && !isMobile ? '0.75' : '1.6'}
+      #define TRACK_DOT ${lean && !isMobile ? '0.45' : '0.8'}
+      uniform float uDim, uShow; varying float vA, vKind, vSize;
       void main() {
         float d = length(gl_PointCoord - 0.5);
         if (d > 0.5 || vA < 0.01) discard;
@@ -635,7 +636,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
            next to nothing (they all sit near its edge), and the far track would all but vanish. From
            seven pixels up it is the soft light it was */
         float a = mix(TRACK_DOT, core * core * 0.7 + exp(-d * d * 40.0) * 0.9, smoothstep(3.0, 7.0, vSize));
-        gl_FragColor = vec4(col * uDim * TRACK_GAIN, a * vA);
+        gl_FragColor = vec4(col * uDim * TRACK_GAIN, a * vA * uShow);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
@@ -1001,7 +1002,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
 
   /* look: how much of the screen a thing fills, and whether a moving picture on it is due a redraw
      (engine.ts). One that isn't is neither redrawn nor sent to the GPU; a film out of shot is paused */
-  function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1, look: Look = ALWAYS) {
+  function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1, look: Look = ALWAYS, trackShow = 1) {
     for (const f of faults) {
       if (time > f.next) { f.until = time + 0.22 + Math.random() * 0.3; f.next = f.until + 1.2 + Math.random() * 2.5; }
       const tearing = !reduced && time < f.until && f.sg.visible;
@@ -1064,6 +1065,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     station.build(stationBuild, time, look);
     trackUniforms.uReveal.value = reveal;
     trackUniforms.uDim.value = dim;
+    trackUniforms.uShow.value = trackShow;
     trackUniforms.uTime.value = time;
     group.visible = reveal > 0.001 || stationBuild > 0.001;
     holos.forEach((h, k) => {
