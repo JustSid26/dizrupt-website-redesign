@@ -915,18 +915,23 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const force30 = new URLSearchParams(location.search).get('fps') === '30';
   let thirty = force30, lastDrawn = 0;
 
-  function frame() {
+  function frame(at?: number) {
     raf = requestAnimationFrame(frame);
+    /* Everything is moved on the frame's own time: the refresh it will be seen on, the same for all
+       that is drawn in it and as evenly spaced as the screen's refreshes. Not the moment this code got
+       its turn: on a slow machine that comes later or sooner in each frame (whatever ran before it took
+       longer or less), and the train moved on in uneven steps while the screen showed them evenly. */
+    const t0 = at ?? performance.now();
     /* held to 30 a second: every other refresh (every fourth at 120Hz) is skipped whole, so each frame
        has twice the time and every one takes the same, where a device that can't keep 60 would otherwise
        jump between the two. What moves is timed by the clock, not by frames, so nothing slows; the
-       page's own scroll runs at its own rate (SmoothScroll.tsx) */
-    const t0 = performance.now();
+       page's own scroll runs at its own rate (SmoothScroll.tsx). (Counted on the refreshes' own times,
+       a frame is never skipped for having started late in its refresh: a 33ms one slipping to 50) */
     if (thirty && t0 - lastDrawn < 1000 / 30 - 4) return;
     lastDrawn = t0;
     frameNo++;
-    clock.update();
-    const rawDt = clock.getDelta();
+    clock.update(t0);
+    const rawDt = Math.max(0, clock.getDelta()); // (the first frame's time is the page's: never behind the last)
     const dt = Math.min(rawDt, 0.05);
     const time = clock.getElapsed();
     const now = performance.now();

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
+import { exactProgress } from "@/lib/scroll";
 import { EASE, T } from "@/lib/motion";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
@@ -59,7 +60,7 @@ export function SolutionsTrain() {
       start: "top bottom",
       end: "bottom bottom",
       onUpdate: (self) => {
-        const p = self.progress;
+        const p = exactProgress(self); // (the exact scroll, not the browser's rounded one: lib/scroll.ts)
         signals.scroll.solutions = p;
         /* His train leaves the plaza and stops at each of the six stations in turn: x counts the stops,
            and within each one it travels, then stands, so each solution is read while it is still. */

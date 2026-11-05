@@ -10,6 +10,19 @@ export const setLenis = (l: Lenis | null) => {
 };
 export const getLenis = () => instance;
 
+/* A trigger's progress from where the smooth scroll really is, to the fraction of a pixel, for what the
+   3D flies by. The browser rounds the page's scroll to whole device pixels (on a screen at 100%, a
+   laptop's usual, whole pixels), and the train or a camera driven by the rounded one moves in uneven
+   steps, worst where a ride is slowest. Lenis keeps the exact position it set; where it isn't driving
+   the page (reduced motion, the light version) or the two have parted (a jump the browser made itself),
+   the trigger's own. The page's own type and layers keep the trigger's: they move with the real scroll. */
+export const exactProgress = (self: { progress: number; start: number; end: number }) => {
+  const y = instance?.animatedScroll;
+  const span = self.end - self.start;
+  if (y === undefined || !(span > 0) || Math.abs(y - window.scrollY) > 1.5) return self.progress;
+  return Math.min(1, Math.max(0, (y - self.start) / span));
+};
+
 // A ride between scroll stops under way (SmoothScroll.tsx) is dropped when the page is sent somewhere
 // else: the jump replaces its scroll, so the ride would never hear that it ended, and would keep
 // swallowing every gesture after it while it waited.

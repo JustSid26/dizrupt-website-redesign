@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { ScrollTrigger } from "@/lib/gsap";
+import { exactProgress } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useSection } from "@/components/home/useSection";
 
@@ -18,7 +19,7 @@ export function Bridge() {
       trigger: section.current,
       start: "top center",
       end: "bottom center",
-      onUpdate: (self) => (signals.scroll.bridge = self.progress),
+      onUpdate: (self) => (signals.scroll.bridge = exactProgress(self)), // (the exact scroll: lib/scroll.ts)
       onLeaveBack: () => (signals.scroll.bridge = 0),
     });
     return () => st.kill();

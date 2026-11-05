@@ -262,7 +262,12 @@ export function SmoothScroll() {
       }
     };
     gsap.ticker.add(idle);
-    const raf = (time: number) => lenis.raf(time * 1000);
+    /* the scroll is moved on the frame's own time (the refresh it will be seen on, the same for
+       everything drawn in it), not GSAP's: that is the wall clock in whole milliseconds, read whenever
+       its turn comes, so each frame's step of a ride was a little long or short, and the train and the
+       cameras flown by it shook. (performance.now() shares the frame's clock, should GSAP ever tick
+       without one) */
+    const raf = (_t: number, _d: number, _f: number, at?: number) => lenis.raf(typeof at === "number" ? at : performance.now());
     gsap.ticker.add(raf);
     gsap.ticker.lagSmoothing(0);
     return () => {

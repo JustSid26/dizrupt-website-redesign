@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ScrollTrigger } from "@/lib/gsap";
+import { exactProgress } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { clients, slugOf } from "@/content/projects";
@@ -43,8 +44,9 @@ export function Projects() {
       ScrollTrigger.create({
         trigger: section.current, start: "top top", end: "bottom bottom",
         onUpdate: (self) => {
-          p = pOf(self.progress);
-          signals.scroll.projects = self.progress;
+          const e = exactProgress(self); // (the exact scroll: lib/scroll.ts)
+          p = pOf(e);
+          signals.scroll.projects = e;
           signals.scroll.projectIndex = Math.max(0, Math.min(N - 1, p));
         },
       }),

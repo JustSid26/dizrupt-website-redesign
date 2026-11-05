@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
+import { exactProgress } from "@/lib/scroll";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { site } from "@/content/site";
@@ -283,7 +284,7 @@ export function Intro() {
       onUpdate: (self) => {
         /* the scroll, reshaped: everything up to the count as it was, then less of a wait on the
            count (0.5 → 0.76) and on the station (0.76 → 1), so the train sets off sooner */
-        const r = self.progress;
+        const r = exactProgress(self); // (the exact scroll: lib/scroll.ts)
         const p = r < 0.675 ? (r / 0.675) * 0.5 : r < 0.825 ? 0.5 + ((r - 0.675) / 0.15) * 0.26 : 0.76 + ((r - 0.825) / 0.175) * 0.24;
         signals.scroll.intro = p;
         // the last line fades before the train sets off
