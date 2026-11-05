@@ -187,7 +187,7 @@ export type AiWorld = ReturnType<typeof createAiWorld>;
    sheen that is barely there under these lights */
 type Surface = THREE.MeshPhysicalMaterialParameters & { clearcoat?: number; clearcoatRoughness?: number };
 const surface = (p: Surface): THREE.MeshStandardMaterial => {
-  if (!lean) return surface(p);
+  if (!lean) return new THREE.MeshPhysicalMaterial(p);
   // (the physical material's own settings, which the standard one hasn't, left out)
   const rest = Object.fromEntries(Object.entries(p).filter(([k]) => !/^(clearcoat|sheen|anisotropy|iridescence|transmission|thickness|ior|specular|attenuation|dispersion)/.test(k)));
   return new THREE.MeshStandardMaterial(rest as THREE.MeshStandardMaterialParameters);
@@ -570,7 +570,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   /* the neon's bloom, as it always was, where it is brightest, on every computer (a lean one's from a
      half-size picture, as the city's is). No single glint may outshine the rest first: a pinpoint
      specular would bloom into a halo */
-  const glowK = lean ? 0.5 : 1;
+  const glowK = 1; // (the same size on every computer: drawn from a smaller picture it spreads wider, and on a big bright thing becomes a haze over the whole frame)
   const clampPass = isMobile ? null : new ShaderPass({
     uniforms: { tDiffuse: { value: null } },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,

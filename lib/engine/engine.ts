@@ -72,7 +72,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      and the dark of the city stays dark. (?tone=linear and ?exp=1.6 to compare, while tuning) */
   const tuneQ = new URLSearchParams(location.search);
   const EXP = +(tuneQ.get('exp') ?? 0) || 0;
-  const liftExp = (withGlow: boolean) => EXP || (withGlow ? 2.0 : 2.4);
+  const liftExp = (withGlow: boolean) => EXP || (withGlow ? 1.25 : 2.2); // (the glow supplies the light where it is on: the lift there only matches the full picture)
   if (lift) {
     renderer.toneMapping = tuneQ.get('tone') === 'linear' ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = liftExp(true);
@@ -132,9 +132,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   /* the bloom: the soft glow round every light in the city, as it always was, on every computer. A phone
      goes without, as it always did, and the heart keeps a halo of its own there (below). It is drawn
      from a picture the page's own size (not the device's: its spread is the same at any resolution),
-     half that on a lean computer (config.ts), and half again once the picture has come down to 1x or
-     his points are thinning. The governor switches it off on a computer that struggles at 1x (quality,
-     below), before it would take the picture any softer */
+     on every computer (glowSize, below: half only once the picture itself is below 1x). The governor
+     switches it off last of all on a computer whose graphics can't afford it (quality, below) */
   const glow = isMobile ? null : new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 0.26);
   if (glow) composer.addPass(glow);
   let glowOn = !!glow && new URLSearchParams(location.search).get('glow') !== 'off', glowIn = 0; // (glowIn: the landing brings it in, below; ?glow=off to see it without)
@@ -239,10 +238,14 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     qualityAt = performance.now();
     setRatio(curPr);
   };
-  // the bloom's picture: the page's size, or half once the governor is at 1x or thinning his points
-  // (the composer sizes every pass to the device's pixels: this undoes that for the bloom)
+  /* the bloom's picture: the page's size, on every computer; half only once the governor has taken
+     the picture itself below 1x (soft already). Drawn from a smaller picture the bloom spreads twice
+     as wide, and on a big bright thing (him, lit, at the contact) that is a haze over the whole frame
+     rather than a glow round it: a lean computer's was half-size for its GPU's sake, and its GPU, it
+     turns out, had the room; what it hadn't was the browser's. (the composer sizes every pass to the
+     device's pixels: this undoes that for the bloom) */
   function glowSize() {
-    const k = (lean ? 0.5 : 1) * ((level > 0 && curPr <= 1) || thin < 1 ? 0.5 : 1);
+    const k = level > 0 && curPr < 0.999 ? 0.5 : 1;
     glow?.setSize(Math.round(innerWidth * k), Math.round(innerHeight * k));
   }
   // the points thinned or brought back
