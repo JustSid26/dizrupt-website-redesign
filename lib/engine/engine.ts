@@ -72,7 +72,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      and the dark of the city stays dark. (?tone=linear and ?exp=1.6 to compare, while tuning) */
   const tuneQ = new URLSearchParams(location.search);
   const EXP = +(tuneQ.get('exp') ?? 0) || 0;
-  const liftExp = (withGlow: boolean) => EXP || (withGlow ? 1.5 : 2.0);
+  const liftExp = (withGlow: boolean) => EXP || (withGlow ? 2.0 : 2.4);
   if (lift) {
     renderer.toneMapping = tuneQ.get('tone') === 'linear' ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = liftExp(true);
@@ -1723,7 +1723,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         glow.enabled = glowOn && !full;
       }
       // (the lift: a little with the glow, more without it, easing between)
-      if (lift) renderer.toneMappingExposure = damp(renderer.toneMappingExposure, liftExp(!!glow && glowOn), 2, dt);
+      // (eased over a few seconds: the glow coming or going is a change the eye would otherwise see as
+      // the whole picture pumping brighter and dimmer)
+      if (lift) renderer.toneMappingExposure = damp(renderer.toneMappingExposure, liftExp(!!glow && glowOn), 0.7, dt);
       if (on) {
         if (aiWorld) { const ta = performance.now(); aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y); aiMs += performance.now() - ta; }
         aiPass.uniforms.uMix.value = ai.mix;
@@ -1847,14 +1849,25 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       /* (a few late frames a second, every second, is the shake that reads as jitter: a frame rate in the
          fifties, one frame in ten held twice as long. Two such seconds running step down too: one alone
          is a hitch, not a pace) */
-      else if (share > 0.16 || (share > 0.06 && lateRun)) {
-        const more = () => level < levels.length - 1 || glowOn || thin > 0.5 || !thirty;
+      /* Where the browser says what the graphics chip's own time was (Chrome, Firefox), late frames
+         are only laid at the picture's door when the chip was busy for a fair share of them. A laptop
+         whose frames run long for the browser's own reasons (the page's layers composited, its scripts)
+         while its chip spends a few ms on the 3D would otherwise be taken down to the softest, dullest
+         picture for nothing, as one was; and while the chip has room to spare, the picture climbs back
+         whatever the frames are doing, a notch at a time, until it hasn't */
+      const gpuShare = cost.gpu >= 0 && cost.frame > 0 ? cost.gpu / cost.frame : -1;
+      const gpuSpare = gpuShare >= 0 && gpuShare < 0.3, gpuBusy = gpuShare < 0 || gpuShare > 0.45;
+      const canUp = level > 0 || thin < 1 || thirty || (glow && !glowOn);
+      if (gpuSpare && canUp) {
+        if (++goodFor >= 5 && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
+      } else if (share > 0.16 || (share > 0.06 && lateRun)) {
+        const more = () => gpuBusy && (level < levels.length - 1 || glowOn || thin > 0.5 || !thirty);
         if (more()) down();
         // (most of the second's frames late: two notches, so a section far over budget shakes for a second or two, not five)
         if (share > 0.5 && more() && now - upAt >= 10000) down(); // (not after a notch up that failed: that one goes back one, and waits)
         goodFor = 0;
       } else if (share < 0.03) {
-        if (++goodFor >= 5 && (level > 0 || thin < 1 || thirty || (glow && !glowOn)) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
+        if (++goodFor >= 5 && canUp && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
       } else goodFor = 0;
       lateRun = drawing && share > 0.06 && share <= 0.16;
       late.at = now; late.n = 0; late.long = 0; late.idle = 0;

@@ -188,7 +188,8 @@ export type AiWorld = ReturnType<typeof createAiWorld>;
 type Surface = THREE.MeshPhysicalMaterialParameters & { clearcoat?: number; clearcoatRoughness?: number };
 const surface = (p: Surface): THREE.MeshStandardMaterial => {
   if (!lean) return surface(p);
-  const { clearcoat: _c, clearcoatRoughness: _r, ...rest } = p;
+  // (the physical material's own settings, which the standard one hasn't, left out)
+  const rest = Object.fromEntries(Object.entries(p).filter(([k]) => !/^(clearcoat|sheen|anisotropy|iridescence|transmission|thickness|ior|specular|attenuation|dispersion)/.test(k)));
   return new THREE.MeshStandardMaterial(rest as THREE.MeshStandardMaterialParameters);
 };
 
