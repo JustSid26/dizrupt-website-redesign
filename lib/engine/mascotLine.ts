@@ -4,9 +4,10 @@ import { createBrandingFilm } from './brandingFilm';
 
 // the films drawn in code, by the name a solution asks for
 const LIVE_FILMS = { branding: createBrandingFilm };
-import { COUNT, lean } from './config';
+import { COUNT, isMobile, lean } from './config';
 import { isPhoneLayout } from '@/lib/layout';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* =========================================================
    The mascot's own line.
@@ -153,6 +154,35 @@ export function trainShape(model?: THREE.Object3D | null): Float32Array {
    safety line, a white canopy on steel columns with strip lights under it, a glass screen behind,
    and the station's name board. Built up out of particles in each material's own colour, and shown
    solid below the line those have reached. Local frame: +z along the track, +x to the platform. */
+/* The pieces of something that never come apart, drawn as one: every mesh is a draw call of its own,
+   and a station's billboard was fifty of them (the steel of its frame, legs, bracing and catwalk, its
+   lamps), six billboards three hundred a frame for a few thousand points. Each draw costs the browser
+   the same however small it is, and Safari on an Intel Mac a great deal. Merged by material, in place
+   in their group: the picture is the same. */
+function mergeByMaterial(group: THREE.Object3D, mats: Set<THREE.Material>) {
+  const by = new Map<THREE.Material, THREE.Mesh[]>();
+  for (const c of group.children) {
+    const m = c as THREE.Mesh;
+    const mat = m.material as THREE.Material;
+    if (!m.isMesh || m.children.length || !mats.has(mat)) continue;
+    if (!by.has(mat)) by.set(mat, []);
+    by.get(mat)!.push(m);
+  }
+  for (const [mat, meshes] of by) {
+    if (meshes.length < 2) continue;
+    const geos = meshes.map((m) => { m.updateMatrix(); return m.geometry.clone().applyMatrix4(m.matrix); });
+    const merged = mergeGeometries(geos);
+    geos.forEach((g) => g.dispose());
+    if (!merged) continue;
+    for (const m of meshes) { group.remove(m); m.geometry.dispose(); }
+    group.add(new THREE.Mesh(merged, mat));
+  }
+}
+
+/** How much of the screen a thing fills, and whether a moving picture on it is due a redraw (engine.ts). */
+type Look = { share: (o: THREE.Object3D) => number; due: (o: THREE.Object3D, time: number) => boolean };
+const ALWAYS: Look = { share: () => 1, due: () => true };
+
 /* The station's billboard: DIZRUPT on black, the mirrored Z losing the signal in irregular bursts —
    the channels thrown apart, the letter jumping, a band of it dropped. Redrawn while it is seen. */
 function glitchBoard() {
@@ -234,6 +264,7 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
   const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), -1e4);
   const board = glitchBoard();
   const meshes: THREE.Mesh[] = [];
+  let screen: THREE.Object3D | null = null; // the sign's face: what has to be seen for it to be redrawn
   // the billboard stands over the front half of the roof, above where the train's nose waits
   model.traverse((o) => { if (o.name.startsWith('station_screen') || o.name.startsWith('station_billboard')) o.position.z += 4.5; });
   model.updateMatrixWorld(true);
@@ -242,6 +273,7 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
     if (!m.isMesh) return;
     if (o.name.startsWith('station_screen')) {
       m.material = new THREE.MeshBasicMaterial({ map: board.tex, toneMapped: false, clippingPlanes: [clip], side: THREE.DoubleSide });
+      screen ??= m;
     } else {
       const mat = (m.material as THREE.MeshStandardMaterial).clone();
       mat.clippingPlanes = [clip];
@@ -308,14 +340,16 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
 
   const bb = new THREE.Box3().setFromObject(model);
   const LOW = bb.min.y, TOP = bb.max.y + 0.3;
-  function build(t: number, time: number) {
+  function build(t: number, time: number, look: Look) {
     group.visible = t > 0.001;
     const local = LOW + (TOP - LOW) * t;
     clip.constant = t >= 0.999 ? 1e4 : local + group.position.y;
     pu.uFront.value = local;
     pu.uTime.value = time;
     particles.visible = t < 0.999;
-    if (group.visible) board.draw(time);
+    /* the sign is drawn afresh (and sent to the GPU) only while it is seen big enough to be seen moving:
+       far off, or out of shot, it keeps its last picture, which at that size is the same thing */
+    if (group.visible && (!screen || look.due(screen, time))) board.draw(time);
   }
   return { group, build };
 }
@@ -613,8 +647,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const banners: { mat: THREE.MeshBasicMaterial; texs: THREE.Texture[]; i: number; next: number }[] = [];
   const liveBoards: ReturnType<typeof glitchBoard>[] = [];
   const screens: THREE.Mesh[] = [];
-  const lives: { film: { tex: THREE.Texture; draw: (t: number) => void; stop?: () => void }; k: number; mat: THREE.MeshBasicMaterial; start: number; on: boolean }[] = [];
-  const films: { video: HTMLVideoElement; k: number; mat: THREE.MeshBasicMaterial; tex: THREE.Texture; on: boolean; start: number }[] = [];
+  const lives: { film: { tex: THREE.Texture; draw: (t: number) => void; stop?: () => void }; k: number; mat: THREE.MeshBasicMaterial; start: number; on: boolean; screen: THREE.Object3D }[] = [];
+  const films: { video: HTMLVideoElement; k: number; mat: THREE.MeshBasicMaterial; tex: THREE.Texture; on: boolean; start: number; screen: THREE.Object3D; sent: number }[] = [];
   const unloaded: { video: HTMLVideoElement; k: number }[] = []; // films not fetched yet
   stations.forEach((st, k) => {
     const u = stops[k + 1];
@@ -661,11 +695,12 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     }
     add(new THREE.BoxGeometry(0.7, 0.05, BW + 0.2), steel, BX - 0.35, 0.55, 0); // the catwalk
     add(new THREE.BoxGeometry(0.03, 0.4, BW + 0.2), steel, BX - 0.7, 0.77, 0);  // its rail
+    const lampMat = new THREE.MeshBasicMaterial({ color: '#fff4dc' }); // (one for the four: they are drawn as one, below)
     for (let i = 0; i < 4; i++) {
       // spotlight arms from the top, leaning out over the screen
       const z = -BW * 0.375 + i * BW * 0.25;
       add(new THREE.BoxGeometry(0.9, 0.04, 0.04), steel, BX - 0.45, BY + BH / 2 + 0.25, z);
-      const lamp = add(new THREE.CylinderGeometry(0.09, 0.14, 0.22, 10), new THREE.MeshBasicMaterial({ color: '#fff4dc' }), BX - 0.9, BY + BH / 2 + 0.18, z);
+      const lamp = add(new THREE.CylinderGeometry(0.09, 0.14, 0.22, 10), lampMat, BX - 0.9, BY + BH / 2 + 0.18, z);
       lamp.rotation.z = -0.6;
     }
     // the screen: the photograph, its channel and its name, composed on a canvas
@@ -711,7 +746,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       const film = LIVE_FILMS[st.live](1600, Math.round(1600 * BH / BW));
       screenMat.map = film.tex;
       screenMat.color.setScalar(0.5); // the films run darker than the photographs
-      lives.push({ film, k, mat: screenMat, start: 0, on: false });
+      lives.push({ film, k, mat: screenMat, start: 0, on: false, screen });
     }
     // (a phone has no train and never sees the billboards: no films to fetch)
     if (st.film && !isPhoneLayout()) {
@@ -719,17 +754,23 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       // fetched only once the train is on its way to this station (update(), below), not all at once
       Object.assign(v, { src: st.film, muted: true, loop: true, playsInline: true, preload: 'none', crossOrigin: 'anonymous' });
       v.addEventListener('loadeddata', () => {
-        const vt = new THREE.VideoTexture(v);
+        /* a lean computer's film is sent to the GPU 15 times a second, not with every frame of it: each is
+           a 1280×720 picture, and on integrated graphics (Safari's above all) the sending is dear. A
+           plain texture, sent from update() below; anything else's, the video's own */
+        const vt = lean && !isMobile ? new THREE.Texture(v) : new THREE.VideoTexture(v);
+        if (!(vt as THREE.VideoTexture).isVideoTexture) { vt.generateMipmaps = false; vt.minFilter = vt.magFilter = THREE.LinearFilter; vt.needsUpdate = true; }
         vt.colorSpace = THREE.SRGBColorSpace;
         const va = v.videoWidth / v.videoHeight, sa = BW / BH;
         if (va > sa) { vt.repeat.set(sa / va, 1); vt.offset.set((1 - sa / va) / 2, 0); }
         else { vt.repeat.set(1, va / sa); vt.offset.set(0, (1 - va / sa) * (st.filmY ?? 0.5)); }
-        films.push({ video: v, k, mat: screenMat, tex: vt, on: false, start: -1 });
+        films.push({ video: v, k, mat: screenMat, tex: vt, on: false, start: -1, screen, sent: 0 });
         screenMat.map = vt;
         screenMat.color.setScalar(0.3); // footage runs brighter than the photographs: the bloom would wash it out
       }, { once: true });
       unloaded.push({ video: v, k });
     }
+    // the billboard's steel, its lit edges and its lamps never move apart: each drawn as one (mergeByMaterial)
+    mergeByMaterial(sg, new Set<THREE.Material>([steel, accent, lampMat]));
     } else {
       /* Tech & Automation: a silver MacBook Pro, giant, standing open beside the line on a steel
          deck, its screen a macOS desktop with the projects folder on it. Clicking it opens the Mac. */
@@ -948,7 +989,9 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   });
   const reduced = typeof window !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1) {
+  /* look: how much of the screen a thing fills, and whether a moving picture on it is due a redraw
+     (engine.ts). One that isn't is neither redrawn nor sent to the GPU; a film out of shot is paused */
+  function update(time: number, reveal: number, dim: number, s: number, stationBuild = 1, look: Look = ALWAYS) {
     for (const f of faults) {
       if (time > f.next) { f.until = time + 0.22 + Math.random() * 0.3; f.next = f.until + 1.2 + Math.random() * 2.5; }
       const tearing = !reduced && time < f.until && f.sg.visible;
@@ -980,6 +1023,15 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       if (near && f.start < 0 && d < ARRIVED) { f.start = time; void f.video.play().catch(() => {}); }
       if (!near && f.on) f.video.pause();
       f.on = near;
+      // under way, it plays only while its screen is seen: out of shot (the last station's, behind the
+      // page once the train has gone on to the bridge and the contact) it waits where it is
+      const sh = near ? look.share(f.screen) : 0;
+      if (near && f.start >= 0) {
+        if (sh < 0.1 && !f.video.paused) f.video.pause();
+        else if (sh >= 0.1 && f.video.paused) void f.video.play().catch(() => {});
+      }
+      // (a lean computer's, sent 15 times a second filling half the screen, fewer the smaller it is)
+      if (!(f.tex as THREE.VideoTexture).isVideoTexture && !f.video.paused && time - f.sent > (sh > 0.5 ? 1 / 15 : sh > 0.2 ? 1 / 10 : 1 / 6)) { f.tex.needsUpdate = true; f.sent = time; }
       f.mat.map = f.tex;
     }
     for (const l of lives) {
@@ -988,7 +1040,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       if (near && l.start < 0 && d < ARRIVED) l.start = time;
       if (!near && l.on) l.film.stop?.(); // footage stops once the train has gone
       l.on = near;
-      if (near) l.film.draw(l.start < 0 ? 0 : time - l.start);
+      if (near && look.due(l.screen, time)) l.film.draw(l.start < 0 ? 0 : time - l.start);
       l.mat.map = l.film.tex;
     }
     for (const b of banners) {
@@ -999,7 +1051,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         b.next = time + (b.i === 0 ? 6 : 3.5); // the photograph holds longer than the work
       }
     }
-    station.build(stationBuild, time);
+    station.build(stationBuild, time, look);
     trackUniforms.uReveal.value = reveal;
     trackUniforms.uDim.value = dim;
     trackUniforms.uTime.value = time;

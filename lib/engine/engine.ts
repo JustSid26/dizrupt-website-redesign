@@ -217,6 +217,32 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     return frustum.intersectsObject(o);
   };
+  /* and how much of it: its size on screen, as a share of the view's height (0 out of shot). A moving
+     picture (a board drawn in code, a film) is redrawn and sent to the GPU by it: under a tenth, not at
+     all (it keeps its last picture, which at that size is the same thing); on a lean computer, the
+     less of the screen it fills the less often (each redraw of one is a canvas drawn and a megabyte or
+     more sent to the GPU, and on integrated graphics, Safari's above all, that was most of a frame).
+     Filling half the screen or more, as often as ever */
+  const seenBox = new THREE.Box3(), seenSize = new THREE.Vector3();
+  const shareOf = (o: THREE.Object3D) => {
+    if (!inView(o)) return 0;
+    seenBox.setFromObject(o);
+    const size = seenBox.getSize(seenSize).length();
+    const dist = Math.max(0.01, seenBox.distanceToPoint(camera.position));
+    return size / (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+  };
+  const redrawnAt = new WeakMap<object, number>();
+  // (the boards draw on every other call of theirs: these are the calls, twice the redraws)
+  const due = (o: THREE.Object3D, time: number) => {
+    const sh = shareOf(o);
+    if (sh < 0.1) return false;
+    if (!lean || isMobile || sh > 0.5) return true;
+    const last = redrawnAt.get(o) ?? -1e9;
+    if (time - last < (sh > 0.2 ? 1 / 20 : 1 / 10)) return false;
+    redrawnAt.set(o, time);
+    return true;
+  };
+  const look = { share: shareOf, due };
 
   const resize = () => {
     camera.aspect = innerWidth / innerHeight;
@@ -1482,11 +1508,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     const lineReveal = ride.s > 0.001 ? Math.max(at0, ahead)
       : section === 'intro' ? at0 * smooth(0.79, 0.9, ip) : section === 'solutions' ? Math.max(at0, ahead) : 1.02;
     // (a phone never has the line: its boards aren't drawn, nor its first film fetched)
-    if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT);
+    if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT, look);
     if (wasIsolating || phone) line.group.visible = false; // the work's tower alone: the line and its stations go with the city (a phone never has them)
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place
     // the board stays live (its snow and its Z) for as long as it can be seen
-    if (billboard.material.opacity > 0.05 && (landing || inView(billboard.plane))) billboard.draw(time, !landing);
+    if (billboard.material.opacity > 0.05 && (landing || due(billboard.plane, time))) billboard.draw(time, !landing);
     if (landing && (boardMeasure++ % 30 === 0)) billboard.measure();
 
     sky = damp(sky, onIntro ? smooth(0.1, 0.3, ip) : 1, 3, dt);

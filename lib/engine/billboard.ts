@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { lean } from './config';
+import { isMobile, lean } from './config';
 
 /* =========================================================
    The billboard. The landing you first see — DIZRUPT on black
@@ -48,7 +48,9 @@ export function createBillboard(center: THREE.Vector3, normal: THREE.Vector3) {
     aspect = innerWidth / innerHeight;
     /* the board is drawn afresh every other frame and sent to the GPU whole: a phone's no sharper than
        the picture it fills (a phone's screen at up to 2x, a quarter of a 1600-wide board stood on end) */
-    const W = lean ? Math.min(1600, Math.round(innerWidth * Math.min(2, devicePixelRatio))) : 1600;
+    /* a lean computer's is 1024 across: about what its picture is drawn at (0.75x to 1x of the page), and
+       under half the pixels to draw and send of a 1600 */
+    const W = lean ? Math.min(isMobile ? 1600 : 1024, Math.round(innerWidth * Math.min(2, devicePixelRatio))) : 1600;
     const H = Math.round(W / aspect);
     // (set only when it changes: setting a canvas's size, even to the same, throws its picture away)
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
