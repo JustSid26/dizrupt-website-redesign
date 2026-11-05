@@ -621,7 +621,10 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         vKind = aKind;
         vSize = gl_PointSize;
       }`,
+    // (a lean computer's track dimmer: lifted and through the full-size glow, at the full one's gain it floods)
     fragmentShader: /* glsl */ `
+      #define TRACK_GAIN ${lean && !isMobile ? '1.0' : '1.6'}
+      #define TRACK_DOT ${lean && !isMobile ? '0.55' : '0.8'}
       uniform float uDim; varying float vA, vKind, vSize;
       void main() {
         float d = length(gl_PointCoord - 0.5);
@@ -631,8 +634,8 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         /* a point only a few pixels across is a solid dot: its soft falloff would leave those few pixels
            next to nothing (they all sit near its edge), and the far track would all but vanish. From
            seven pixels up it is the soft light it was */
-        float a = mix(0.8, core * core * 0.7 + exp(-d * d * 40.0) * 0.9, smoothstep(3.0, 7.0, vSize));
-        gl_FragColor = vec4(col * uDim * 1.6, a * vA);
+        float a = mix(TRACK_DOT, core * core * 0.7 + exp(-d * d * 40.0) * 0.9, smoothstep(3.0, 7.0, vSize));
+        gl_FragColor = vec4(col * uDim * TRACK_GAIN, a * vA);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
@@ -648,7 +651,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
   const liveBoards: ReturnType<typeof glitchBoard>[] = [];
   const screens: THREE.Mesh[] = [];
   const lives: { film: { tex: THREE.Texture; draw: (t: number) => void; stop?: () => void }; k: number; mat: THREE.MeshBasicMaterial; start: number; on: boolean; screen: THREE.Object3D }[] = [];
-  const films: { video: HTMLVideoElement; k: number; mat: THREE.MeshBasicMaterial; tex: THREE.Texture; on: boolean; start: number; screen: THREE.Object3D; sent: number }[] = [];
+  const films: { video: HTMLVideoElement; k: number; mat: THREE.MeshBasicMaterial; tex: THREE.Texture; on: boolean; start: number; screen: THREE.Object3D; sent: number; throttle: boolean }[] = [];
   const unloaded: { video: HTMLVideoElement; k: number }[] = []; // films not fetched yet
   stations.forEach((st, k) => {
     const u = stops[k + 1];
@@ -755,15 +758,22 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
       Object.assign(v, { src: st.film, muted: true, loop: true, playsInline: true, preload: 'none', crossOrigin: 'anonymous' });
       v.addEventListener('loadeddata', () => {
         /* a lean computer's film is sent to the GPU 15 times a second, not with every frame of it: each is
-           a 1280×720 picture, and on integrated graphics (Safari's above all) the sending is dear. A
-           plain texture, sent from update() below; anything else's, the video's own */
-        const vt = lean && !isMobile ? new THREE.Texture(v) : new THREE.VideoTexture(v);
-        if (!(vt as THREE.VideoTexture).isVideoTexture) { vt.generateMipmaps = false; vt.minFilter = vt.magFilter = THREE.LinearFilter; vt.needsUpdate = true; }
+           a 1280×720 picture, and on integrated graphics (Safari's above all) the sending is dear. The
+           video texture's own callback (every frame of the film) is cancelled, and update() below sends
+           it at its own pace. (A plain texture won't do: three sizes its storage from the element's
+           width, which a video's is 0, and it stays black) */
+        const vt = new THREE.VideoTexture(v);
+        const throttle = lean && !isMobile;
+        if (throttle) {
+          const id = (vt as unknown as { _requestVideoFrameCallbackId: number })._requestVideoFrameCallbackId;
+          if (id && 'cancelVideoFrameCallback' in v) (v as HTMLVideoElement & { cancelVideoFrameCallback(id: number): void }).cancelVideoFrameCallback(id);
+          vt.needsUpdate = true;
+        }
         vt.colorSpace = THREE.SRGBColorSpace;
         const va = v.videoWidth / v.videoHeight, sa = BW / BH;
         if (va > sa) { vt.repeat.set(sa / va, 1); vt.offset.set((1 - sa / va) / 2, 0); }
         else { vt.repeat.set(1, va / sa); vt.offset.set(0, (1 - va / sa) * (st.filmY ?? 0.5)); }
-        films.push({ video: v, k, mat: screenMat, tex: vt, on: false, start: -1, screen, sent: 0 });
+        films.push({ video: v, k, mat: screenMat, tex: vt, on: false, start: -1, screen, sent: 0, throttle });
         screenMat.map = vt;
         screenMat.color.setScalar(0.3); // footage runs brighter than the photographs: the bloom would wash it out
       }, { once: true });
@@ -1031,7 +1041,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         else if (sh >= 0.1 && f.video.paused) void f.video.play().catch(() => {});
       }
       // (a lean computer's, sent 15 times a second filling half the screen, fewer the smaller it is)
-      if (!(f.tex as THREE.VideoTexture).isVideoTexture && !f.video.paused && time - f.sent > (sh > 0.5 ? 1 / 15 : sh > 0.2 ? 1 / 10 : 1 / 6)) { f.tex.needsUpdate = true; f.sent = time; }
+      if (f.throttle && !f.video.paused && time - f.sent > (sh > 0.5 ? 1 / 15 : sh > 0.2 ? 1 / 10 : 1 / 6)) { f.tex.needsUpdate = true; f.sent = time; }
       f.mat.map = f.tex;
     }
     for (const l of lives) {
