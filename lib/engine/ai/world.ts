@@ -172,7 +172,7 @@ function packageBack(inner: number) {
   return { map: tex(col, true), orm: tex(orm), bump: tex(bmp), pads };
 }
 
-function capped<M extends THREE.MeshPhysicalMaterial>(m: M, max: number) {
+function capped<M extends THREE.MeshStandardMaterial>(m: M, max: number) {
   m.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>\n  gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(${max.toFixed(2)}));`);
   };
@@ -180,6 +180,17 @@ function capped<M extends THREE.MeshPhysicalMaterial>(m: M, max: number) {
 }
 
 export type AiWorld = ReturnType<typeof createAiWorld>;
+
+/* The chip's surfaces: physically based, with the clearcoat (the lacquer on its ceramic, the lid's
+   sheen) on a full computer; on a lean one the same without the clearcoat (config.ts): its second
+   layer of lighting at every pixel is the dearest thing in the frame on integrated graphics, for a
+   sheen that is barely there under these lights */
+type Surface = THREE.MeshPhysicalMaterialParameters & { clearcoat?: number; clearcoatRoughness?: number };
+const surface = (p: Surface): THREE.MeshStandardMaterial => {
+  if (!lean) return surface(p);
+  const { clearcoat: _c, clearcoatRoughness: _r, ...rest } = p;
+  return new THREE.MeshStandardMaterial(rest as THREE.MeshStandardMaterialParameters);
+};
 
 export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number) {
   const scene = new THREE.Scene();
@@ -208,8 +219,8 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
 
   const top = packageTop();
   // matte black ceramic: almost no shine of its own, the engraving cut into it
-  const epoxy = new THREE.MeshPhysicalMaterial({ color: '#333337', map: top.map, roughnessMap: top.rough, roughness: 1, metalness: 0, bumpMap: top.bump, bumpScale: 0.6, clearcoat: 0.05, clearcoatRoughness: 0.75, envMapIntensity: 0.4 });
-  const epoxySide = new THREE.MeshPhysicalMaterial({ color: '#08080a', roughness: 0.85, envMapIntensity: 0.4 });
+  const epoxy = surface({ color: '#333337', map: top.map, roughnessMap: top.rough, roughness: 1, metalness: 0, bumpMap: top.bump, bumpScale: 0.6, clearcoat: 0.05, clearcoatRoughness: 0.75, envMapIntensity: 0.4 });
+  const epoxySide = surface({ color: '#08080a', roughness: 0.85, envMapIntensity: 0.4 });
   // the body: a moulded block with the radius a real package has; its top face carries the marking
   const body = new THREE.Mesh(new RoundedBoxGeometry(BODY, H, BODY, 3, 0.03), epoxySide);
   body.castShadow = body.receiveShadow = true;
@@ -222,8 +233,8 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
      and its engraved traces show round it */
   const LID = BODY * 0.74, LH = 0.045;
   const lidTex = lidTop();
-  const lidSide = capped(new THREE.MeshPhysicalMaterial({ color: '#8e929a', metalness: 1, roughness: 0.32, envMapIntensity: 1.2 }), 0.85);
-  const lidFace = capped(new THREE.MeshPhysicalMaterial({
+  const lidSide = capped(surface({ color: '#8e929a', metalness: 1, roughness: 0.32, envMapIntensity: 1.2 }), 0.85);
+  const lidFace = capped(surface({
     color: '#ffffff', map: lidTex.map, metalness: 0.92, roughness: 1, roughnessMap: lidTex.rough, bumpMap: lidTex.bump, bumpScale: 0.35,
     anisotropy: 0.75, anisotropyRotation: 0, envMapIntensity: 0.95, clearcoat: 0.12, clearcoatRoughness: 0.45,
   }), 0.72);
@@ -238,10 +249,10 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   chip.add(lidTopMesh);
   // the exposed pad underneath
   // silver leads: bright metal, brushed enough that the key light reads as a sheen, not a pinpoint
-  const tin = new THREE.MeshPhysicalMaterial({ color: '#b9bdc4', metalness: 1, roughness: 0.4, envMapIntensity: 1.1 }); // plated silver, brushed: a sheen, not a flare
+  const tin = surface({ color: '#b9bdc4', metalness: 1, roughness: 0.4, envMapIntensity: 1.1 }); // plated silver, brushed: a sheen, not a flare
   capped(tin, 0.85);
   // the package's edge: a machined metal frame round the top, chamfered, catching the light along it
-  const edgeMetal = new THREE.MeshPhysicalMaterial({ color: '#5d6068', metalness: 1, roughness: 0.48 }); // satin: a line of light along it, never a flare
+  const edgeMetal = surface({ color: '#5d6068', metalness: 1, roughness: 0.48 }); // satin: a line of light along it, never a flare
   capped(edgeMetal, 0.8);
   for (let side = 0; side < 4; side++) {
     const bar = new THREE.Mesh(new THREE.BoxGeometry(BODY + 0.012, 0.028, 0.03), edgeMetal);
@@ -256,7 +267,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
   {
     const INNER = 0.36;
     const back = packageBack(INNER);
-    const backMat = capped(new THREE.MeshPhysicalMaterial({
+    const backMat = capped(surface({
       color: '#ffffff', map: back.map, roughness: 1, roughnessMap: back.orm, metalness: 1, metalnessMap: back.orm,
       bumpMap: back.bump, bumpScale: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.5, envMapIntensity: 0.9,
     }), 0.85);
@@ -276,7 +287,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       const foot = new THREE.CylinderGeometry(PIN_R * 1.9, PIN_R * 2.3, 0.008, 10);
       foot.translate(0, -0.004, 0);
       const pinGeo = mergeGeometries([shaft, tip, foot].map((g) => g.toNonIndexed()));
-      const gold = capped(new THREE.MeshPhysicalMaterial({ color: '#d9a94a', metalness: 1, roughness: 0.3, envMapIntensity: 1.2 }), 0.85);
+      const gold = capped(surface({ color: '#d9a94a', metalness: 1, roughness: 0.3, envMapIntensity: 1.2 }), 0.85);
       const pins = new THREE.InstancedMesh(pinGeo, gold, back.pads.length);
       const pm = new THREE.Matrix4();
       back.pads.forEach(([u, v], i) => pins.setMatrixAt(i, pm.makeTranslation((u - 0.5) * side, -H / 2 - 0.002, (v - 0.5) * side)));
@@ -284,7 +295,7 @@ export function createAiWorld(renderer: THREE.WebGLRenderer, pixelRatio: number)
       chip.add(pins);
     }
     // the capacitors: tan ceramic bodies with silver ends, in rows, a few larger ones and a few turned
-    const capBody = new THREE.MeshPhysicalMaterial({ color: '#8f7c63', roughness: 0.55, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.4 });
+    const capBody = surface({ color: '#8f7c63', roughness: 0.55, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.4 });
     const field = BODY * INNER * 0.86, rand = rng(5);
     const caps: { x: number; z: number; w: number; d: number; h: number; turn: boolean }[] = [];
     const cols = 6, rows = 5;

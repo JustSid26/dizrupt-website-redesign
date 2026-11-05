@@ -156,7 +156,22 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let qualityAt = 0, goodFor = 0, upAt = -1e9, holdUntil = 0, hold = 15000, thin = 1;
   // a computer's steady 30: the browser's or its graphics' (see the governor), and the try under way
   let capKnown: 'browser' | 'graphics' | null = null;
-  let probe: { at: number; level: number; thin: number; glow: boolean } | null = null;
+  let probe: { at: number } | null = null;
+  // the pace of frames that drew nothing (the DIZRUPT screen before the cursor moves; the probe): the
+  // browser's own, with no graphics to wait for. A steady 30 there is the browser's doing
+  const idleDts: number[] = [];
+  let probedAt = -1e9; // (the try, at most once a minute: it holds the picture still for a moment)
+  // (the landing's idle frames teach it once; the try may teach it again, should the browser's cap come
+  // on partway through the visit (the battery run down), which would otherwise read as the graphics)
+  const learnCap = (dt: number, again = false) => {
+    if (capKnown !== null && !again) return;
+    idleDts.push(dt);
+    if (idleDts.length < 40) return;
+    const sorted = [...idleDts].sort((a, b) => a - b);
+    const lo = sorted[Math.floor(sorted.length * 0.2)], hi = sorted[Math.floor(sorted.length * 0.8)];
+    capKnown = lo > 0.03 && hi < 0.036 ? 'browser' : 'graphics';
+    idleDts.length = 0;
+  };
   // what each section last held (see the governor)
   const held = new Map<string, { level: number; thin: number; thirty: boolean; glow: boolean }>();
   let heldFor = '';
@@ -164,8 +179,33 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   /* where a frame's time goes, averaged over the last second or so (for ?perf, on a device that can't
      be measured from here): the page's logic, the boards drawn on canvases and the films sent up, the
      AI world, the draw itself as submitted, and the whole frame (the next frame's start less this one's) */
-  const cost = { logic: 0, boards: 0, ai: 0, draw: 0, frame: 0 };
-  const costAcc = { logic: 0, boards: 0, ai: 0, draw: 0, frame: 0, n: 0, at: 0 };
+  const cost = { logic: 0, boards: 0, ai: 0, draw: 0, frame: 0, gpu: -1 };
+  const costAcc = { logic: 0, boards: 0, ai: 0, draw: 0, frame: 0, n: 0, at: 0, gpu: 0, gpuN: 0 };
+  /* and the graphics chip's own time on the frame's draw, where the browser will say (Chrome and
+     Firefox do; Safari won't): a timer query round each draw, read back a few frames later */
+  const gl2 = renderer.getContext() as WebGL2RenderingContext;
+  const gpuExt = gl2.getExtension('EXT_disjoint_timer_query_webgl2') as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null;
+  const gpuQueries: WebGLQuery[] = [];
+  let gpuOpen = false;
+  const gpuBegin = () => {
+    if (!gpuExt || gpuOpen || gpuQueries.length > 8) return;
+    const q = gl2.createQuery();
+    if (!q) return;
+    gl2.beginQuery(gpuExt.TIME_ELAPSED_EXT, q);
+    gpuQueries.push(q);
+    gpuOpen = true;
+  };
+  const gpuEnd = () => {
+    if (!gpuExt || !gpuOpen) return;
+    gl2.endQuery(gpuExt.TIME_ELAPSED_EXT);
+    gpuOpen = false;
+    // the oldest answered (never the one just closed): read, or dropped if the clock was disjoint
+    while (gpuQueries.length > 1 && gl2.getQueryParameter(gpuQueries[0], gl2.QUERY_RESULT_AVAILABLE)) {
+      const q = gpuQueries.shift()!;
+      if (!gl2.getParameter(gpuExt.GPU_DISJOINT_EXT)) { costAcc.gpu += (gl2.getQueryParameter(q, gl2.QUERY_RESULT) as number) / 1e6; costAcc.gpuN++; }
+      gl2.deleteQuery(q);
+    }
+  };
   let frameStart = 0, boardsMs = 0, aiMs = 0;
   // the notch that is 1x (or the lowest, on a screen under 1x): where a lean computer's ladder pauses
   const oneX = () => { const i = levels.findIndex((v) => v <= 1.001); return i < 0 ? levels.length - 1 : i; };
@@ -983,7 +1023,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        jump between the two. What moves is timed by the clock, not by frames, so nothing slows; the
        page's own scroll runs at its own rate (SmoothScroll.tsx). (Counted on the refreshes' own times,
        a frame is never skipped for having started late in its refresh: a 33ms one slipping to 50) */
-    if (thirty && t0 - lastDrawn < 1000 / 30 - 4) return;
+    if (thirty && !probe && t0 - lastDrawn < 1000 / 30 - 4) return; // (not while the try measures the browser's own pace)
     lastDrawn = t0;
     frameNo++;
     clock.update(t0);
@@ -1736,13 +1776,16 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const steady30 = n > 10 && dts[Math.floor(n * 0.2)] > 0.03 && dts[Math.floor(n * 0.8)] < 0.036;
       /* A computer's steady 30 can be either: the browser holding it there (Chrome's Energy Saver, on
          battery), or graphics that need a little more than a refresh for every frame and settle into
-         every other one just as steadily (a weak laptop's, in the city: it was taken for the first, and
-         left at 30 at its sharpest). Told apart by trying, below. A phone's is its own, and so is ours */
+         every other one just as steadily (a weak laptop's, in the city). Told apart by the frames that
+         draw nothing (the landing, before the cursor moves; or the try, below). A phone's is its own, and
+         so is ours */
       const capped = steady30 && (isMobile || thirty || capKnown === 'browser');
       /* (only judged on frames that drew the picture: with nothing to draw, the DIZRUPT screen, the
          browser may well take its frames at 30 by itself, and that says nothing about the graphics) */
       const drawing = late.idle <= n * 0.1;
-      const unsure = steady30 && !capped && capKnown === null;
+      // (asked when the frames are at a steady 30 the governor didn't ask for, or once it has asked for
+      // one itself: that lock is pointless under a browser's cap, and the picture could climb back)
+      const unsure = ((steady30 && !capped) || thirty) && capKnown !== 'browser' && now - probedAt > 60000;
       const period = capped ? 1 / 30 : 1 / 60;
       let slow = late.long;
       for (let i = 0; i < n; i++) if (dts[i] > period * 1.45) slow++;
@@ -1791,26 +1834,14 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
          few seconds. Still a steady 30: the browser's; everything put back as it was, and not tried
          again. 60: it was the graphics, and the governor climbs back up from there, a notch at a time,
          to the best it can hold at 60 (a steady 30 from then on is lateness, like any other) */
-      if (!drawing) goodFor = 0; // (nothing drawn, nothing to judge: neither way, nor the try)
-      else if (probe) {
-        if (now - probe.at > 2500 && now - qualityAt >= 900) {
-          if (steady30) {
-            capKnown = 'browser';
-            setThin(probe.thin);
-            setLevel(probe.level);
-            setGlow(probe.glow);
-          } else capKnown = 'graphics';
-          probe = null;
-        }
-        goodFor = 0;
-      } else if (unsure) {
-        // (tried while the page is still, never in the middle of a ride)
-        if (now - qualityAt >= 900 && now > signals.rideEnd) {
-          probe = { at: now, level, thin, glow: glowOn };
-          setLevel(levels.length - 1);
-          setThin(0.5);
-          setGlow(false);
-        }
+      if (!drawing || probe) goodFor = 0; // (nothing drawn, nothing to judge: neither way, nor the try)
+      else if (unsure) {
+        /* the try: a second and a half drawing nothing (the picture holds its last frame), while the
+           page is still, never in the middle of a ride. Frames still at a steady 30 with no graphics to
+           wait for are the browser's doing (Chrome's Energy Saver); at 60, it was the graphics. (It was
+           tried at the cheapest picture before, which on a laptop whose cheapest picture takes a frame
+           and a half looked the same as the browser's cap, and was taken for it) */
+        if (now - qualityAt >= 900 && now > signals.rideEnd) { probe = { at: now }; probedAt = now; idleDts.length = 0; }
         goodFor = 0;
       } else if (now - qualityAt < 900) goodFor = 0;
       /* (a few late frames a second, every second, is the shake that reads as jitter: a frame rate in the
@@ -1832,20 +1863,29 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     /* the DIZRUPT screen: the canvas is under solid black until the hole the cursor opens has opened.
        A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
        it would only be work: the frame's state is kept up, the picture is skipped */
-    if (lean && landing && !view && !preview && signals.introHole < 0.02) { late.idle++; frameStart = 0; return; }
+    if ((lean && landing && !view && !preview && signals.introHole < 0.02) || probe) {
+      late.idle++; frameStart = 0;
+      if (rawDt < 0.25) learnCap(rawDt, !!probe);
+      if (probe && (now - probe.at > 1500 || idleDts.length === 0)) { probe = null; qualityAt = now; }
+      return;
+    }
+    idleDts.length = 0; // (a drawn frame: the idle run, if any, is over)
     /* With no glow and no hand-over under way the composer has nothing to add: the picture is drawn
        straight to the screen, which saves a pass over every pixel and the 16-bit buffer the composer
        draws into (on integrated graphics, Safari's above all, a frame's worth of both). The output
        (the tone mapping, sRGB) is the renderer's own either way, the same picture. */
     const td = performance.now();
+    gpuBegin();
     if (direct()) renderer.render(scene, camera);
     else composer.render();
+    gpuEnd();
     const tEnd = performance.now();
     costAcc.draw += tEnd - td; costAcc.boards += boardsMs; costAcc.ai += aiMs; costAcc.logic += td - frameStart - boardsMs - aiMs; costAcc.n++;
     if (tEnd - costAcc.at > 1000) {
       const n = Math.max(1, costAcc.n);
       cost.logic = costAcc.logic / n; cost.boards = costAcc.boards / n; cost.ai = costAcc.ai / n; cost.draw = costAcc.draw / n; cost.frame = costAcc.frame / n;
-      costAcc.logic = costAcc.boards = costAcc.ai = costAcc.draw = costAcc.frame = costAcc.n = 0; costAcc.at = tEnd;
+      cost.gpu = gpuExt ? (costAcc.gpuN ? costAcc.gpu / costAcc.gpuN : cost.gpu) : -1;
+      costAcc.logic = costAcc.boards = costAcc.ai = costAcc.draw = costAcc.frame = costAcc.n = costAcc.gpu = costAcc.gpuN = 0; costAcc.at = tEnd;
     }
   }
   frame();
