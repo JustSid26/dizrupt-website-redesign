@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isMobile, lean } from './config';
 
 /* =========================================================
    Real facades, drawn in the shader so the whole city costs one
@@ -34,7 +35,7 @@ export function setMode(u: ReturnType<typeof lightingUniforms>, night: number) {
   u.uSkyTop.value.setRGB(0.022 * (1 - k) + 0.005 * k, 0.045 * (1 - k) + 0.008 * k, 0.13 * (1 - k) + 0.028 * k);
   u.uSkyHorizon.value.setRGB(0.13 * (1 - k) + 0.025 * k, 0.12 * (1 - k) + 0.032 * k, 0.19 * (1 - k) + 0.06 * k);
   u.uAmbient.value = 0.85 * (1 - k) + 0.12 * k;
-  u.uLit.value = 0.3 + 0.2 * k;
+  u.uLit.value = (0.3 + 0.2 * k) * (lean && !isMobile ? 1.25 : 1); // (a lean computer: a few more windows lit, for the bloom it hasn't)
 }
 
 export const FACADE_GLSL = /* glsl */ `

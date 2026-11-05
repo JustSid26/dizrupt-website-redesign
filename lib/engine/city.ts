@@ -227,7 +227,11 @@ void main() {
 
 /* ---------- everything small and bright: lights, trees, cars, beacons ---------- */
 const LIGHT = 0, TREE = 1, HEAD = 2, TAIL = 3, BEACON = 4, PLINTH = 5, LED = 6;
-const sparkVertex = /* glsl */ `
+/* a lean computer's lights (config.ts) a little larger and brighter: without the bloom, which is where
+   their spread came from, they read as bare specks; the few extra pixels a sprite covers are nothing
+   against the bloom they stand in for */
+const LAMP_TUNE = /* glsl */ `#define LAMP_SIZE ${lean && !isMobile ? '1.25' : '1.0'}\n#define LAMP_GLOW ${lean && !isMobile ? '1.35' : '1.0'}\n`;
+const sparkVertex = /* glsl */ `${LAMP_TUNE}
 uniform float uTime, uPixelRatio, uBuild;
 uniform vec3 uBoard;
 uniform float uExtent;
@@ -245,11 +249,11 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float s = aKind < 0.5 ? 2.2 : aKind < 1.5 ? 1.6 : aKind < 3.5 ? 1.6 : aKind < 4.5 ? 3.0 : aKind < 5.5 ? 1.1 : 1.4;
-  gl_PointSize = max(1.5, 5.5 * s * uPixelRatio / -mv.z);
+  gl_PointSize = max(1.5, 5.5 * LAMP_SIZE * s * uPixelRatio / -mv.z);
   vKind = aKind; vSeed = aSeed;
   vFade = 1.0 - smoothstep(50.0, 130.0, -mv.z);
 }`;
-const sparkFragment = /* glsl */ `
+const sparkFragment = /* glsl */ `${LAMP_TUNE}
 uniform float uTime, uDim;
 varying float vKind, vSeed, vShow, vFade;
 void main() {
@@ -265,7 +269,7 @@ void main() {
   else if (vKind < 4.5) { col = vec3(1.0, 0.15, 0.2); alpha = 0.2 + 0.8 * step(0.55, fract(uTime * 0.7 + vSeed)); }
   else if (vKind < 5.5) { col = vec3(0.4, 0.95, 1.0); alpha = 0.5; }                // the plinth's rings
   else { col = mix(vec3(0.2, 0.9, 1.0), vec3(1.0, 0.35, 0.7), step(0.5, fract(vSeed * 5.0))); alpha = 0.8; }
-  gl_FragColor = vec4(col * uDim, a * alpha * vFade);
+  gl_FragColor = vec4(col * uDim * LAMP_GLOW, a * alpha * vFade);
 }`;
 
 /* ---------- aeroplanes ---------- */

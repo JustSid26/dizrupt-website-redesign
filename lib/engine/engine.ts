@@ -67,9 +67,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const lift = lean && !isMobile;
   // (and the page's own grain, laid over the whole picture on every frame, goes: globals.css, html.lean)
   document.documentElement.classList.toggle('lean', lift);
+  /* Lifted through a filmic curve, not a straight one: a straight lift clips every light to a flat
+     white square at the top; the curve lets them burn bright and roll off, with more colour in them,
+     and the dark of the city stays dark. (?tone=linear and ?exp=1.6 to compare, while tuning) */
+  const tuneQ = new URLSearchParams(location.search);
+  const EXP = +(tuneQ.get('exp') ?? 0) || 0;
+  const liftExp = (withGlow: boolean) => EXP || (withGlow ? 1.5 : 2.0);
   if (lift) {
-    renderer.toneMapping = THREE.LinearToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMapping = tuneQ.get('tone') === 'linear' ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = liftExp(true);
   }
   /* the picture's resolution: the device's own, capped (config.ts). A phone's cap is only a floor to
      start from: once the scene is built it is measured against the phone it is on (see the benchmark
@@ -1677,7 +1683,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         glow.enabled = glowOn && !full;
       }
       // (the lift: a little with the glow, more without it, easing between)
-      if (lift) renderer.toneMappingExposure = damp(renderer.toneMappingExposure, glow && glowOn ? 1.15 : 1.4, 2, dt);
+      if (lift) renderer.toneMappingExposure = damp(renderer.toneMappingExposure, liftExp(!!glow && glowOn), 2, dt);
       if (on) {
         if (aiWorld) { const ta = performance.now(); aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y); aiMs += performance.now() - ta; }
         aiPass.uniforms.uMix.value = ai.mix;
