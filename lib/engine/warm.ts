@@ -7,7 +7,7 @@ import * as THREE from 'three';
    draws into: Metal's and Direct3D's are made at the draw, not at the compile). So: every object, hidden
    or out of view, drawn once into a few pixels' corner of the buffer it will be drawn into, and then
    put back as it was. The pixels it leaves there are drawn over by the next frame. */
-export function drawAll(renderer: THREE.WebGLRenderer, scene: THREE.Object3D, camera: THREE.Camera, target: THREE.WebGLRenderTarget) {
+export function drawAll(renderer: THREE.WebGLRenderer, scene: THREE.Object3D, camera: THREE.Camera, target: THREE.WebGLRenderTarget | null) {
   const shown: THREE.Object3D[] = [], unculled: THREE.Object3D[] = [], mats: THREE.Material[] = [];
   scene.traverse((o) => {
     if (!o.visible) { o.visible = true; shown.push(o); }
@@ -15,15 +15,15 @@ export function drawAll(renderer: THREE.WebGLRenderer, scene: THREE.Object3D, ca
     const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
     for (const mat of Array.isArray(m) ? m : m ? [m] : []) if (!mat.visible) { mat.visible = true; mats.push(mat); }
   });
-  const scissor = target.scissor.clone(), scissorTest = target.scissorTest, prev = renderer.getRenderTarget();
-  target.scissor.set(0, 0, 2, 2);
-  target.scissorTest = true;
+  const prev = renderer.getRenderTarget();
+  // (the screen itself: its scissor is the renderer's own)
+  const scissor = target ? target.scissor.clone() : renderer.getScissor(new THREE.Vector4()), scissorTest = target ? target.scissorTest : renderer.getScissorTest();
+  if (target) { target.scissor.set(0, 0, 2, 2); target.scissorTest = true; } else { renderer.setScissor(0, 0, 2, 2); renderer.setScissorTest(true); }
   try {
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
   } finally {
-    target.scissor.copy(scissor);
-    target.scissorTest = scissorTest;
+    if (target) { target.scissor.copy(scissor); target.scissorTest = scissorTest; } else { renderer.setScissor(scissor); renderer.setScissorTest(scissorTest); }
     renderer.setRenderTarget(prev);
     shown.forEach((o) => (o.visible = false));
     unculled.forEach((o) => (o.frustumCulled = true));
@@ -35,7 +35,7 @@ export function drawAll(renderer: THREE.WebGLRenderer, scene: THREE.Object3D, ca
    program), without holding the page up: where the browser can (KHR_parallel_shader_compile, nearly
    all of them) the driver compiles them on its own threads while the count keeps counting, and this
    resolves once they are done. */
-export function compileFor(renderer: THREE.WebGLRenderer, scene: THREE.Object3D, camera: THREE.Camera, target: THREE.WebGLRenderTarget) {
+export function compileFor(renderer: THREE.WebGLRenderer, scene: THREE.Object3D, camera: THREE.Camera, target: THREE.WebGLRenderTarget | null) {
   const prev = renderer.getRenderTarget();
   renderer.setRenderTarget(target);
   const done = renderer.compileAsync(scene, camera);

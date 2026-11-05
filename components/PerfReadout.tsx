@@ -11,9 +11,9 @@ import { signals } from "@/lib/signals";
    the picture was there. "Copy report" puts all of it on the clipboard, with the browser, the screen
    and the graphics, to be pasted where it can be read: what a weak laptop really does, section by
    section, rather than what a fast one guesses. Nothing of it runs otherwise. */
-type Q = { low: boolean; base: number; thin: number; pr?: number; bench?: Record<string, number>; tier?: string; why?: string; gpu?: string; glow?: boolean | null; fps30?: boolean; cap?: string | null; trying?: boolean };
+type Q = { frames?: number; low: boolean; base: number; thin: number; pr?: number; bench?: Record<string, number>; tier?: string; why?: string; gpu?: string; glow?: boolean | null; fps30?: boolean; cap?: string | null; trying?: boolean };
 type Eng = { renderer?: { getPixelRatio(): number }; quality?: () => Q };
-type Section = { n: number; late: number; worst: number; time: number; at: string };
+type Section = { n: number; late: number; worst: number; time: number; at: string; drawn: number };
 
 // what the picture is, in a few words
 const look = (q: Q | undefined, dpr: number) =>
@@ -31,6 +31,7 @@ export function PerfReadout() {
     // and since the page opened, per section: frames, dropped (a refresh missed), the worst, time spent, and the picture there
     const by: Record<string, Section> = {};
     const order: string[] = [];
+    let drawnBefore = -1; // the 3D's own frames so far (it draws every other one, held to 30)
     const tick = () => {
       const now = performance.now();
       frames++;
@@ -40,9 +41,12 @@ export function PerfReadout() {
       const eng = (window as unknown as { engine?: Eng }).engine;
       if (dt < 250) {
         const k = signals.scroll.section;
-        if (!by[k]) { by[k] = { n: 0, late: 0, worst: 0, time: 0, at: "" }; order.push(k); }
+        if (!by[k]) { by[k] = { n: 0, late: 0, worst: 0, time: 0, at: "", drawn: 0 }; order.push(k); }
         const b = by[k];
         b.n++;
+        const drawn = eng?.quality?.().frames ?? -1;
+        if (drawn >= 0 && drawnBefore >= 0) b.drawn += drawn - drawnBefore;
+        drawnBefore = drawn;
         b.time += dt;
         if (dt > 24) b.late++;
         b.worst = Math.max(b.worst, dt);
@@ -53,7 +57,7 @@ export function PerfReadout() {
       const dpr = eng?.renderer?.getPixelRatio() ?? 0;
       const lines = (fps: boolean) => order.map((k) => {
         const b = by[k];
-        return `${k} ${fps ? `${Math.round((b.n * 1000) / Math.max(1, b.time))}fps · ` : ""}${Math.round((b.late / b.n) * 100)}% dropped, worst ${b.worst.toFixed(0)}ms${fps && b.at ? ` · at ${b.at}` : ""}`;
+        return `${k} ${fps ? `${Math.round((b.n * 1000) / Math.max(1, b.time))}fps (3D drawn ${Math.round((b.drawn * 1000) / Math.max(1, b.time))}/s) · ` : ""}${Math.round((b.late / b.n) * 100)}% dropped, worst ${b.worst.toFixed(0)}ms${fps && b.at ? ` · at ${b.at}` : ""}`;
       });
       setText(`${frames} fps · worst ${worst.toFixed(0)}ms · ${dpr.toFixed(2)}x of ${devicePixelRatio}x${q?.low ? " · LIGHT" : ""}${q?.glow === false ? " · no glow" : ""}${q?.fps30 ? " · held to 30fps" : ""}${q?.trying ? " · trying for 60" : q?.cap === "browser" ? " · the browser holds 30" : ""}${q && q.thin < 1 ? ` · points ${Math.round(q.thin * 100)}%` : ""} · ${signals.scroll.section}\n`
         // which scene this device was given (lib/engine/config.ts: lean), why, and the graphics it reported

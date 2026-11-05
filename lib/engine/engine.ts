@@ -121,6 +121,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.setPixelRatio(pixelRatio);
   composer.setSize(innerWidth, innerHeight);
   const renderPass = new RenderPass(scene, camera);
+  const direct = () => !(glow && glow.enabled) && !aiPass.enabled;
   composer.addPass(renderPass);
   /* the bloom: the soft glow round every light in the city, as it always was, on every computer. A phone
      goes without, as it always did, and the heart keeps a halo of its own there (below). It is drawn
@@ -130,7 +131,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
      below), before it would take the picture any softer */
   const glow = isMobile ? null : new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 0.26);
   if (glow) composer.addPass(glow);
-  let glowOn = !!glow, glowIn = 0; // (glowIn: the landing brings it in, below)
+  let glowOn = !!glow && new URLSearchParams(location.search).get('glow') !== 'off', glowIn = 0; // (glowIn: the landing brings it in, below; ?glow=off to see it without)
   // the hand-over to the AI world: both pictures, one transition (ai/transition.ts)
   const aiPass = createTransitionPass();
   aiPass.enabled = false;
@@ -154,6 +155,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const held = new Map<string, { level: number; thin: number; thirty: boolean; glow: boolean }>();
   let heldFor = '';
   let lateRun = false; // the last second had a few late frames (see the governor)
+  // the notch that is 1x (or the lowest, on a screen under 1x): where a lean computer's ladder pauses
+  const oneX = () => { const i = levels.findIndex((v) => v <= 1.001); return i < 0 ? levels.length - 1 : i; };
   // the frames since the governor last looked: how long each took
   // (long: frames of a quarter to a whole second, counted apart: see frame())
   const late = { at: 0, n: 0, long: 0, idle: 0, dts: new Float32Array(256) };
@@ -685,6 +688,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   composer.render();
   aiPass.enabled = false;
   drawAll(renderer, scene, camera, composer.readBuffer);
+  // (and as drawn straight to the screen, which a lean computer without its glow is: frame(), below)
+  if (lean) { await compileFor(renderer, scene, camera, null); drawAll(renderer, scene, camera, null); }
   await breathe();
   /* and the pictures not yet on the GPU (a client's banner, once it has loaded) go up one at a time
      while the page is still, not in the frame of a ride that first shows them */
@@ -760,8 +765,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
          resolution keeps its sharpest (lowering it would only blur it); a weak one that pays for its
          pixels comes down as far as it must. The governor may still take it back up (or down) from
          there, on what the real frames cost. */
-      const floor = Math.min(lean ? 0.75 : 1, cap);
-      const notches = [cap, 1.75, 1.5, 1.25, 1, 0.85, 0.75].filter((v, k, a) => v <= cap + 0.001 && v >= floor - 0.001 && a.indexOf(v) === k);
+      const floor = Math.min(1, cap);
+      // (the governor's ladder runs on below 1x on a lean computer, in its turn: after a steady 30)
+      const notches = [cap, 1.75, 1.5, 1.25, 1, 0.85, 0.75].filter((v, k, a) => v <= cap + 0.001 && v >= (lean ? 0.75 : floor) - 0.001 && a.indexOf(v) === k);
       chosen = cap;
       const top = cost(cap);
       if (top > BUDGET && cap > floor + 0.01) {
@@ -769,7 +775,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         const perPx = (top - low) / (cap * cap - floor * floor);
         if (perPx > 0 && low < top * 0.85) {
           const fixed = low - perPx * floor * floor;
-          chosen = notches.find((pr) => fixed + perPx * pr * pr <= BUDGET) ?? floor;
+          chosen = notches.find((pr) => pr >= floor - 0.001 && fixed + perPx * pr * pr <= BUDGET) ?? floor;
         }
       }
       pixelRatio = chosen;
@@ -1736,9 +1742,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
            A full computer: down to 1x, its glow, his points, and a steady 30 the last resort */
         const step = (s: number) => setThin(Math.max(0.5, thin - s));
         if (lean) {
-          if (level < levels.length - 1) setLevel(level + 1);
+          /* (a lean computer: down to 1x, his points thinned, a steady 30 at 1x; only then softer than
+             1x, and its glow last. Below 1x on a 2x screen is blurred, and a sharp steady 30 reads better) */
+          if (level < oneX()) setLevel(level + 1);
           else if (thin > 0.5) step(0.25);
           else if (!thirty) setThirty(true);
+          else if (level < levels.length - 1) setLevel(level + 1);
           else if (glowOn) setGlow(false);
         } else {
           if (level < levels.length - 1) setLevel(level + 1);
@@ -1750,6 +1759,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       const up = () => {
         if (lean) {
           if (glow && !glowOn) setGlow(true);
+          else if (level > oneX()) setLevel(level - 1);
           else if (thirty) setThirty(false);
           else if (thin < 1) setThin(Math.min(1, thin + 0.25));
           else setLevel(level - 1);
@@ -1807,11 +1817,16 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        A phone has no cursor, so until it is touched nothing of the picture can be seen, and drawing
        it would only be work: the frame's state is kept up, the picture is skipped */
     if (lean && landing && !view && !preview && signals.introHole < 0.02) { late.idle++; return; }
-    composer.render();
+    /* With no glow and no hand-over under way the composer has nothing to add: the picture is drawn
+       straight to the screen, which saves a pass over every pixel and the 16-bit buffer the composer
+       draws into (on integrated graphics, Safari's above all, a frame's worth of both). The output
+       (the tone mapping, sRGB) is the renderer's own either way, the same picture. */
+    if (direct()) renderer.render(scene, camera);
+    else composer.render();
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ frames: frameNo, low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
