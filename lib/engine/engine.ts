@@ -1577,6 +1577,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        of violet light round the city is a glare for nothing, and is faded out; it comes back as the page
        returns to the ride */
     trackShow = damp(trackShow, section === 'intro' || section === 'solutions' ? 1 : 0, 2, dt);
+    city.setRailway(trackShow > 0.05); // (the city's own elevated railway and its trains go with it)
     { const tb = performance.now(); if (!phone) line.update(time, lineReveal, cityDim, ride.s, stationT, look, trackShow); boardsMs += performance.now() - tb; }
     if (wasIsolating || phone) line.group.visible = false; // the work's tower alone: the line and its stations go with the city (a phone never has them)
     city.setPlinth(stationT < 0.05); // the station takes the plinth's place

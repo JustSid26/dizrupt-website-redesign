@@ -1293,8 +1293,10 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
     sparkUniforms.uTime.value = time;
     sparkUniforms.uDim.value = dim;
     plinth.visible = build > 0.3 && !hidePlinth;
-    // the railway goes up with the city; the trains run once it is there
-    carriages.visible = build > 0.8;
+    // the railway goes up with the city; the trains run once it is there (and the whole of it goes with
+    // his train, once that has gone: setRailway, from engine.ts)
+    rails.visible = deck.visible = pillars.visible = railOn;
+    carriages.visible = railOn && build > 0.8;
     if (carriages.visible) placeTrains(time);
     for (const p of planes) {
       const a = p.phase + time * p.speed * p.way;
@@ -1335,6 +1337,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       isoSaved = null;
     }
   };
+  let railOn = true;
   const setIsolate = (k: number, x: number, z: number) => {
     isoU.value = k;
     isoAt.value.set(x, z);
@@ -1342,5 +1345,5 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
   };
   // the city's own frame may show things again: while the tower is alone, they are put back away after it
   const frame = (...a: Parameters<typeof update>) => { update(...a); if (isoSaved) applyIso(); };
-  return { group, update: frame, setPlinth: (on: boolean) => { hidePlinth = !on; }, setIsolate };
+  return { group, update: frame, setPlinth: (on: boolean) => { hidePlinth = !on; }, setIsolate, setRailway: (on: boolean) => { railOn = on; } };
 }
