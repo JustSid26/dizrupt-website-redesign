@@ -401,6 +401,10 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
        the stage, which follows them as they change from beat to beat. */
     const portrait = matchMedia("(max-aspect-ratio: 1/1)");
     const room = { top: -1, bottom: -1 };
+    /* the layers that slide with the chip, moved by their own translate: it was a custom property on
+       the network's root, which every element under it inherits (hundreds of wires, cells and panels),
+       and the browser restyled all of them on every frame */
+    let sliders: HTMLElement[] = [], slid = "";
     const tick = (_: number, dtMs: number) => {
       const h = hub.current, el = root.current, st = stage.current, sec = section.current;
       if (!h || !el || !st || !sec || signals.scroll.section !== "ai") return;
@@ -434,8 +438,9 @@ export function AiNetwork({ section, chapter, onBeat, seek }: {
       h.style.translate = `${(c.x - r.left).toFixed(1)}px ${(c.y - r.top).toFixed(1)}px`;
       const cp = chip.current?.offsetParent?.getBoundingClientRect();
       if (cp) chip.current!.style.translate = `${(c.x - cp.left).toFixed(1)}px ${(c.y - cp.top).toFixed(1)}px`;
-      el.style.setProperty("--sx", `${(c.x - r.left - r.width / 2).toFixed(1)}px`);
-      el.style.setProperty("--sy", `${(c.y - r.top - r.height / 2).toFixed(1)}px`);
+      const t = `${(c.x - r.left - r.width / 2).toFixed(1)}px ${(c.y - r.top - r.height / 2).toFixed(1)}px`;
+      if (!sliders.length || !sliders[0].isConnected) { sliders = [...el.querySelectorAll<HTMLElement>(".ain-wires, .ain-faults, .ain-panels, .ain-scan, .ain-groups, .ain-matrix")]; slid = ""; }
+      if (t !== slid) { for (const sl of sliders) sl.style.translate = t; slid = t; }
       h.style.setProperty("--r", `${Math.max(24, c.size * 1.5).toFixed(1)}px`);
     };
     gsap.ticker.add(tick);

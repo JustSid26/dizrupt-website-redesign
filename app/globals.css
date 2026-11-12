@@ -2634,6 +2634,10 @@ em.ain-chip.is-warn { color: #ffd166; }
    whole picture, put together with it on every frame, and the landing's snow is repainted 30 times a
    second (staticNoise.ts doesn't start it there). A phone keeps both */
 html.lean .grain, html.lean .intro-static { display: none; }
+/* nor the vignette: a full-screen gradient blended over the picture on every frame, at the screen's own
+   resolution (a Retina laptop's 2x), and its darkened edges only took from the light the picture is
+   lifted to (lib/engine/engine.ts: lift) */
+html.lean .vignette { display: none; }
 .work-shot-open { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--pa) 30%, rgba(5, 4, 10, 0.82)); }
 /* Nor blurred as it moves. A blur that changes is redrawn whole on every frame it changes, and a
    glow round a line that moves is redrawn with it: on a phone, what comes in and goes out of focus

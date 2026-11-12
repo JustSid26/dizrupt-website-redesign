@@ -120,8 +120,10 @@ export function AiAutomation() {
     const f = (v: number) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(3)}`;
     const tick = () => {
       if (signals.scroll.section !== "ai") return;
-      if (readout.current) readout.current.textContent = `X ${f(signals.pointer.x)}  Y ${f(signals.pointer.y)}`;
-      if (depth.current) depth.current.textContent = `Z ${signals.ai.play.toFixed(3)}`;
+      // (only when they change: new text is new layout, which the network's measuring would then force)
+      const xy = `X ${f(signals.pointer.x)}  Y ${f(signals.pointer.y)}`, z = `Z ${signals.ai.play.toFixed(3)}`;
+      if (readout.current && readout.current.textContent !== xy) readout.current.textContent = xy;
+      if (depth.current && depth.current.textContent !== z) depth.current.textContent = z;
     };
     gsap.ticker.add(tick);
     return () => gsap.ticker.remove(tick);
@@ -170,14 +172,19 @@ export function AiAutomation() {
   useEffect(() => {
     let last = -1;
     const root = document.documentElement;
+    /* (the glitch's two numbers go on the few elements that wear it, not the page's root: a custom
+       property set on the root is inherited by every element on the page, and the browser restyled the
+       whole of it on every frame of the hand-over) */
+    let glitched: HTMLElement[] = [];
     const tick = () => {
       const m = signals.ai.mix;
       const shifting = m > 0.001 && m < 0.999;
       signals.busy.handover = !!tween.current?.isActive();
       root.classList.toggle("ai-shifting", shifting);
       if (shifting) {
-        root.style.setProperty("--ai-jx", `${((Math.random() - 0.5) * 24 * Math.sin(Math.PI * m)).toFixed(1)}px`);
-        root.style.setProperty("--ai-cl", `${(Math.random() * 60).toFixed(0)}%`);
+        if (!glitched.length || !glitched[0].isConnected) glitched = [...document.querySelectorAll<HTMLElement>(".nav, .sol-copy, .rail")];
+        const jx = `${((Math.random() - 0.5) * 24 * Math.sin(Math.PI * m)).toFixed(1)}px`, cl = `${(Math.random() * 60).toFixed(0)}%`;
+        for (const g of glitched) { g.style.setProperty("--ai-jx", jx); g.style.setProperty("--ai-cl", cl); }
       }
       const nowOn = m > 0.85;
       if (nowOn !== (last === 1)) {

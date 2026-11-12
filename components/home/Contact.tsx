@@ -50,7 +50,10 @@ export function Contact() {
   useSection(section, "contact");
 
   useEffect(() => {
-    const root = document.documentElement;
+    /* (the hand-over's two numbers go on the elements that read them, not the page's root: a custom
+       property set on the root is inherited by every element on the page, and the browser restyles the
+       whole of it on every frame of the scroll that sets it) */
+    let hints: HTMLElement[] = [];
     const st = ScrollTrigger.create({
       trigger: section.current,
       start: "top bottom",
@@ -58,10 +61,12 @@ export function Contact() {
       onUpdate: (self) => {
         const p = self.progress;
         signals.scroll.contact = p;
-        root.style.setProperty("--handoff", p.toFixed(4));
-        root.style.setProperty("--contact-in", smooth(0.55, 0.85, p).toFixed(4));
+        if (!hints.length || !hints[0].isConnected) hints = [...document.querySelectorAll<HTMLElement>(".index-hint")];
+        const handoff = p.toFixed(4);
+        for (const h of hints) h.style.setProperty("--handoff", handoff);
         const el = pane.current;
         if (!el) return;
+        el.style.setProperty("--contact-in", smooth(0.55, 0.85, p).toFixed(4));
         el.classList.toggle("handing", p > 0.001);
         // hysteresis, so a slow scroll near the line doesn't restart the reveal
         if (p >= 0.84) el.classList.add("contact-text-in");
