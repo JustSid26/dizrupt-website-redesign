@@ -11,7 +11,7 @@ import { signals } from "@/lib/signals";
    the picture was there. "Copy report" puts all of it on the clipboard, with the browser, the screen
    and the graphics, to be pasted where it can be read: what a weak laptop really does, section by
    section, rather than what a fast one guesses. Nothing of it runs otherwise. */
-type Q = { frames?: number; cost?: { logic: number; boards: number; ai: number; draw: number; frame: number; gpu: number }; low: boolean; base: number; thin: number; pr?: number; bench?: Record<string, number>; tier?: string; why?: string; gpu?: string; glow?: boolean | null; fps30?: boolean; cap?: string | null; trying?: boolean };
+type Q = { frames?: number; cost?: { logic: number; boards: number; ai: number; draw: number; frame: number; gpu: number }; low: boolean; base: number; thin: number; pr?: number; bench?: Record<string, number>; tier?: string; why?: string; gpu?: string; gpuMs?: number; glow?: boolean | null; fps30?: boolean; cap?: string | null; trying?: boolean };
 type Eng = { renderer?: { getPixelRatio(): number }; quality?: () => Q };
 type Section = { n: number; late: number; worst: number; time: number; at: string; drawn: number; cost: number[]; costN: number };
 
@@ -67,7 +67,7 @@ export function PerfReadout() {
       });
       setText(`${frames} fps · worst ${worst.toFixed(0)}ms · ${dpr.toFixed(2)}x of ${devicePixelRatio}x${q?.low ? " · LIGHT" : ""}${q?.glow === false ? " · no glow" : ""}${q?.fps30 ? " · held to 30fps" : ""}${q?.trying ? " · trying for 60" : q?.cap === "browser" ? " · the browser holds 30" : ""}${q && q.thin < 1 ? ` · points ${Math.round(q.thin * 100)}%` : ""} · ${signals.scroll.section}\n`
         // which scene this device was given (lib/engine/config.ts: lean), why, and the graphics it reported
-        + (q?.tier ? `${q.tier} (${q.why}) · ${(q.gpu || "graphics unnamed").replace(/^ANGLE \((.*)\)$/, "$1").slice(0, 70)}\n` : "")
+        + (q?.tier ? `${q.tier} (${q.why}) · ${(q.gpu || "graphics unnamed").replace(/^ANGLE \((.*)\)$/, "$1").slice(0, 70)}${q.gpuMs && q.gpuMs > 0 ? ` · timed ${q.gpuMs.toFixed(1)}ms` : ""}\n` : "")
         // what the benchmark timed at startup: ms a frame at each resolution it tried
         + (q?.bench && Object.keys(q.bench).length ? `test ${Object.entries(q.bench).map(([pr, ms]) => `${pr}x ${ms}ms`).join(" · ")}\n` : "")
         + lines(false).join("\n"));
@@ -79,7 +79,7 @@ export function PerfReadout() {
           `page ${location.pathname}${location.search}`,
           `browser ${navigator.userAgent}`,
           `screen ${innerWidth}×${innerHeight} css at ${devicePixelRatio}x · ${nav.hardwareConcurrency ?? "?"} cores · ${nav.deviceMemory ?? "?"}GB`,
-          `graphics ${q?.gpu || "unnamed"}`,
+          `graphics ${q?.gpu || "unnamed"}${q?.gpuMs && q.gpuMs > 0 ? ` · timed ${q.gpuMs.toFixed(1)}ms` : ""}`,
           `tier ${q?.tier ?? "no 3D"} (${q?.why ?? ""}) · started at ${q?.base ?? "?"}x · now ${look(q, dpr)}${q?.cap ? ` · 30fps cap: ${q.cap}` : ""}`,
           q?.bench && Object.keys(q.bench).length ? `startup test ${Object.entries(q.bench).map(([pr, ms]) => `${pr}x ${ms}ms`).join(" · ")}` : "startup test none",
           "sections, in the order seen:",

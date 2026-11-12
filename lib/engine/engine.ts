@@ -4,7 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CAMERA_Z, COUNT, GPU, MAX_PIXEL_RATIO, PIXEL_RATIO, TIER, TIER_WHY, isMobile, lean, reducedMotion } from './config';
+import { CAMERA_Z, COUNT, GPU, GPU_MS, MAX_PIXEL_RATIO, PIXEL_RATIO, TIER, TIER_WHY, isMobile, lean, reducedMotion } from './config';
 import { ParticleField } from './field';
 import { BUST_DROP, BUST_HEIGHT, loadMascot } from './mascot';
 import { createIndex } from './spiral';
@@ -1927,7 +1927,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, pin: (pr: number, th = thin, t30 = thirty, gl = glowOn) => { pinned = true; let i = 0; levels.forEach((v, j) => { if (Math.abs(v - pr) < Math.abs(levels[i] - pr)) i = j; }); setLevel(i); setThin(th); setThirty(t30); setGlow(gl); }, quality: () => ({ frames: frameNo, cost, low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, pin: (pr: number, th = thin, t30 = thirty, gl = glowOn) => { pinned = true; let i = 0; levels.forEach((v, j) => { if (Math.abs(v - pr) < Math.abs(levels[i] - pr)) i = j; }); setLevel(i); setThin(th); setThirty(t30); setGlow(gl); }, quality: () => ({ frames: frameNo, cost, low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, gpuMs: GPU_MS, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
