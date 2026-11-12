@@ -1196,9 +1196,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         /* a gesture sent it to a stop: the scroll is already riding there on a fixed, eased clock,
            so the train rides with it, tightly, and pulls in as the scroll does */
         const prev = ride.s;
-        ride.s = damp(ride.s, s.trainS, 7, dt);
-        // (the scroll stands a hair past the stop, 0.01 of a station: near enough is there)
-        if (Math.abs(target - ride.s) < 0.02) ride.s = target;
+        /* (the scroll comes to rest a hair past the stop, 0.01 of a station: the train follows it only as
+           far as the stop, and eases the last of the way in on the same spring. It was snapped onto the
+           stop from 0.02 out, six frames' travel in one, a hop at every station) */
+        const aim = ride.s <= target ? Math.min(s.trainS, target) : Math.max(s.trainS, target);
+        ride.s = damp(ride.s, aim, 7, dt);
         ride.v = (ride.s - prev) / Math.max(dt, 1e-4);
       } else {
         // the scroll drives it: close behind, smoothed, never waiting at a station

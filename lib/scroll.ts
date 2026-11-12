@@ -16,10 +16,13 @@ export const getLenis = () => instance;
    steps, worst where a ride is slowest. Lenis keeps the exact position it set; where it isn't driving
    the page (reduced motion, the light version) or the two have parted (a jump the browser made itself),
    the trigger's own. The page's own type and layers keep the trigger's: they move with the real scroll. */
+/* (Parted: further apart than a frame's lag. Safari reports the page's scroll a frame behind the one
+   just set, so on a quick ride the two were several pixels apart on every other frame, and the train
+   was driven by one and then the other, a stutter; a jump the browser made is hundreds) */
 export const exactProgress = (self: { progress: number; start: number; end: number }) => {
   const y = instance?.animatedScroll;
   const span = self.end - self.start;
-  if (y === undefined || !(span > 0) || Math.abs(y - window.scrollY) > 1.5) return self.progress;
+  if (y === undefined || !(span > 0) || Math.abs(y - window.scrollY) > Math.max(48, Math.abs(instance?.velocity ?? 0) * 3)) return self.progress;
   return Math.min(1, Math.max(0, (y - self.start) / span));
 };
 
