@@ -172,7 +172,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     idleDts.length = 0;
   };
   // what each section last held (see the governor)
-  const held = new Map<string, { level: number; thin: number; thirty: boolean; glow: boolean }>();
+  const held = new Map<string, { level: number; thin: number; thirty: boolean }>(); // (not the glow: see the governor)
   let heldFor = '';
   let lateRun = false; // the last second had a few late frames (see the governor)
   /* where a frame's time goes, averaged over the last second or so (for ?perf, on a device that can't
@@ -1769,13 +1769,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
        picture is at once what it held there, rather than shaking while it is learnt again (the work
        left at the chip's softer picture, or the train's ride at the work's sharper one) */
     if (s.section !== heldFor) {
-      if (heldFor) held.set(heldFor, { level, thin, thirty, glow: glowOn });
+      if (heldFor) held.set(heldFor, { level, thin, thirty });
       const h = held.get(s.section);
       if (h && !probe) {
         if (h.level !== level) setLevel(h.level);
         if (h.thin !== thin) setThin(h.thin);
         if (h.thirty !== thirty) setThirty(h.thirty);
-        if (h.glow !== glowOn) setGlow(h.glow);
       }
       heldFor = s.section;
       late.at = now; late.n = 0; late.long = 0; late.idle = 0; // (the new section judged on its own frames)
@@ -1801,42 +1800,45 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       let slow = late.long;
       for (let i = 0; i < n; i++) if (dts[i] > period * 1.45) slow++;
       const share = n + late.long ? slow / (n + late.long) : 0;
+      /* The glow is the picture's light, and it isn't the governor's to take back and forth: each time
+         it went and came the whole picture went darker and brighter (on a lean computer, the lift with
+         it), section by section. It goes only at the very bottom of either ladder, only where the
+         graphics chip is busy for a fair share of the frame (or the browser won't say: Safari), and
+         then for good. A frame that runs long for the browser's own reasons (its compositing, at 2x,
+         on integrated graphics) is no reason to take the light away; everything else on the ladder
+         still answers it, as it did before the chip's time was asked */
+      const gpuShare = cost.gpu >= 0 && cost.frame > 0 ? cost.gpu / cost.frame : -1;
+      const gpuBusy = gpuShare < 0 || gpuShare > 0.45;
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
-        /* Each a notch down its own ladder (and back up it the same way, below).
-           A lean computer keeps its 60 frames a second for as long as anything else can give: the
-           picture softer, down to 0.75x, then his points thinned; only then a steady 30, and its glow
-           last of all (by then from a quarter-size picture: a small part of the frame, and most of its
-           light, without which it reads dull). (It went to 30 at 1x before, to keep the picture sharp:
-           a weak laptop's frames are smoother at 60 a little softer than sharp at 30.)
-           A full computer: down to 1x, its glow, his points, and a steady 30 the last resort */
+        /* Each a notch down its own ladder (and back up it the same way, below, but for the glow).
+           A lean computer: down to 1x, his points thinned, then a steady 30 at 1x; only then softer than
+           1x, and the glow (above) last of all.
+           A full computer: down to its lowest resolution, his points, a steady 30, the glow last */
         const step = (s: number) => setThin(Math.max(0.5, thin - s));
         if (lean) {
-          /* (a lean computer: down to 1x, his points thinned, a steady 30 at 1x; only then softer than
-             1x, and its glow last. Below 1x on a 2x screen is blurred, and a sharp steady 30 reads better) */
+          // (below 1x on a 2x screen is blurred, and a sharp steady 30 reads better)
           if (level < oneX()) setLevel(level + 1);
           else if (thin > 0.5) step(0.25);
           else if (!thirty) setThirty(true);
           else if (level < levels.length - 1) setLevel(level + 1);
-          else if (glowOn) setGlow(false);
+          else if (glowOn && gpuBusy) setGlow(false);
         } else {
           if (level < levels.length - 1) setLevel(level + 1);
-          else if (glowOn) setGlow(false);
           else if (thin > 0.5) step(0.25);
           else if (!thirty) setThirty(true);
+          else if (glowOn && gpuBusy) setGlow(false);
         }
       };
       const up = () => {
         if (lean) {
-          if (glow && !glowOn) setGlow(true);
-          else if (level > oneX()) setLevel(level - 1);
+          if (level > oneX()) setLevel(level - 1);
           else if (thirty) setThirty(false);
           else if (thin < 1) setThin(Math.min(1, thin + 0.25));
           else setLevel(level - 1);
         } else {
           if (thirty) setThirty(false);
           else if (thin < 1) setThin(Math.min(1, thin + 0.25));
-          else if (glow && !glowOn) setGlow(true);
           else setLevel(level - 1);
         }
         upAt = now;
@@ -1858,25 +1860,14 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       /* (a few late frames a second, every second, is the shake that reads as jitter: a frame rate in the
          fifties, one frame in ten held twice as long. Two such seconds running step down too: one alone
          is a hitch, not a pace) */
-      /* Where the browser says what the graphics chip's own time was (Chrome, Firefox), late frames
-         are only laid at the picture's door when the chip was busy for a fair share of them. A laptop
-         whose frames run long for the browser's own reasons (the page's layers composited, its scripts)
-         while its chip spends a few ms on the 3D would otherwise be taken down to the softest, dullest
-         picture for nothing, as one was; and while the chip has room to spare, the picture climbs back
-         whatever the frames are doing, a notch at a time, until it hasn't */
-      const gpuShare = cost.gpu >= 0 && cost.frame > 0 ? cost.gpu / cost.frame : -1;
-      const gpuSpare = gpuShare >= 0 && gpuShare < 0.3, gpuBusy = gpuShare < 0 || gpuShare > 0.45;
-      const canUp = level > 0 || thin < 1 || thirty || (glow && !glowOn);
-      if (gpuSpare && canUp) {
-        if (++goodFor >= 5 && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
-      } else if (share > 0.16 || (share > 0.06 && lateRun)) {
-        const more = () => gpuBusy && (level < levels.length - 1 || glowOn || thin > 0.5 || !thirty);
+      else if (share > 0.16 || (share > 0.06 && lateRun)) {
+        const more = () => level < levels.length - 1 || thin > 0.5 || !thirty || (glowOn && gpuBusy);
         if (more()) down();
         // (most of the second's frames late: two notches, so a section far over budget shakes for a second or two, not five)
         if (share > 0.5 && more() && now - upAt >= 10000) down(); // (not after a notch up that failed: that one goes back one, and waits)
         goodFor = 0;
       } else if (share < 0.03) {
-        if (++goodFor >= 5 && canUp && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
+        if (++goodFor >= 5 && (level > 0 || thin < 1 || thirty) && now > holdUntil && now > signals.rideEnd) { up(); goodFor = 0; }
       } else goodFor = 0;
       lateRun = drawing && share > 0.06 && share <= 0.16;
       late.at = now; late.n = 0; late.long = 0; late.idle = 0;
