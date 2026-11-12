@@ -767,7 +767,9 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
       };
       screenMats.push(sm);
       const sMesh = new THREE.Mesh(geo, sm);
-      sMesh.frustumCulled = false;
+      // (culled: a screen's shader moves nothing, and of the thirty or so only a few are ever in view at
+      // once; each drawn is a call of its own, which Safari's WebGL above all pays for on the CPU)
+      geo.computeBoundingSphere();
       group.add(sMesh);
       screenMeshes.push(sMesh);
     }
