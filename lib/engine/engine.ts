@@ -73,8 +73,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const tuneQ = new URLSearchParams(location.search);
   const EXP = +(tuneQ.get('exp') ?? 0) || 0;
   const liftExp = (withGlow: boolean) => EXP || (withGlow ? 1.25 : 2.2); // (the glow supplies the light where it is on: the lift there only matches the full picture)
+  const CITY_TONE = tuneQ.get('tone') === 'linear' ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
   if (lift) {
-    renderer.toneMapping = tuneQ.get('tone') === 'linear' ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = CITY_TONE;
     renderer.toneMappingExposure = liftExp(true);
   }
   /* the picture's resolution: the device's own, capped (config.ts). A phone's cap is only a floor to
@@ -141,6 +142,11 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const aiPass = createTransitionPass();
   aiPass.enabled = false;
   aiPass.uniforms.uRes.value.set(innerWidth * pixelRatio, innerHeight * pixelRatio);
+  /* The AI world is nearly black, and on a full computer the page's grain (globals.css), laid over it,
+     raises its blacks to a dark grey: most of the light there is. A lean computer goes without the
+     grain (a full-screen layer to put together every frame), and its AI world read as the lights gone
+     out after the zoom into his heart; its blacks are raised as much here instead, for nothing */
+  if (lift) aiPass.uniforms.uLift.value = 0.0016;
   composer.addPass(aiPass);
   composer.addPass(new OutputPass());
   /* Quality: a governor, on every device (a weak laptop is as likely to struggle as a phone). The
@@ -745,6 +751,8 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   await compileFor(renderer, scene, camera, composer.readBuffer);
   aiPass.enabled = true;
   composer.render();
+  // (and the output pass as the AI world goes out on a lean computer, plain: frame(), the hand-over)
+  if (lift) { renderer.toneMapping = THREE.NoToneMapping; composer.render(); renderer.toneMapping = CITY_TONE; }
   aiPass.enabled = false;
   drawAll(renderer, scene, camera, composer.readBuffer);
   // (and as drawn straight to the screen, which a lean computer without its glow is: frame(), below)
@@ -1740,6 +1748,17 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       // (eased over a few seconds: the glow coming or going is a change the eye would otherwise see as
       // the whole picture pumping brighter and dimmer)
       if (lift) renderer.toneMappingExposure = damp(renderer.toneMappingExposure, liftExp(!!glow && glowOn), 0.7, dt);
+      /* The AI world is a dark one, dim neon traces on black, and the filmic curve the city is lifted
+         through crushes exactly that: its toe takes a dim light down to half, and the traces all but
+         went out (half the full computer's light there). Once the hand-over is past halfway, inside its
+         glitch, its picture goes out as a full computer's does, plain; back to the curve halfway on the
+         way out. Only while the hand-over's pass is drawing: then the output pass alone depends on it
+         (the scene goes into the composer's buffer, never straight to the screen), and both of its
+         programs were made behind the count */
+      if (lift) {
+        const tm = on && ai.mix > 0.5 ? THREE.NoToneMapping : CITY_TONE;
+        if (renderer.toneMapping !== tm && (on || tm === CITY_TONE)) renderer.toneMapping = tm;
+      }
       if (on) {
         if (aiWorld) { const ta = performance.now(); aiPass.uniforms.tAi.value = aiWorld.render(dt, time, ai.play, signals.pointer.x, signals.pointer.y); aiMs += performance.now() - ta; }
         aiPass.uniforms.uMix.value = ai.mix;

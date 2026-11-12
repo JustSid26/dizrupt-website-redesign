@@ -60,11 +60,12 @@ export function createTransitionPass() {
       uTime: { value: 0 },
       uRes: { value: new THREE.Vector2(1, 1) },
       uExposure: { value: 1.0 },
+      uLift: { value: 0 },
     },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
       uniform sampler2D tDiffuse, tAi, tGlyph, tLogo;
-      uniform float uMix, uTime, uExposure;
+      uniform float uMix, uTime, uExposure, uLift;
       uniform int uMode;
       uniform vec2 uRes;
       varying vec2 vUv;
@@ -74,7 +75,8 @@ export function createTransitionPass() {
       vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
       // the AI world is HDR: tone map it here, the city is already display-ready linear
       vec3 A(vec2 uv) { return texture2D(tDiffuse, clamp(uv, 0.0, 1.0)).rgb; }
-      vec3 B(vec2 uv) { return aces(texture2D(tAi, clamp(uv, 0.0, 1.0)).rgb * uExposure); }
+      // (uLift: a lean computer's blacks raised a touch, as the page's grain raises a full one's: engine.ts)
+      vec3 B(vec2 uv) { vec3 c = aces(texture2D(tAi, clamp(uv, 0.0, 1.0)).rgb * uExposure); return c + uLift * (1.0 - c); }
       float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
       vec3 pick(vec2 uv, float w) { return w > 0.5 ? B(uv) : A(uv); }
 
