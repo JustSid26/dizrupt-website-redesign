@@ -252,6 +252,7 @@ void main() {
   gl_PointSize = max(1.5, 5.5 * LAMP_SIZE * s * uPixelRatio / -mv.z);
   vKind = aKind; vSeed = aSeed;
   vFade = 1.0 - smoothstep(50.0, 130.0, -mv.z);
+  if (vShow < 0.5 || vFade <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // (not built yet, or too far to see: clipped whole, not shaded and thrown away)
 }`;
 const sparkFragment = /* glsl */ `${LAMP_TUNE}
 uniform float uTime, uDim;
@@ -888,6 +889,7 @@ export function createCity(pixelRatio: number, billboard: Billboard, GROUND: num
         // once the real facade has come up behind it, it has done its work and goes
         float facadeAt = clamp((g - 0.22) / 0.78, 0.0, 1.0);
         vA = step(0.001, t) * (1.0 - smoothstep(aFrac.x + 0.02, aFrac.x + 0.16, facadeAt));
+        if (vA < 0.01) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // (nothing to show: clipped whole, rather than its pixels each thrown away)
         // white while it flies, its own colour once it lands
         vTint = mix(vec3(0.95, 0.95, 1.0), aTint, e);
       }`,

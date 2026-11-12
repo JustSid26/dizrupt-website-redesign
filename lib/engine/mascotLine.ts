@@ -324,6 +324,7 @@ function buildStation(model: THREE.Object3D, pixelRatio: number) {
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         gl_PointSize = max(1.5, (2.2 + 3.0 * (1.0 - e)) * 6.0 * uPixelRatio / -mv.z);
+        if (vA < 0.01) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // (nothing to show: clipped whole, rather than its pixels each thrown away)
         vCol = mix(vec3(1.0), aCol, e);
       }`,
     fragmentShader: /* glsl */ `
@@ -405,6 +406,7 @@ export function particleBuilder(obj: THREE.Object3D, parent: THREE.Object3D, pix
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         gl_PointSize = max(2.0, (2.6 + 3.5 * (1.0 - e)) * 7.0 * uPixelRatio / -mv.z);
+        if (vA < 0.01) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // (nothing to show: clipped whole, rather than its pixels each thrown away)
         vCol = mix(vec3(1.0), aCol, e);
       }`,
     fragmentShader: /* glsl */ `
@@ -619,6 +621,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
         float s = aKind < 0.5 ? 1.8 : aKind < 1.5 ? 2.2 : 1.2;
         // (never under three pixels: an odd size has a pixel at its centre, an even one only pixels at its edge)
         gl_PointSize = max(3.0, s * 16.0 * uPixelRatio / -mv.z);
+        if (vA < 0.01) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // (nothing to show: clipped whole, rather than its pixels each thrown away)
         vKind = aKind;
         vSize = gl_PointSize;
       }`,
@@ -1066,6 +1069,7 @@ export function createMascotLine(pixelRatio: number, GROUND: number, plinthTop: 
     trackUniforms.uReveal.value = reveal;
     trackUniforms.uDim.value = dim;
     trackUniforms.uShow.value = trackShow;
+    lights.visible = trackShow > 0.004; // (gone: not drawn at all, rather than drawn at nothing)
     trackUniforms.uTime.value = time;
     group.visible = reveal > 0.001 || stationBuild > 0.001;
     holos.forEach((h, k) => {

@@ -407,7 +407,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     trainModel.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
-      const mat = (m.material as THREE.MeshStandardMaterial).clone();
+      let mat = (m.material as THREE.MeshStandardMaterial).clone();
+      // (a lean computer's paint without its clearcoat: the physical material's second lobe, shaded on
+      // every pixel of the train, for a gloss the plain one's low roughness all but gives already)
+      if (lean && (mat as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) mat = new THREE.MeshStandardMaterial().copy(mat);
       mat.clippingPlanes = [trainClip];
       mat.emissiveIntensity = Math.min(mat.emissiveIntensity, 0.8);
       m.material = mat;
@@ -595,6 +598,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
           gl_Position = projectionMatrix * mv;
           gl_PointSize = max(2.0, (2.4 + 3.0 * sin(e * 3.14159)) * 7.0 * uPixelRatio / -mv.z);
+          if (vA < 0.01) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // (nothing to show: clipped whole, rather than its pixels each thrown away)
           vCol = mix(vec3(0.85, 0.65, 1.0), aCol, e); // his violet, turning the banner's colour as it lands
         }`,
       fragmentShader: /* glsl */ `
@@ -1011,6 +1015,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   // the governor's last step but one (quality, below): a steady 30 frames a second (?fps=30 holds it there, to see it)
   const force30 = new URLSearchParams(location.search).get('fps') === '30';
   let thirty = force30, lastDrawn = 0;
+  let pinned = false; // (engine.pin(), for measuring: the governor leaves the picture as it is set)
 
   function frame(at?: number) {
     raf = requestAnimationFrame(frame);
@@ -1779,7 +1784,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       heldFor = s.section;
       late.at = now; late.n = 0; late.long = 0; late.idle = 0; // (the new section judged on its own frames)
     }
-    if (now - late.at > 1000) {
+    if (now - late.at > 1000 && !pinned) {
       /* late: a refresh missed. A phone held to 30 frames a second (iOS's Low Power Mode does it) runs
          every frame at 33ms, steadily; that is its pace, not lateness, and nothing here would mend it */
       const dts = late.dts.subarray(0, late.n).sort(), n = late.n;
@@ -1903,7 +1908,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   }
   frame();
 
-  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, quality: () => ({ frames: frameNo, cost, low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
+  const api = { triggerGlitch, field, index, windowField, camera, scene, signals, renderer, get aiWorld() { return aiWorld; }, pin: (pr: number, th = thin, t30 = thirty, gl = glowOn) => { pinned = true; let i = 0; levels.forEach((v, j) => { if (Math.abs(v - pr) < Math.abs(levels[i] - pr)) i = j; }); setLevel(i); setThin(th); setThirty(t30); setGlow(gl); }, quality: () => ({ frames: frameNo, cost, low: curPr < pixelRatio, base: pixelRatio, thin, pr: curPr, levels, bench, tier: TIER, why: TIER_WHY, gpu: GPU, glow: glow ? glowOn : null, fps30: thirty, cap: capKnown, trying: !!probe }), ...api0 };
   (window as unknown as { engine: typeof api }).engine = api;
 
   return {
