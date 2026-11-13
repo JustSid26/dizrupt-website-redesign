@@ -1907,7 +1907,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         }
       };
       const up = () => {
-        if (lean) {
+        /* (in Safari, with the chip keeping up, the picture comes back before the pace does: what was
+           taken from it went in a second the chip was behind, the films and banners going up as the train
+           came in, and frames late since for other reasons are what the steady 30 holds. Let go first,
+           the 30 failed again at once and was taken back, and the picture never returned) */
+        if (!soften && (thin < 1 || level > 0)) {
+          if (level > oneX()) setLevel(level - 1);
+          else if (thin < 1) setThin(Math.min(1, thin + 0.25));
+          else setLevel(level - 1);
+        } else if (lean) {
           if (level > oneX()) setLevel(level - 1);
           else if (thirty) setThirty(false);
           else if (thin < 1) setThin(Math.min(1, thin + 0.25));
