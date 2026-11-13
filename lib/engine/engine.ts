@@ -1201,7 +1201,10 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         /* (the scroll comes to rest a hair past the stop, 0.01 of a station: the train follows it only as
            far as the stop, and eases the last of the way in on the same spring. It was snapped onto the
            stop from 0.02 out, six frames' travel in one, a hop at every station) */
-        const aim = ride.s <= target ? Math.min(s.trainS, target) : Math.max(s.trainS, target);
+        /* (riding back, the scroll comes to rest that same hair on the near side of the stop, short of
+           it: followed only that far, the train stood 0.01 of a station out, never quite in. Back, it
+           follows the scroll less that hair, and reaches the stop as the scroll comes to rest) */
+        const aim = ride.s <= target ? Math.min(s.trainS, target) : Math.max(s.trainS - 0.01, target);
         ride.s = damp(ride.s, aim, 7, dt);
         ride.v = (ride.s - prev) / Math.max(dt, 1e-4);
       } else {
