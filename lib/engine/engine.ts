@@ -212,6 +212,39 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       gl2.deleteQuery(q);
     }
   };
+  /* Where the browser won't (Safari), the chip's time is found another way: a fence after every fourth
+     frame's draw, looked at between the page's tasks until the chip has done it, timed from the moment
+     the draw began. Safari's chip, behind, holds the draw itself up as it is sent (the wait is there,
+     not after it: with the chip loaded on this M5 in WebKit, sending took 25-60ms and the fence came
+     back at once), so the sending is counted too. What is kept is the last moment it was seen still
+     unfinished: the chip had the frame for at least that long, with whatever it still had queued
+     before it (the page's compositing). Not the moment it was first seen done: on a page whose own work
+     holds its tasks up, that is when the page next got round to looking, and a busy page read as a
+     busy chip. The median of the last second's is the chip's time (cost.gpu, as the timer query's). So the governor can tell, in Safari as in Chrome,
+     graphics that can't keep up from frames late for the browser's own reasons, which a softer
+     picture wouldn't mend (timed on this M5 in WebKit against Chrome's own query for the same scene:
+     9 to its 10ms, and 16 to its 18 at twice the pixels). A computer only: a phone's ladder is as it
+     was tuned */
+  const fenceMs: number[] = [];
+  let fenceOut = false;
+  const gpuFence = (t0: number) => {
+    if (gpuExt || isMobile || fenceOut || frameNo % 4) return;
+    const sync = gl2.fenceSync(gl2.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    if (!sync) return;
+    gl2.flush(); // (sent now, not when the frame is handed over: timed from here)
+    fenceOut = true;
+    let notYet = performance.now() - t0; // (the last look that found it unfinished: the sending, at least)
+    const poll = () => {
+      const ms = performance.now() - t0;
+      const done = gl2.getSyncParameter(sync, gl2.SYNC_STATUS) === gl2.SIGNALED;
+      if (!done) notYet = ms;
+      if (!done && ms < 250) { setTimeout(poll, 0); return; }
+      gl2.deleteSync(sync);
+      fenceOut = false;
+      if (fenceMs.length < 64) fenceMs.push(notYet);
+    };
+    setTimeout(poll, 0);
+  };
   let frameStart = 0, boardsMs = 0, aiMs = 0;
   // the notch that is 1x (or the lowest, on a screen under 1x): where a lean computer's ladder pauses
   const oneX = () => { const i = levels.findIndex((v) => v <= 1.001); return i < 0 ? levels.length - 1 : i; };
@@ -1834,15 +1867,24 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       /* The glow is the picture's light, and it isn't the governor's to take back and forth: each time
          it went and came the whole picture went darker and brighter (on a lean computer, the lift with
          it), section by section. It goes only at the very bottom of either ladder, only where the
-         graphics chip is busy for a fair share of the frame (or, where the browser won't say, Safari, on
-         a lean computer), and then for good. A frame that runs long for the browser's own reasons (its compositing, at 2x,
+         graphics chip is busy for a fair share of the frame (timed by the browser, or in Safari by a fence:
+         gpuFence; where it is not known at all, on a lean computer), and then for good. A frame that runs long for the browser's own reasons (its compositing, at 2x,
          on integrated graphics) is no reason to take the light away; everything else on the ladder
          still answers it, as it did before the chip's time was asked */
       const gpuShare = cost.gpu >= 0 && cost.frame > 0 ? cost.gpu / cost.frame : -1;
-      /* (where the browser won't say, Safari, only a lean computer's chip is taken to be busy: Apple
-         silicon in Safari had its frames run late for the browser's own reasons and was left without its
-         light for the rest of the visit, the whole city dark, on graphics for which the glow is nothing) */
+      /* (where the chip's time isn't known yet, or at all, only a lean computer's chip is taken to be busy:
+         Apple silicon in Safari, before it was timed there, had its frames run late for the browser's own
+         reasons and was left without its light for the rest of the visit, the whole city dark, on
+         graphics for which the glow is nothing) */
       const gpuBusy = gpuShare < 0 ? lean : gpuShare > 0.45;
+      /* And in Safari, where that time is the fence's (gpuFence), the picture is made softer or sparser
+         only when it is the chip that is behind. Frames late for anything else (the browser's own work,
+         the page's, a screen being recorded) are only held to a steady 30, which evens them out: a
+         softer, thinner picture would mend none of it, and Safari was left with one, his points halved
+         and the city blurred, still at 30. Where the browser times the chip itself (Chrome), every step
+         is as it was: its query times the frame's draw alone, not the rest of what the chip is asked to
+         do, which the picture's resolution can still relieve */
+      const soften = !!gpuExt || gpuShare < 0 || gpuBusy;
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
         /* Each a notch down its own ladder (and back up it the same way, below, but for the glow).
@@ -1852,14 +1894,14 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         const step = (s: number) => setThin(Math.max(0.5, thin - s));
         if (lean) {
           // (below 1x on a 2x screen is blurred, and a sharp steady 30 reads better)
-          if (level < oneX()) setLevel(level + 1);
-          else if (thin > 0.5) step(0.25);
+          if (soften && level < oneX()) setLevel(level + 1);
+          else if (soften && thin > 0.5) step(0.25);
           else if (!thirty) setThirty(true);
-          else if (level < levels.length - 1) setLevel(level + 1);
+          else if (soften && level < levels.length - 1) setLevel(level + 1);
           else if (glowOn && gpuBusy) setGlow(false);
         } else {
-          if (level < levels.length - 1) setLevel(level + 1);
-          else if (thin > 0.5) step(0.25);
+          if (soften && level < levels.length - 1) setLevel(level + 1);
+          else if (soften && thin > 0.5) step(0.25);
           else if (!thirty) setThirty(true);
           else if (glowOn && gpuBusy) setGlow(false);
         }
@@ -1895,7 +1937,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
          fifties, one frame in ten held twice as long. Two such seconds running step down too: one alone
          is a hitch, not a pace) */
       else if (share > 0.16 || (share > 0.06 && lateRun)) {
-        const more = () => level < levels.length - 1 || thin > 0.5 || !thirty || (glowOn && gpuBusy);
+        const more = () => (soften && (level < levels.length - 1 || thin > 0.5)) || !thirty || (glowOn && gpuBusy);
         if (more()) down();
         // (most of the second's frames late: two notches, so a section far over budget shakes for a second or two, not five)
         if (share > 0.5 && more() && now - upAt >= 10000) down(); // (not after a notch up that failed: that one goes back one, and waits)
@@ -1926,12 +1968,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     if (direct()) renderer.render(scene, camera);
     else composer.render();
     gpuEnd();
+    gpuFence(td);
     const tEnd = performance.now();
     costAcc.draw += tEnd - td; costAcc.boards += boardsMs; costAcc.ai += aiMs; costAcc.logic += td - frameStart - boardsMs - aiMs; costAcc.n++;
     if (tEnd - costAcc.at > 1000) {
       const n = Math.max(1, costAcc.n);
       cost.logic = costAcc.logic / n; cost.boards = costAcc.boards / n; cost.ai = costAcc.ai / n; cost.draw = costAcc.draw / n; cost.frame = costAcc.frame / n;
-      cost.gpu = gpuExt ? (costAcc.gpuN ? costAcc.gpu / costAcc.gpuN : cost.gpu) : -1;
+      if (gpuExt) cost.gpu = costAcc.gpuN ? costAcc.gpu / costAcc.gpuN : cost.gpu;
+      // (too few to go on, a slow second's: kept for the next)
+      else if (fenceMs.length >= 3) { fenceMs.sort((a, b) => a - b); cost.gpu = fenceMs[fenceMs.length >> 1]; fenceMs.length = 0; }
       costAcc.logic = costAcc.boards = costAcc.ai = costAcc.draw = costAcc.frame = costAcc.n = costAcc.gpu = costAcc.gpuN = 0; costAcc.at = tEnd;
     }
   }
