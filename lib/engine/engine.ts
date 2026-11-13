@@ -1834,12 +1834,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       /* The glow is the picture's light, and it isn't the governor's to take back and forth: each time
          it went and came the whole picture went darker and brighter (on a lean computer, the lift with
          it), section by section. It goes only at the very bottom of either ladder, only where the
-         graphics chip is busy for a fair share of the frame (or the browser won't say: Safari), and
-         then for good. A frame that runs long for the browser's own reasons (its compositing, at 2x,
+         graphics chip is busy for a fair share of the frame (or, where the browser won't say, Safari, on
+         a lean computer), and then for good. A frame that runs long for the browser's own reasons (its compositing, at 2x,
          on integrated graphics) is no reason to take the light away; everything else on the ladder
          still answers it, as it did before the chip's time was asked */
       const gpuShare = cost.gpu >= 0 && cost.frame > 0 ? cost.gpu / cost.frame : -1;
-      const gpuBusy = gpuShare < 0 || gpuShare > 0.45;
+      /* (where the browser won't say, Safari, only a lean computer's chip is taken to be busy: Apple
+         silicon in Safari had its frames run late for the browser's own reasons and was left without its
+         light for the rest of the visit, the whole city dark, on graphics for which the glow is nothing) */
+      const gpuBusy = gpuShare < 0 ? lean : gpuShare > 0.45;
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
         /* Each a notch down its own ladder (and back up it the same way, below, but for the glow).
