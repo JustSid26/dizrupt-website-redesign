@@ -8,6 +8,7 @@ import { bySlug } from "@/content/projects";
 import { signals } from "@/lib/signals";
 import { useStore } from "@/lib/store";
 import { canRunEngine, ENGINE_TIMEOUT_MS } from "@/lib/webgl";
+import { fetchEngineFiles } from "@/lib/engineFiles";
 
 // The one canvas behind every page. The engine is imported on the client only, and lives for the
 // whole visit — routes change what it shows, never whether it exists.
@@ -44,6 +45,7 @@ export function Stage() {
       giveUp("no hardware WebGL 2 (or ?lite)");
       return;
     }
+    fetchEngineFiles(); // (the 3D's files, alongside its code: lib/engineFiles.ts)
     const timer = window.setTimeout(() => {
       if (!signals.ready) giveUp(`not ready after ${ENGINE_TIMEOUT_MS / 1000}s`);
     }, ENGINE_TIMEOUT_MS);

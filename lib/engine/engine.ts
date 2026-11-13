@@ -26,6 +26,7 @@ import { breathe, compileFor, drawAll } from './warm';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { isPhoneLayout } from '@/lib/layout';
 import { ENGINE_TIMEOUT_MS } from '@/lib/webgl';
+import { engineFile } from '@/lib/engineFiles';
 import { workP, WORK_LEAD } from '@/lib/stops';
 import { bannerFor } from '@/content/banners';
 
@@ -327,17 +328,19 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   addEventListener('resize', resize);
 
   /* ---------- the mascot ---------- */
-  const loadModel = (url: string) => new GLTFLoader().loadAsync(url).then((g) => g.scene).catch(() => null);
-  const [mascot, landmarks, cityModel, trainModel, stationModel] = await Promise.all([
+  // (the downloads begun with the page, lib/engineFiles.ts)
+  const gltf = (url: string) => engineFile(url).then((b) => new GLTFLoader().parseAsync(b, '/models/'));
+  const loadModel = (url: string) => gltf(url).then((g) => g.scene).catch(() => null);
+  const models = Promise.all([
     loadMascot(),
     // the NYC landmarks, modelled in Blender
-    new GLTFLoader().loadAsync('/models/nyc.glb').then((g) => {
+    gltf('/models/nyc.glb').then((g) => {
       const out: { name: string; geometry: THREE.BufferGeometry }[] = [];
       g.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push({ name: o.name, geometry: (o as THREE.Mesh).geometry }); });
       return out;
     }).catch(() => []),
     // the whole city, modelled in Blender: one mesh of buildings, and the Times Square screens
-    new GLTFLoader().loadAsync('/models/nyc-city.glb').then((g) => {
+    gltf('/models/nyc-city.glb').then((g) => {
       let city: THREE.BufferGeometry | null = null;
       const screens: THREE.BufferGeometry[] = [];
       g.scene.traverse((o) => {
@@ -354,6 +357,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     loadModel('/models/train.glb'),
     loadModel('/models/station.glb'),
   ]);
+  const [mascot, landmarks, cityModel, trainModel, stationModel] = await models;
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
     field.register('mascot:flex', mascot.flex);

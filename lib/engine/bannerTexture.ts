@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { lean } from './config';
+import { ENGINE_FILES, engineFile } from '@/lib/engineFiles';
 
 /* The clients' banners are up on the city's screens, the billboards, the work's windows and the
    spiral's cards: a texture for each, but one picture on the GPU, since they share its source (and
@@ -7,6 +8,11 @@ import { lean } from './config';
 const MAX_W = lean ? 1024 : Infinity;
 type Waiting = [THREE.Texture, ((t: THREE.Texture) => void) | undefined][];
 const cache = new Map<string, { source: THREE.TextureSource<TexImageSource | null>; waiting: Waiting | null }>();
+/* Asked for only once the 3D's own files are in (lib/engineFiles.ts): the spiral's cards ask for
+   theirs as the engine starts, and ten banners (2 MB) alongside the models took half of a slow
+   connection from the files the visitor is waiting on */
+let gate: Promise<unknown> | null = null;
+const filesIn = () => (gate ??= Promise.all(ENGINE_FILES.map(engineFile)).catch(() => {}));
 
 export function bannerTexture(url: string, onLoad?: (t: THREE.Texture) => void) {
   let e = cache.get(url);
@@ -30,7 +36,9 @@ export function bannerTexture(url: string, onLoad?: (t: THREE.Texture) => void) 
       });
       entry.waiting = null;
     };
-    im.src = url;
+    filesIn().then(() => {
+      im.src = url;
+    });
     e = entry;
   }
   const t = new THREE.Texture();

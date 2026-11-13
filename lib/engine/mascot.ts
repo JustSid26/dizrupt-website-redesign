@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { COUNT } from './config';
 import { edgeField } from './edgeField';
+import { engineFile } from '@/lib/engineFiles';
 
 /* The mascot, as two point clouds with identical surface coordinates — neutral and flexed — so the
    bicep curl moves each particle with its own patch of skin. Upper body only: the files are the
@@ -28,16 +29,11 @@ const fract = (x: number) => x - Math.floor(x);
 
 export async function loadMascot(base = ''): Promise<Mascot | null> {
   try {
-    const [n, f, m] = await Promise.all([
-      fetch(`${base}/mascot-neutral-claude.bin`),
-      fetch(`${base}/mascot-flex-claude.bin`),
-      fetch(`${base}/mascot-transition-claude.json`),
-    ]);
-    if (!n.ok || !f.ok || !m.ok) throw new Error('mascot files unavailable');
+    // (the downloads begun with the page, lib/engineFiles.ts)
     const [neutralRaw, flexRaw, meta] = await Promise.all([
-      n.arrayBuffer().then((b) => new Int16Array(b)),
-      f.arrayBuffer().then((b) => new Int16Array(b)),
-      m.json() as Promise<{ eyes?: number; pivot: [number, number, number] }>,
+      engineFile(`${base}/mascot-neutral-claude.bin`).then((b) => new Int16Array(b)),
+      engineFile(`${base}/mascot-flex-claude.bin`).then((b) => new Int16Array(b)),
+      engineFile(`${base}/mascot-transition-claude.json`).then((b) => JSON.parse(new TextDecoder().decode(b)) as { eyes?: number; pivot: [number, number, number] }),
     ]);
     const available = (neutralRaw.length / 4) | 0; // x, y, z and the head channel
     if (!available || flexRaw.length !== neutralRaw.length) throw new Error('invalid paired mascot data');

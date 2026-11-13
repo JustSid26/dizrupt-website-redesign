@@ -36,6 +36,9 @@ export function Projects() {
   const caps = useRef<(HTMLDivElement | null)[]>([]);
   const router = useRouter();
   const reduce = useStore((s) => s.reducedMotion);
+  /* (the banners asked for once the page is in: ten of them are 2 MB, and asked for with the page they
+     took half of a slow connection from the 3D the visitor waits on. The section is far below) */
+  const loaded = useStore((s) => s.loaded);
   useSection(section, "projects");
 
   useEffect(() => {
@@ -154,7 +157,7 @@ export function Projects() {
               style={{ "--pa": c.colors[0], "--pb": c.colors[1] } as React.CSSProperties}
               onClick={() => shots.current[k]?.classList.contains("is-on") && open(k)}
             >
-              <div className="work-shot-media" style={{ backgroundImage: b ? `url(${b})` : undefined }} />
+              <div className="work-shot-media" style={{ backgroundImage: b && loaded ? `url(${b})` : undefined }} />
               <div className="work-shot-glass" aria-hidden />
             </div>
           );
