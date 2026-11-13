@@ -272,7 +272,9 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
     });
     u.uPixelRatio.value = pr;
   };
+  let heldLevel: number | null = null; // a section's own resolution, waiting for the ride into it to land (see the governor)
   const setLevel = (i: number) => {
+    heldLevel = null;
     level = Math.max(0, Math.min(levels.length - 1, i));
     curPr = levels[level];
     qualityAt = performance.now();
@@ -949,6 +951,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   let scrubbing = false; // uProgress is being driven by the scroll
   let scrubFrom = '';
   const ride = { s: 0, v: 0 };
+  let rideOff = 0, rideClockWas: unknown = null; // (riding a ride's clock: how far off its curve the train began, and which ride)
   let rideBack = 0; // 0..1, how much the train is riding back: the camera follows it tighter then (see follow)
   const contactLook = new THREE.Vector3();
   let wasContact = false;
@@ -1237,8 +1240,29 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
         /* (riding back, the scroll comes to rest that same hair on the near side of the stop, short of
            it: followed only that far, the train stood 0.01 of a station out, never quite in. Back, it
            follows the scroll less that hair, and reaches the stop as the scroll comes to rest) */
-        const aim = ride.s <= target ? Math.min(s.trainS, target) : Math.max(s.trainS - 0.01, target);
-        ride.s = damp(ride.s, aim, 7, dt);
+        /* Where the scroll is on its ride, from the ride's own clock (lib/signals.ts: rideClock) read at
+           this frame's time, not from the scroll as it arrives. On a slow computer the scroll's
+           position came unevenly (two frames' travel at once, then none), the train chased it on its
+           spring, and its speed jumped about from frame to frame: measured on a simulated Intel Mac,
+           by nine tenths of itself at 60 a second. On the clock, the train is where the ride's curve
+           puts it at the moment the frame is shown, however unevenly the frames come. The scroll's own
+           position stands in if the two ever part (a page that changed height under the ride) */
+        const clock = signals.rideClock, trainAt = signals.trainAt;
+        let along = s.trainS, onClock = false;
+        if (clock && clock.target === target && trainAt) {
+          const at = trainAt(clock.y0 + (clock.y1 - clock.y0) * clock.ease(Math.min(1, Math.max(0, (t0 - clock.t0) / clock.ms))));
+          if (Math.abs(at - s.trainS) < 0.5) { along = at; onClock = true; }
+        }
+        const aim = ride.s <= target ? Math.min(along, target) : Math.max(along - 0.01, target);
+        if (onClock && clock !== rideClockWas) { rideOff = ride.s - aim; rideClockWas = clock; } // (what it was off the curve as the ride began)
+        if (onClock) {
+          // on the curve, exactly, less whatever it was off it as the ride began, closed over a few frames
+          rideOff = damp(rideOff, 0, 7, dt);
+          ride.s = aim + rideOff;
+        } else {
+          rideOff = 0;
+          ride.s = damp(ride.s, aim, 7, dt);
+        }
         ride.v = (ride.s - prev) / Math.max(dt, 1e-4);
       } else {
         // the scroll drives it: close behind, smoothed, never waiting at a station
@@ -1836,13 +1860,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
       if (heldFor) held.set(heldFor, { level, thin, thirty });
       const h = held.get(s.section);
       if (h && !probe) {
-        if (h.level !== level) setLevel(h.level);
+        // (not in the middle of a ride: a new resolution's first frame is a lurch in it. Once it lands)
+        if (h.level !== level) { if (now < signals.rideEnd) heldLevel = h.level; else setLevel(h.level); }
         if (h.thin !== thin) setThin(h.thin);
         if (h.thirty !== thirty) setThirty(h.thirty);
       }
       heldFor = s.section;
       late.at = now; late.n = 0; late.long = 0; late.idle = 0; // (the new section judged on its own frames)
     }
+    if (heldLevel !== null && now >= signals.rideEnd && !probe) setLevel(heldLevel);
     if (now - late.at > 1000 && !pinned) {
       /* late: a refresh missed. A phone held to 30 frames a second (iOS's Low Power Mode does it) runs
          every frame at 33ms, steadily; that is its pace, not lateness, and nothing here would mend it */
@@ -1883,8 +1909,12 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
          softer, thinner picture would mend none of it, and Safari was left with one, his points halved
          and the city blurred, still at 30. Where the browser times the chip itself (Chrome), every step
          is as it was: its query times the frame's draw alone, not the rest of what the chip is asked to
-         do, which the picture's resolution can still relieve */
-      const soften = !!gpuExt || gpuShare < 0 || gpuBusy;
+         do, which the picture's resolution can still relieve. Nor on a lean computer (an Intel Mac, in
+         Safari): its graphics are what was found weak before anything was drawn, the fence's reading
+         of them runs from a couple of ms to fifty from one second to the next, and a quiet one must
+         never hold a picture there that the chip can't draw */
+      const soften = !!gpuExt || lean || gpuShare < 0 || gpuBusy;
+      const midRide = now < signals.rideEnd; // (a ride to a stop under way: see down)
       const down = () => {
         if (now - upAt < 10000) { holdUntil = now + hold; hold = Math.min(120000, hold * 2); }
         /* Each a notch down its own ladder (and back up it the same way, below, but for the glow).
@@ -1892,7 +1922,15 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
            1x, and the glow (above) last of all.
            A full computer: down to its lowest resolution, his points, a steady 30, the glow last */
         const step = (s: number) => setThin(Math.max(0.5, thin - s));
-        if (lean) {
+        /* In the middle of a ride, nothing that rebuilds the picture: a new resolution remakes its
+           buffers, and the first frame at it is a long one, a lurch in the train's run, on a slow
+           computer most of all, whose rides are when its frames run late. The pace is held to a steady 30
+           (nothing to remake, and every frame then as long as the next), then his points thinned; the
+           resolution waits for the train to pull in, and is judged on what the frames cost then */
+        if (midRide) {
+          if (!thirty) setThirty(true);
+          else if (soften && thin > 0.5) step(0.25);
+        } else if (lean) {
           // (below 1x on a 2x screen is blurred, and a sharp steady 30 reads better)
           if (soften && level < oneX()) setLevel(level + 1);
           else if (soften && thin > 0.5) step(0.25);
@@ -1945,7 +1983,7 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
          fifties, one frame in ten held twice as long. Two such seconds running step down too: one alone
          is a hitch, not a pace) */
       else if (share > 0.16 || (share > 0.06 && lateRun)) {
-        const more = () => (soften && (level < levels.length - 1 || thin > 0.5)) || !thirty || (glowOn && gpuBusy);
+        const more = () => midRide ? !thirty || (soften && thin > 0.5) : (soften && (level < levels.length - 1 || thin > 0.5)) || !thirty || (glowOn && gpuBusy);
         if (more()) down();
         // (most of the second's frames late: two notches, so a section far over budget shakes for a second or two, not five)
         if (share > 0.5 && more() && now - upAt >= 10000) down(); // (not after a notch up that failed: that one goes back one, and waits)

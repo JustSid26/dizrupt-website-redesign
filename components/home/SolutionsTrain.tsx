@@ -73,7 +73,12 @@ export function SolutionsTrain() {
         if (bar.current) bar.current.style.transform = `scaleX(${(p >= 1 ? 1 : x - i).toFixed(3)})`;
       },
     });
-    return () => st.kill();
+    // the same, for any scroll position, from the trigger as it stands (the train rides a ride's own clock: lib/signals.ts)
+    signals.trainAt = (y) => {
+      const p = st.end > st.start ? Math.min(1, Math.max(0, (y - st.start) / (st.end - st.start))) : 0;
+      return Math.min(N, Math.min(1, Math.max(0, (p - 0.01) / 0.99)) * N);
+    };
+    return () => { st.kill(); signals.trainAt = null; };
   }, []);
 
   // change channel: the old copy tears out upward, the new one comes in from below

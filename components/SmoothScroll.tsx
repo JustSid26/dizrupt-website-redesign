@@ -92,6 +92,8 @@ export function SmoothScroll() {
       // the train drives itself there now, rather than when the page catches up
       signals.rideTarget = to.train;
       signals.rideEnd = performance.now() + duration * 1000;
+      // (the ride's clock, for the train to ride as well: lib/signals.ts)
+      signals.rideClock = { t0: performance.now(), ms: duration * 1000, y0: lenis.animatedScroll, y1: to.y, ease: how.turning ? onward : r.ease, target: to.train };
       glide = { stops, i, dir, auto: how.auto };
       lastDir = dir;
       const token = ++seq;
@@ -152,7 +154,11 @@ export function SmoothScroll() {
       if (!fresh) return true; // one gesture, one stop
       // just landed: what arrives now is the last gesture's momentum, unless it can't be
       if (!sure && performance.now() - landedAt < SETTLE) return true;
-      const i = dir > 0 ? stops.findIndex((st) => st.y > y + TOL) : stops.findLastIndex((st) => st.y < y - TOL);
+      // (the last one behind, counted back by hand: findLastIndex isn't in Safari before 15.4, which an
+      // older Intel Mac may be held at, and every gesture there threw)
+      let back = -1;
+      for (let k = stops.length - 1; k >= 0 && dir <= 0; k--) if (stops[k].y < y - TOL) { back = k; break; }
+      const i = dir > 0 ? stops.findIndex((st) => st.y > y + TOL) : back;
       if (i < 0) return false;
       // the stop's own scene still playing: the gesture isn't lost, the ride waits for it to finish
       if (busy()) {
@@ -235,6 +241,7 @@ export function SmoothScroll() {
       lastDir = 1; // sent somewhere counts as going on
       signals.rideEnd = 0;
       signals.rideTarget = null;
+      signals.rideClock = null;
     });
     lenis.on("scroll", (l: Lenis) => {
       signals.scroll.velocity = l.velocity;

@@ -38,6 +38,13 @@ export const signals = {
   rideTarget: null as number | null, // the stop a swipe sent the train to (null: follow the scroll)
   rideEnd: 0, // when the ride under way lands (performance.now ms; 0: none): a stop's own animation ends with it
   rideS: 0, // where the train actually is (it drives itself towards trainS)
+  /* the ride under way, as the scroll is riding it: from where, to where, over how long, on what curve
+     (SmoothScroll.tsx). The train rides the same clock (engine.ts), read at its own frame's time, rather
+     than the scroll's position as it happens to arrive: on a slow computer that came unevenly, and the
+     train's speed jumped from frame to frame */
+  rideClock: null as null | { t0: number; ms: number; y0: number; y1: number; ease: (t: number) => number; target: number | null },
+  // where the train is on its line for a scroll position (SolutionsTrain.tsx: as its trigger works it out)
+  trainAt: null as null | ((y: number) => number),
   // the social skyscrapers' logos on screen at contact (the engine writes them, SocialTowers links them)
   socials: Array.from({ length: 5 }, () => ({ x: 0, y: 0, w: 0, h: 0, on: false })),
   night: 1, // 0 blue hour, 1 full night (the nav's switch)
