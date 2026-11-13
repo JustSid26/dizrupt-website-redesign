@@ -3,11 +3,11 @@ import { COUNT } from './config';
 import { edgeField } from './edgeField';
 import { engineFile } from '@/lib/engineFiles';
 
-/* The mascot, as two point clouds with identical surface coordinates — neutral and flexed — so the
-   bicep curl moves each particle with its own patch of skin. Upper body only: the files are the
-   whole figure, so everything below BUST_CUT of his height is dropped, thinning out over BUST_FADE
-   rather than ending on a flat line. What is kept is scaled to stand BUST_HEIGHT tall and centred
-   across on his face. */
+/* The mascot, as a point cloud. (The export makes a flexed pose too, mascot-flex-claude.bin, point
+   for point with this one: nothing on the page curls his arm, and it is not downloaded.) Upper body
+   only: the file is the whole figure, so everything below BUST_CUT of his height is dropped, thinning
+   out over BUST_FADE rather than ending on a flat line. What is kept is scaled to stand BUST_HEIGHT
+   tall and centred across on his face. */
 export const BUST_CUT = 0.82;
 export const BUST_FADE = 0.055;
 export const BUST_HEIGHT = 4.45;
@@ -17,7 +17,6 @@ export const BUST_DROP = BUST_TOP - BUST_HEIGHT / 2;
 export type MascotAttr = THREE.BufferAttribute & { edge?: THREE.BufferAttribute };
 export type Mascot = {
   neutral: MascotAttr;
-  flex: MascotAttr;
   full: MascotAttr; // head to toe, in the bust's own frame: its upper particles are the bust's own
   feet: number; // where his soles are, in that frame
   fullHead: Float32Array; // the head-turn weights for the full figure (its legs don't turn with the head)
@@ -30,13 +29,12 @@ const fract = (x: number) => x - Math.floor(x);
 export async function loadMascot(base = ''): Promise<Mascot | null> {
   try {
     // (the downloads begun with the page, lib/engineFiles.ts)
-    const [neutralRaw, flexRaw, meta] = await Promise.all([
+    const [neutralRaw, meta] = await Promise.all([
       engineFile(`${base}/mascot-neutral-claude.bin`).then((b) => new Int16Array(b)),
-      engineFile(`${base}/mascot-flex-claude.bin`).then((b) => new Int16Array(b)),
       engineFile(`${base}/mascot-transition-claude.json`).then((b) => JSON.parse(new TextDecoder().decode(b)) as { eyes?: number; pivot: [number, number, number] }),
     ]);
     const available = (neutralRaw.length / 4) | 0; // x, y, z and the head channel
-    if (!available || flexRaw.length !== neutralRaw.length) throw new Error('invalid paired mascot data');
+    if (!available) throw new Error('invalid mascot data');
     const eyeAvailable = Math.min(meta.eyes || 0, available);
     const bodyAvailable = available - eyeAvailable;
 
@@ -106,12 +104,10 @@ export async function loadMascot(base = ''): Promise<Mascot | null> {
     }
     full.edge = edgeField(farr);
     const feet = (low - middle) * scale;
-    const flex = decode(flexRaw);
     neutral.edge = edgeField(neutral.array);
-    flex.edge = edgeField(flex.array);
     const [px, py, pz] = meta.pivot;
     const pivot = new THREE.Vector3((px - acrossMid) * scale, (pz - middle) * scale, -py * scale);
-    return { neutral, flex, full, feet, head, fullHead, pivot };
+    return { neutral, full, feet, head, fullHead, pivot };
   } catch (err) {
     console.warn('mascot point cloud unavailable', err);
     return null;

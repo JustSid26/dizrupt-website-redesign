@@ -9,7 +9,6 @@ export const ENGINE_FILES = [
   "/models/station.glb",
   "/models/nyc.glb",
   "/mascot-neutral-claude.bin",
-  "/mascot-flex-claude.bin",
   "/mascot-transition-claude.json",
 ];
 

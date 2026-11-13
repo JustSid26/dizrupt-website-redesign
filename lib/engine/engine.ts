@@ -360,7 +360,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   const [mascot, landmarks, cityModel, trainModel, stationModel] = await models;
   if (mascot) {
     field.register('mascot:neutral', mascot.neutral);
-    field.register('mascot:flex', mascot.flex);
     field.register('mascot:full', mascot.full);
     (field.geometry.attributes.aHead as THREE.BufferAttribute).array.set(mascot.head);
     field.geometry.attributes.aHead.needsUpdate = true;
@@ -368,7 +367,6 @@ export async function createEngine({ canvas, indexLayer, onOpenProject }: Engine
   } else {
     // without the files he is the wordmark, so the site still reads
     field.register('mascot:neutral', field.shape('wordmark'));
-    field.register('mascot:flex', field.shape('wordmark'));
     field.register('mascot:full', field.shape('wordmark'));
   }
   /* ---------- the city, and the billboard the landing turns out to be ---------- */
